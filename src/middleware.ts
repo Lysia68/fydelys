@@ -2,7 +2,19 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
 export async function middleware(request: NextRequest) {
+  const hostname = request.headers.get("host") || ""
+
+  // Détecter le type de domaine
+  const isApp       = hostname.startsWith("app.")        // app.fydelys.fr → SuperAdmin
+  const isLocalhost = hostname.includes("localhost")
+  const subdomain   = hostname.split(".")[0]
+  const isTenant    = !isApp && !isLocalhost &&
+                      hostname.includes(".fydelys.fr") &&
+                      subdomain !== "www"
+
   let supabaseResponse = NextResponse.next({ request })
+  supabaseResponse.headers.set("x-tenant-mode",  isTenant ? "studio"     : isApp ? "superadmin" : "default")
+  supabaseResponse.headers.set("x-studio-slug",  isTenant ? subdomain    : "")
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,6 +25,8 @@ export async function middleware(request: NextRequest) {
         setAll(cookiesToSet: { name: string; value: string; options?: any }[]) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
+          supabaseResponse.headers.set("x-tenant-mode", isTenant ? "studio" : isApp ? "superadmin" : "default")
+          supabaseResponse.headers.set("x-studio-slug", isTenant ? subdomain : "")
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           )
@@ -23,17 +37,11 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
   const path = request.nextUrl.pathname
-
   const protectedPaths = ["/dashboard", "/planning", "/members", "/subscriptions", "/payments", "/disciplines", "/settings"]
   const isProtected = protectedPaths.some(p => path.startsWith(p))
 
-  if (!user && isProtected) {
-    return NextResponse.redirect(new URL("/", request.url))
-  }
-
-  if (user && path === "/") {
-    return NextResponse.redirect(new URL("/dashboard", request.url))
-  }
+  if (!user && isProtected) return NextResponse.redirect(new URL("/", request.url))
+  if (user && path === "/")  return NextResponse.redirect(new URL("/dashboard", request.url))
 
   return supabaseResponse
 }

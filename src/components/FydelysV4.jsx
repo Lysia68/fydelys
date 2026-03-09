@@ -2192,8 +2192,8 @@ function AdherentView({ onSwitch, isMobile }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // ROOT — switch automatique par rôle
 // ══════════════════════════════════════════════════════════════════════════════
-export default function App() {
-  const [role, setRole] = useState("admin"); // "superadmin" | "admin" | "adherent"
+export default function App({ initialRole = "admin" }) {
+  const [role, setRole] = useState(initialRole); // "superadmin" | "admin" | "adherent"
   const [page, setPage] = useState("planning");
   const width = useWidth();
   const isMobile = width < 768;
