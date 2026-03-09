@@ -64,7 +64,7 @@ export default function LoginPage() {
             <LotusIcon />
           </div>
           <h1 style={{ fontSize: 30, fontWeight: 800, color: "#2A1F14", margin: "0 0 6px", letterSpacing: -0.8, lineHeight: 1 }}>
-            Zen<span style={{ color: "#A06838" }}>Class</span>
+            Sama<span style={{ color: "#A06838" }}>vi</span>
           </h1>
           <p style={{ color: "#8C7B6C", fontSize: 13, margin: 0, fontWeight: 500, letterSpacing: 0.1 }}>
             Gestion de studio · Yoga &amp; Bien-être
@@ -168,7 +168,7 @@ export default function LoginPage() {
         <p style={{
           textAlign: "center", color: "#B0A090", fontSize: 11,
           marginTop: 24, lineHeight: 1.8, letterSpacing: 0.2,
-        }}>© 2026 ZenClass · Connexion 100% sécurisée</p>
+        }}>© 2026 Samavi · Connexion 100% sécurisée</p>
       </div>
     </div>
   )
