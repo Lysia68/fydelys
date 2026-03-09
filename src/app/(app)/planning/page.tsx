@@ -195,7 +195,7 @@ export default function PlanningPage() {
             <div style={{ fontSize: 12, fontWeight: 700, color: pct >= 1 ? C.warn : C.text }}>
               {sess.booked}/{sess.spots}
             </div>
-            <div style={{ width: 44, height: 3, background: "#EDE6DC" || "#EDE6DC", borderRadius: 2, marginTop: 3 }}>
+            <div style={{ width: 44, height: 3, background: "#EDE6DC", borderRadius: 2, marginTop: 3 }}>
               <div style={{ height: "100%", width: `${Math.min(pct*100,100)}%`, background: pct>=1 ? C.warn : pct>.75 ? C.accent : C.ok, borderRadius: 2 }} />
             </div>
             {sess.waitlist > 0 && (
@@ -412,7 +412,7 @@ export default function PlanningPage() {
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                   <div style={{
                     fontSize: 12, fontWeight: 700, color: isToday ? "#fff" : C.textMid,
-                    background: isToday ? C.accent : "#EDE6DC" || "#EDE6DC",
+                    background: isToday ? C.accent : "#EDE6DC",
                     padding: "4px 12px", borderRadius: 20,
                   }}>
                     {DAYS[i]} {d.getDate()} {MONTHS[d.getMonth()].slice(0,3)}
