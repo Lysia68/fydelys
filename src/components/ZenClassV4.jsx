@@ -2192,9 +2192,6 @@ function AdherentView({ onSwitch, isMobile }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // ROOT — switch automatique par rôle
 // ══════════════════════════════════════════════════════════════════════════════
-const PAGE_TITLES = { dashboard:"Tableau de bord", planning:"Planning", members:"Adhérents", subscriptions:"Abonnements", payments:"Paiements", disciplines:"Disciplines", settings:"Paramètres" };
-const PAGES = { dashboard:Dashboard, planning:Planning, members:Members, subscriptions:Subscriptions, payments:Payments, disciplines:DisciplinesPage, settings:Settings };
-
 export default function App() {
   const [role, setRole] = useState("admin"); // "superadmin" | "admin" | "adherent"
   const [page, setPage] = useState("planning");
