@@ -374,7 +374,6 @@ export default function PlanningPage() {
                       <div key={s.id}
                         onClick={() => toggleSession(s.id)}
                         style={{
-                          borderLeft: `3px solid ${disc?.color || C.accent}`,
                           background: isExp ? C.accentBg : C.surface,
                           border: `1px solid ${isExp ? C.accent : C.borderSoft}`,
                           borderLeft: `3px solid ${disc?.color || C.accent}`,
