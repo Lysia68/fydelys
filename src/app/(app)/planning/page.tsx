@@ -169,7 +169,7 @@ export default function PlanningPage() {
             background: isExpanded ? C.accentBg : C.surface,
             transition: "background .15s",
           }}
-          onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = C.warm }}
+          onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = "#FBF8F4" }}
           onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = C.surface }}
         >
           {/* Color bar */}
@@ -195,7 +195,7 @@ export default function PlanningPage() {
             <div style={{ fontSize: 12, fontWeight: 700, color: pct >= 1 ? C.warn : C.text }}>
               {sess.booked}/{sess.spots}
             </div>
-            <div style={{ width: 44, height: 3, background: C.bgDeep || "#EDE6DC", borderRadius: 2, marginTop: 3 }}>
+            <div style={{ width: 44, height: 3, background: "#EDE6DC" || "#EDE6DC", borderRadius: 2, marginTop: 3 }}>
               <div style={{ height: "100%", width: `${Math.min(pct*100,100)}%`, background: pct>=1 ? C.warn : pct>.75 ? C.accent : C.ok, borderRadius: 2 }} />
             </div>
             {sess.waitlist > 0 && (
@@ -298,10 +298,10 @@ export default function PlanningPage() {
 
                 {/* Footer actions */}
                 <div style={{ padding: "10px 14px", display: "flex", gap: 8 }}>
-                  <button style={{ fontSize: 11, padding: "5px 12px", background: C.accentBg, color: C.accentDk, border: `1px solid #DFC0A0`, borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>
+                  <button style={{ fontSize: 11, padding: "5px 12px", background: C.accentBg, color: "#8C5E38", border: `1px solid #DFC0A0`, borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>
                     + Inscrire un adhérent
                   </button>
-                  <button style={{ fontSize: 11, padding: "5px 12px", background: C.warm, color: C.textSoft, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>
+                  <button style={{ fontSize: 11, padding: "5px 12px", background: "#FBF8F4", color: C.textSoft, border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>
                     📧 Envoyer rappel
                   </button>
                 </div>
@@ -324,7 +324,7 @@ export default function PlanningPage() {
           </span>
           <button onClick={nextWeek} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: C.textSoft, padding: "0 4px" }}>›</button>
         </div>
-        <button onClick={goToday} style={{ fontSize: 12, padding: "7px 14px", background: C.accentBg, color: C.accentDk, border: `1px solid #DFC0A0`, borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>
+        <button onClick={goToday} style={{ fontSize: 12, padding: "7px 14px", background: C.accentBg, color: "#8C5E38", border: `1px solid #DFC0A0`, borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>
           Aujourd'hui
         </button>
         <div style={{ marginLeft: "auto", display: "flex", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
@@ -382,7 +382,7 @@ export default function PlanningPage() {
                           marginBottom: 4, cursor: "pointer",
                           transition: "all .15s",
                         }}
-                        onMouseEnter={e => { if (!isExp) e.currentTarget.style.background = C.warm }}
+                        onMouseEnter={e => { if (!isExp) e.currentTarget.style.background = "#FBF8F4" }}
                         onMouseLeave={e => { if (!isExp) e.currentTarget.style.background = C.surface }}
                       >
                         <div style={{ fontSize: 10, fontWeight: 700, color: C.accent }}>{s.session_time?.slice(0,5)}</div>
@@ -412,7 +412,7 @@ export default function PlanningPage() {
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                   <div style={{
                     fontSize: 12, fontWeight: 700, color: isToday ? "#fff" : C.textMid,
-                    background: isToday ? C.accent : C.bgDeep || "#EDE6DC",
+                    background: isToday ? C.accent : "#EDE6DC" || "#EDE6DC",
                     padding: "4px 12px", borderRadius: 20,
                   }}>
                     {DAYS[i]} {d.getDate()} {MONTHS[d.getMonth()].slice(0,3)}

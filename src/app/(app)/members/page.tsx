@@ -83,7 +83,7 @@ export default function MembersPage() {
       {/* Toolbar */}
       <div className="flex gap-2 mb-4 items-center">
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍  Rechercher…"
-          style={{ flex: 1, padding: "9px 12px", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 14, outline: "none", color: C.text, background: C.warm, fontFamily: "Inter, sans-serif" }}
+          style={{ flex: 1, padding: "9px 12px", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 14, outline: "none", color: C.text, background: "#FBF8F4", fontFamily: "Inter, sans-serif" }}
           onFocus={e => e.currentTarget.style.borderColor = C.accent}
           onBlur={e => e.currentTarget.style.borderColor = C.border} />
         <button onClick={() => setShowAdd(!showAdd)} className="btn-primary whitespace-nowrap">＋ Adhérent</button>
