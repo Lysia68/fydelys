@@ -24,86 +24,17 @@ function ConfirmModal({ message, onConfirm, onCancel }) {
   );
 }
 
-const MEMBERS = [
-  { id:1, firstName:"Claire",  lastName:"Martin",   email:"claire.m@email.com",  phone:"06 12 34 56 78", joined:"2026-01-10", subscription:"Mensuel illimité",  status:"actif",    credits:0, nextPayment:"2026-04-10", avatar:"CM" },
-  { id:2, firstName:"Sophie",  lastName:"Leroux",   email:"sophie.l@email.com",  phone:"06 23 45 67 89", joined:"2025-11-05", subscription:"Carnet 10 séances", status:"actif",    credits:4, nextPayment:null,         avatar:"SL" },
-  { id:3, firstName:"Julie",   lastName:"Bernard",  email:"julie.b@email.com",   phone:"06 34 56 78 90", joined:"2026-02-20", subscription:"Mensuel illimité",  status:"actif",    credits:0, nextPayment:"2026-04-20", avatar:"JB" },
-  { id:4, firstName:"Emma",    lastName:"Rousseau", email:"emma.r@email.com",    phone:"06 45 67 89 01", joined:"2025-09-15", subscription:"Mensuel illimité",  status:"suspendu", credits:0, nextPayment:"2026-03-15", avatar:"ER" },
-  { id:5, firstName:"Anne",    lastName:"Dupont",   email:"anne.d@email.com",    phone:"06 56 78 90 12", joined:"2026-03-01", subscription:"Séance découverte", status:"nouveau",  credits:1, nextPayment:null,         avatar:"AD" },
-  { id:6, firstName:"Lucie",   lastName:"Petit",    email:"lucie.p@email.com",   phone:"06 67 89 01 23", joined:"2025-12-10", subscription:"Carnet 10 séances", status:"actif",    credits:7, nextPayment:null,         avatar:"LP" },
-];
+const MEMBERS = [];
 const DISCIPLINES = [
   { id:1, name:"Yoga Vinyasa", icon:"🧘", color:"#C4956A" },
   { id:2, name:"Pilates",      icon:"⚡", color:"#6B9E7A" },
   { id:3, name:"Méditation",   icon:"☯",  color:"#6A8FAE" },
   { id:4, name:"Yin Yoga",     icon:"🌙", color:"#AE7A7A" },
 ];
-const SESSIONS_INIT = [
-  { id:1, disciplineId:1, teacher:"Sophie Laurent", date:"2026-03-09", time:"07:30", duration:60, spots:12, booked:8,  level:"Tous niveaux",  room:"Studio A",  waitlist:0 },
-  { id:2, disciplineId:2, teacher:"Marie Dubois",   date:"2026-03-09", time:"09:00", duration:50, spots:10, booked:10, level:"Intermédiaire", room:"Studio B",  waitlist:3 },
-  { id:3, disciplineId:3, teacher:"Camille Morin",  date:"2026-03-09", time:"12:00", duration:45, spots:15, booked:5,  level:"Tous niveaux",  room:"Salle Zen", waitlist:0 },
-  { id:4, disciplineId:4, teacher:"Sophie Laurent", date:"2026-03-09", time:"18:00", duration:75, spots:12, booked:7,  level:"Tous niveaux",  room:"Studio A",  waitlist:0 },
-  { id:5, disciplineId:1, teacher:"Emma Petit",     date:"2026-03-10", time:"07:00", duration:60, spots:12, booked:4,  level:"Débutant",      room:"Studio A",  waitlist:0 },
-  { id:6, disciplineId:2, teacher:"Marie Dubois",   date:"2026-03-10", time:"10:00", duration:50, spots:10, booked:9,  level:"Avancé",        room:"Studio B",  waitlist:1 },
-  { id:7, disciplineId:1, teacher:"Sophie Laurent", date:"2026-03-11", time:"08:00", duration:60, spots:12, booked:11, level:"Tous niveaux",  room:"Studio A",  waitlist:2 },
-  { id:8, disciplineId:4, teacher:"Camille Morin",  date:"2026-03-11", time:"19:00", duration:75, spots:12, booked:6,  level:"Intermédiaire", room:"Salle Zen", waitlist:0 },
-];
-const BOOKINGS_INIT = {
-  1: [
-    {id:"b1",st:"confirmed",fn:"Claire",ln:"Martin",   phone:"06 12 34 56 78", sub:"Mensuel illimité",  credits:null, total:null},
-    {id:"b2",st:"confirmed",fn:"Sophie",ln:"Leroux",   phone:"06 23 45 67 89", sub:"Carnet 10 séances", credits:4,    total:10},
-    {id:"b3",st:"confirmed",fn:"Julie", ln:"Bernard",  phone:"06 34 56 78 90", sub:"Mensuel illimité",  credits:null, total:null},
-    {id:"b4",st:"confirmed",fn:"Lucie", ln:"Petit",    phone:"06 67 89 01 23", sub:"Carnet 10 séances", credits:7,    total:10},
-    {id:"b5",st:"confirmed",fn:"Thomas",ln:"Blanc",    phone:"06 71 22 33 44", sub:"Carnet 15 séances", credits:2,    total:15},
-    {id:"b6",st:"confirmed",fn:"Marie", ln:"Roux",     phone:"06 82 33 44 55", sub:"Carnet 10 séances", credits:9,    total:10},
-    {id:"b7",st:"confirmed",fn:"Pierre",ln:"Laurent",  phone:"06 93 44 55 66", sub:"Trimestriel",       credits:null, total:null},
-    {id:"b8",st:"confirmed",fn:"Laura", ln:"Simon",    phone:"07 04 55 66 77", sub:"Séance découverte", credits:1,    total:1},
-  ],
-  2: [
-    {id:"b9", st:"confirmed",fn:"Claire",  ln:"Martin",   phone:"06 12 34 56 78", sub:"Mensuel illimité",  credits:null, total:null},
-    {id:"b10",st:"confirmed",fn:"Julie",   ln:"Bernard",  phone:"06 34 56 78 90", sub:"Mensuel illimité",  credits:null, total:null},
-    {id:"b11",st:"confirmed",fn:"Nicolas", ln:"Moreau",   phone:"06 45 11 22 33", sub:"Carnet 10 séances", credits:1,    total:10},
-    {id:"b12",st:"confirmed",fn:"Emma",    ln:"Rousseau", phone:"06 45 67 89 01", sub:"Mensuel illimité",  credits:null, total:null},
-    {id:"b13",st:"confirmed",fn:"Antoine", ln:"Girard",   phone:"06 56 22 33 44", sub:"Carnet 15 séances", credits:12,   total:15},
-    {id:"b14",st:"confirmed",fn:"Céline",  ln:"Morel",    phone:"06 67 33 44 55", sub:"Carnet 10 séances", credits:3,    total:10},
-    {id:"b15",st:"confirmed",fn:"Maxime",  ln:"Lambert",  phone:"06 78 44 55 66", sub:"Trimestriel",       credits:null, total:null},
-    {id:"b16",st:"confirmed",fn:"Laura",   ln:"Vincent",  phone:"07 89 55 66 77", sub:"Carnet 10 séances", credits:8,    total:10},
-    {id:"b17",st:"confirmed",fn:"Paul",    ln:"Mercier",  phone:"06 90 66 77 88", sub:"Mensuel illimité",  credits:null, total:null},
-    {id:"b18",st:"confirmed",fn:"Nadia",   ln:"Blanco",   phone:"07 01 77 88 99", sub:"Carnet 15 séances", credits:5,    total:15},
-    {id:"b19",st:"waitlist", fn:"Anne",    ln:"Dupont",   phone:"06 56 78 90 12", sub:"Séance découverte", credits:1,    total:1},
-    {id:"b20",st:"waitlist", fn:"Hugo",    ln:"Simon",    phone:"07 12 88 99 00", sub:"Carnet 10 séances", credits:6,    total:10},
-    {id:"b21",st:"waitlist", fn:"Chloé",   ln:"Rousseau", phone:"06 23 99 00 11", sub:"Carnet 15 séances", credits:14,   total:15},
-  ],
-  7: [
-    {id:"b22",st:"confirmed",fn:"Sophie",  ln:"Leroux",   phone:"06 23 45 67 89", sub:"Carnet 10 séances", credits:4,    total:10},
-    {id:"b23",st:"confirmed",fn:"Lucie",   ln:"Petit",    phone:"06 67 89 01 23", sub:"Carnet 10 séances", credits:7,    total:10},
-    {id:"b24",st:"confirmed",fn:"Marie",   ln:"Roux",     phone:"06 82 33 44 55", sub:"Carnet 10 séances", credits:9,    total:10},
-    {id:"b25",st:"confirmed",fn:"Thomas",  ln:"Blanc",    phone:"06 71 22 33 44", sub:"Carnet 15 séances", credits:2,    total:15},
-    {id:"b26",st:"confirmed",fn:"Pierre",  ln:"Laurent",  phone:"06 93 44 55 66", sub:"Trimestriel",       credits:null, total:null},
-    {id:"b27",st:"confirmed",fn:"Nadia",   ln:"Blanco",   phone:"07 01 77 88 99", sub:"Carnet 15 séances", credits:5,    total:15},
-    {id:"b28",st:"confirmed",fn:"Julien",  ln:"Robert",   phone:"06 34 66 77 88", sub:"Mensuel illimité",  credits:null, total:null},
-    {id:"b29",st:"confirmed",fn:"Sandrine",ln:"Michel",   phone:"07 45 77 88 99", sub:"Carnet 10 séances", credits:1,    total:10},
-    {id:"b30",st:"confirmed",fn:"Romain",  ln:"Garcia",   phone:"06 56 88 99 00", sub:"Mensuel illimité",  credits:null, total:null},
-    {id:"b31",st:"confirmed",fn:"Valérie", ln:"Martinez", phone:"06 67 99 00 11", sub:"Carnet 10 séances", credits:3,    total:10},
-    {id:"b32",st:"confirmed",fn:"Xavier",  ln:"Leclerc",  phone:"07 78 00 11 22", sub:"Carnet 15 séances", credits:13,   total:15},
-    {id:"b33",st:"waitlist", fn:"Anne",    ln:"Dupont",   phone:"06 56 78 90 12", sub:"Séance découverte", credits:1,    total:1},
-    {id:"b34",st:"waitlist", fn:"Emma",    ln:"Rousseau", phone:"06 45 67 89 01", sub:"Mensuel illimité",  credits:null, total:null},
-  ],
-};
-const SUBSCRIPTIONS_INIT = [
-  { id:1, name:"Mensuel illimité",  price:89,  period:"mois",      description:"Accès illimité à toutes les séances", popular:true,  color:"#C4956A" },
-  { id:2, name:"Carnet 10 séances", price:120, period:"carnet",    description:"Valable 6 mois, toutes disciplines",  popular:false, color:"#6B9E7A" },
-  { id:3, name:"Séance découverte", price:20,  period:"séance",    description:"Première venue pour les nouveaux",    popular:false, color:"#6A8FAE" },
-  { id:4, name:"Trimestriel",       price:240, period:"trimestre", description:"3 mois d'accès illimité",             popular:false, color:"#AE7A7A" },
-];
-const PAYMENTS = [
-  { id:1, member:"Claire Martin",  amount:89,  date:"2026-03-10", type:"Prélèvement", subscription:"Mensuel illimité",  status:"payé"   },
-  { id:2, member:"Julie Bernard",  amount:89,  date:"2026-03-20", type:"Prélèvement", subscription:"Mensuel illimité",  status:"payé"   },
-  { id:3, member:"Emma Rousseau",  amount:89,  date:"2026-03-15", type:"Prélèvement", subscription:"Mensuel illimité",  status:"impayé" },
-  { id:4, member:"Lucie Petit",    amount:120, date:"2026-03-08", type:"Carte",       subscription:"Carnet 10 séances", status:"payé"   },
-  { id:5, member:"Anne Dupont",    amount:20,  date:"2026-03-01", type:"Carte",       subscription:"Séance découverte", status:"payé"   },
-  { id:6, member:"Sophie Leroux",  amount:120, date:"2026-02-15", type:"Carte",       subscription:"Carnet 10 séances", status:"payé"   },
-];
+const SESSIONS_INIT = [];
+const BOOKINGS_INIT = {};
+const SUBSCRIPTIONS_INIT = [];
+const PAYMENTS = [];
 
 // ── SVG ICON SYSTEM ───────────────────────────────────────────────────────────
 const IC = ({d,size=16,color="currentColor",sw=1.5,fill="none"}) => (
@@ -417,6 +348,39 @@ function KpiCard({ icon, label, value, delta, accentColor, isMobile }) {
   );
 }
 
+
+// ── SEED BANNER — bouton pour insérer des données exemple ─────────────────────
+function SeedBanner({ onSeed, loading }) {
+  return (
+    <div style={{ margin:"32px auto", maxWidth:420, background:"#FFFDF9", border:"1.5px dashed #DDD5C8", borderRadius:16, padding:"28px 24px", textAlign:"center" }}>
+      <div style={{ fontSize:32, marginBottom:10 }}>🌱</div>
+      <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:6 }}>Aucune donnée pour l'instant</div>
+      <div style={{ fontSize:13, color:C.textSoft, lineHeight:1.6, marginBottom:20 }}>
+        Votre espace est vide. Vous pouvez insérer quelques données d'exemple pour explorer les fonctionnalités.
+      </div>
+      <button
+        onClick={onSeed}
+        disabled={loading}
+        style={{ background:loading?"#DDD5C8":"linear-gradient(145deg,#B88050,#9A6030)", color:"#fff", border:"none", borderRadius:10, padding:"10px 22px", fontSize:13, fontWeight:700, cursor:loading?"not-allowed":"pointer", opacity:loading?0.7:1 }}
+      >
+        {loading ? "Insertion…" : "✦ Insérer des données exemple"}
+      </button>
+      <div style={{ fontSize:11, color:"#B0A090", marginTop:10 }}>1 à 2 entrées par section — supprimables à tout moment</div>
+    </div>
+  );
+}
+
+// ── EMPTY STATE générique ────────────────────────────────────────────────────
+function EmptyState({ icon="📋", title, sub }) {
+  return (
+    <div style={{ padding:"48px 24px", textAlign:"center" }}>
+      <div style={{ fontSize:36, marginBottom:12 }}>{icon}</div>
+      <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:6 }}>{title}</div>
+      {sub && <div style={{ fontSize:13, color:C.textSoft, lineHeight:1.6, maxWidth:320, margin:"0 auto" }}>{sub}</div>}
+    </div>
+  );
+}
+
 function Dashboard({ isMobile }) {
   const p = isMobile?12:28;
   const [expandedId, setExpandedId] = useState(null);
@@ -425,6 +389,23 @@ function Dashboard({ isMobile }) {
   const handleChangeStatus = (bid, sid, ns) => {
     setBookings(prev => { const nb={...prev}; nb[sid]=(nb[sid]||[]).map(b=>b.id===bid?{...b,st:ns}:b); return nb; });
   };
+  const [seedLoading, setSeedLoading] = useState(false);
+  const handleSeed = async () => {
+    setSeedLoading(true);
+    // Appel RPC seed via l'API (données légères : 1-2 lignes par table)
+    try {
+      await fetch("/api/seed-demo", { method:"POST" });
+      window.location.reload();
+    } catch(e) { console.error(e); }
+    setSeedLoading(false);
+  };
+
+  if (SESSIONS_INIT.length === 0) return (
+    <div style={{ padding:p }}>
+      <SeedBanner onSeed={handleSeed} loading={seedLoading}/>
+    </div>
+  );
+
   return (
     <div style={{ padding:p }}>
       <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:isMobile?8:14, marginBottom:isMobile?12:20 }}>
@@ -646,6 +627,12 @@ function Planning({ isMobile }) {
   const p = isMobile?12:28;
 
   const filtered = fd ? sessions.filter(s=>s.disciplineId===fd) : sessions;
+  const [seedLoading2, setSeedLoading2] = useState(false);
+  const handleSeed2 = async () => {
+    setSeedLoading2(true);
+    try { await fetch("/api/seed-demo", { method:"POST" }); window.location.reload(); } catch(e) {}
+    setSeedLoading2(false);
+  };
   const dates = [...new Set(filtered.map(s=>s.date))].sort();
 
   const addSession = () => {
@@ -734,6 +721,12 @@ function Planning({ isMobile }) {
 
 function Members({ isMobile }) {
   const [members, setMembers] = useState(MEMBERS);
+  const [seedLoadingM, setSeedLoadingM] = useState(false);
+  const handleSeedM = async () => {
+    setSeedLoadingM(true);
+    try { await fetch("/api/seed-demo", { method:"POST" }); window.location.reload(); } catch(e) {}
+    setSeedLoadingM(false);
+  };
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -888,7 +881,10 @@ function Members({ isMobile }) {
           </div>
         </Card>
       )}
-      <Card noPad>{filtered.map(m=><MemberRow key={m.id} m={m} onSelect={m=>setSelected(selected?.id===m.id?null:m)} selected={selected?.id===m.id}/>)}</Card>
+      {members.length === 0
+        ? <SeedBanner onSeed={handleSeedM} loading={seedLoadingM}/>
+        : <Card noPad>{filtered.map(m=><MemberRow key={m.id} m={m} onSelect={m=>setSelected(selected?.id===m.id?null:m)} selected={selected?.id===m.id}/>)}</Card>
+      }
       {selected && (
         <Card style={{ marginTop:16, borderTop:`3px solid ${C.accent}` }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:18 }}>
@@ -1640,12 +1636,7 @@ function Settings({ isMobile }) {
   );
 
   // ── Tab: Équipe — coachs et leurs disciplines ─────────────────────────────
-  const COACHES_INIT = [
-    { id:"c1", fn:"Sophie",  ln:"Laurent",  email:"sophie.l@studio.fr", isCoach:true,  disciplines:[1,4], status:"actif" },
-    { id:"c2", fn:"Marie",   ln:"Dubois",   email:"marie.d@studio.fr",  isCoach:true,  disciplines:[2],   status:"actif" },
-    { id:"c3", fn:"Camille", ln:"Morin",    email:"camille.m@studio.fr",isCoach:true,  disciplines:[3,1], status:"actif" },
-    { id:"c4", fn:"Emma",    ln:"Petit",    email:"emma.p@studio.fr",   isCoach:true,  disciplines:[1],   status:"actif" },
-  ];
+  const COACHES_INIT = [];
 
   const TabTeam = () => {
     const [coaches, setCoaches]         = useState(COACHES_INIT);

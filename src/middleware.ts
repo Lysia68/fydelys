@@ -55,10 +55,13 @@ export async function middleware(request: NextRequest) {
   // ── Intercepter ?code= sur la racine (Supabase confirmation email) ─────────
   // Supabase peut envoyer le code sur / au lieu de /auth/callback
   const codeParam = searchParams.get("code")
-  if (codeParam && (pathname === "/" || pathname === "")) {
+  const tokenHashParam = searchParams.get("token_hash")
+  if ((codeParam || tokenHashParam) && (pathname === "/" || pathname === "" || pathname === "/login")) {
     const callbackUrl = new URL("/auth/callback", request.url)
-    callbackUrl.searchParams.set("code", codeParam)
-    // Préserver register=1 si présent
+    if (codeParam) callbackUrl.searchParams.set("code", codeParam)
+    if (tokenHashParam) callbackUrl.searchParams.set("token_hash", tokenHashParam)
+    const typeParam = searchParams.get("type")
+    if (typeParam) callbackUrl.searchParams.set("type", typeParam)
     const registerParam = searchParams.get("register")
     if (registerParam) callbackUrl.searchParams.set("register", registerParam)
     return NextResponse.redirect(callbackUrl)
@@ -72,7 +75,9 @@ export async function middleware(request: NextRequest) {
 
   // Auth guard
   if (!user && isProtected) {
-    return NextResponse.redirect(new URL("/", request.url))
+    // Sur fydelys.fr → redirect /login, sur tenant → redirect /
+    const loginUrl = isApp ? "/login" : "/"
+    return NextResponse.redirect(new URL(loginUrl, request.url))
   }
 
   // SuperAdmin sur domaine tenant → rediriger vers fydelys.fr

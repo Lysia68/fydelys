@@ -35,6 +35,10 @@ export async function GET(request: NextRequest) {
   if (error || !data.user) return NextResponse.redirect(new URL("/?error=auth", request.url))
 
   // service_role pour toutes les opérations DB (bypass RLS sans policy SELECT)
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error("SUPABASE_SERVICE_ROLE_KEY manquante — callback ne peut pas fonctionner")
+    return NextResponse.redirect(new URL("/?error=config", request.url))
+  }
   const db = createServiceSupabase()
 
   const userId    = data.user.id
