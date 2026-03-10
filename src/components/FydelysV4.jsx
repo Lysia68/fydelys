@@ -1081,7 +1081,10 @@ function DisciplinesPage({ isMobile }) {
   const rmSlot  = (id,si) => setDiscs(prev=>prev.map(d=>d.id===id?{...d,slots:d.slots.filter((_,j)=>j!==si)}:d));
   const upSlot  = (id,si,field,val) => setDiscs(prev=>prev.map(d=>d.id===id?{...d,slots:d.slots.map((s,j)=>j===si?{...s,[field]:val}:s)}:d));
 
-  const ScheduleModal = ({ disc }) => (
+  const ScheduleModal = ({ disc: discProp }) => {
+    // Lire la discipline LIVE depuis le state pour voir les slots ajoutés en temps réel
+    const disc = discs.find(d=>d.id===discProp.id) || discProp;
+    return (
     <div onClick={e=>e.target===e.currentTarget&&setEditDisc(null)}
       style={{position:"fixed",inset:0,background:"rgba(42,31,20,.45)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div style={{background:C.surface,borderRadius:16,width:"100%",maxWidth:480,boxShadow:"0 24px 60px rgba(0,0,0,.18)",overflow:"hidden"}}>
@@ -1123,11 +1126,12 @@ function DisciplinesPage({ isMobile }) {
 
         <div style={{padding:"14px 22px",borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"flex-end",gap:10}}>
           <Button variant="ghost" onClick={()=>setEditDisc(null)}>Fermer</Button>
-          <Button variant="primary" onClick={()=>setEditDisc(null)}>Enregistrer</Button>
+          <Button variant="primary" onClick={()=>{ showToast("Horaires enregistrés !"); setEditDisc(null); }}>Enregistrer</Button>
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   return (
     <div style={{ padding:p }}>
