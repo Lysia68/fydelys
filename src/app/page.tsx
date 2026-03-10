@@ -1,8 +1,6 @@
 "use client"
-export const dynamic = "force-dynamic"
-import * as React from "react"
-import { useState, useEffect } from "react"
-import { createClient } from "@/lib/supabase"
+import Link from "next/link"
+import { useEffect, useRef, useState } from "react"
 
 function FleurDeLys({ size = 46 }: { size?: number }) {
   return (
@@ -31,489 +29,244 @@ function FleurDeLys({ size = 46 }: { size?: number }) {
   )
 }
 
-type DisciplineSlot = { day: string; time: string }
-type DisciplineConfig = { name: string; icon: string; slots: DisciplineSlot[] }
-
-const DAYS = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"]
-const DISC_OPTS = [
-  {name:"Yoga Vinyasa",icon:"🧘"},{name:"Yin Yoga",icon:"🌙"},{name:"Méditation",icon:"☯"},
-  {name:"Pilates Mat",icon:"⚡"},{name:"Pilates Réform.",icon:"🔧"},{name:"Stretching",icon:"🤸"},
-  {name:"Danse Contemp.",icon:"💃"},{name:"Hip-Hop",icon:"🎵"},{name:"Classique",icon:"🩰"},
-  {name:"HIIT",icon:"🔥"},{name:"Cardio",icon:"❤"},{name:"Musculation",icon:"💪"},
+const FEATURES = [
+  { icon: "🗓️", title: "Planning intelligent", desc: "Gérez vos séances, créneaux et récurrences en quelques clics. Coachs et adhérents accèdent à leur planning en temps réel." },
+  { icon: "👥", title: "Gestion des membres", desc: "Fiches adhérents, crédits, abonnements, historique de présence. Tout pour un suivi personnalisé." },
+  { icon: "💳", title: "Paiements intégrés", desc: "Encaissez abonnements et séances sans friction. Stripe sécurise chaque transaction." },
+  { icon: "🏠", title: "Votre espace dédié", desc: "Un sous-domaine à votre image — nom.fydelys.fr. Coachs et membres s'y connectent directement." },
+  { icon: "📊", title: "Tableaux de bord", desc: "CA, taux de remplissage, tendances. Pilotez votre studio avec des données claires." },
+  { icon: "✉️", title: "Invitations & rôles", desc: "Invitez vos coachs par email. Vos adhérents s'inscrivent librement depuis votre URL." },
 ]
-const DEFAULTS: Record<string,string[]> = {
-  Yoga:["Yoga Vinyasa","Yin Yoga","Méditation"], Pilates:["Pilates Mat","Pilates Réform.","Stretching"],
-  Danse:["Danse Contemp.","Hip-Hop","Classique"], Fitness:["HIIT","Cardio","Musculation"],
-  Méditation:["Méditation","Yin Yoga","Yoga Vinyasa"], Multi:["Yoga Vinyasa","Pilates Mat","HIIT"],
-}
 
-function DisciplinesModal({ studioType, onClose, onSave }: {
-  studioType: string; onClose: ()=>void; onSave: (d: DisciplineConfig[])=>void
-}) {
-  const init = DISC_OPTS.filter(d=>(DEFAULTS[studioType]||DEFAULTS.Multi).includes(d.name))
-    .map(d=>({...d, slots:[{day:"Lun",time:"09:00"}]}))
-  const [discs, setDiscs] = useState<DisciplineConfig[]>(init)
-  const [active, setActive] = useState(0)
+const PLANS = [
+  { name: "Essentiel", price: "9",  desc: "Pour démarrer",           features: ["50 adhérents", "2 coachs", "Planning", "Paiements"], popular: false },
+  { name: "Standard",  price: "29", desc: "Pour les studios actifs", features: ["200 adhérents", "5 coachs", "Statistiques", "Support email"], popular: true },
+  { name: "Pro",       price: "69", desc: "Pour les grands studios", features: ["Adhérents illimités", "Coachs illimités", "Tout Standard +", "Support prioritaire"], popular: false },
+]
 
-  const toggle = (d: {name:string;icon:string}) => {
-    const i = discs.findIndex(x=>x.name===d.name)
-    if(i>=0){ setDiscs(p=>p.filter((_,j)=>j!==i)); setActive(0) }
-    else { setDiscs(p=>[...p,{...d,slots:[{day:"Lun",time:"09:00"}]}]); setActive(discs.length) }
-  }
-  const addSlot = (di:number) => setDiscs(p=>p.map((d,i)=>i===di?{...d,slots:[...d.slots,{day:"Lun",time:"10:00"}]}:d))
-  const rmSlot  = (di:number,si:number) => setDiscs(p=>p.map((d,i)=>i===di?{...d,slots:d.slots.filter((_,j)=>j!==si)}:d))
-  const upSlot  = (di:number,si:number,f:"day"|"time",v:string) =>
-    setDiscs(p=>p.map((d,i)=>i===di?{...d,slots:d.slots.map((s,j)=>j===si?{...s,[f]:v}:s)}:d))
+function StepsAnimated() {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          ref.current?.querySelectorAll(".step").forEach((s, i) => {
+            setTimeout(() => s.classList.add("visible"), i * 150)
+          })
+          observer.disconnect()
+        }
+      })
+    }, { threshold: 0.3 })
+    if (ref.current) observer.observe(ref.current)
+    return () => observer.disconnect()
+  }, [])
 
-  const B = {bg:"#F8F2EA",w:"#fff",border:"#DDD5C8",accent:"#A06838",text:"#2A1F14",sub:"#8C7B6C",muted:"#B0A090"}
   return (
-    <div onClick={e=>e.target===e.currentTarget&&onClose()}
-      style={{position:"fixed",inset:0,background:"rgba(42,31,20,.5)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div style={{background:B.w,borderRadius:20,width:"100%",maxWidth:580,maxHeight:"90vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 24px 60px rgba(0,0,0,.2)"}}>
-        <div style={{padding:"18px 24px",borderBottom:`1px solid ${B.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+    <div ref={ref} style={{ display:"flex", flexDirection:"column", gap:0, marginTop:40 }}>
+      {[
+        { n:"1", title:"Créez votre studio",   desc:"Nom, URL personnalisée (nom.fydelys.fr). Prêt en 2 minutes." },
+        { n:"2", title:"Invitez vos coachs",   desc:"Un email d'invitation — ils accèdent directement à leur espace." },
+        { n:"3", title:"Accueillez vos membres", desc:"Partagez votre URL. Inscription, réservation, paiement en autonomie." },
+      ].map((s, i) => (
+        <div key={i} className="step" style={{ display:"flex", gap:20, alignItems:"flex-start", padding:"24px 0", borderBottom:"1px solid rgba(160,104,56,.12)", opacity:0, transform:"translateX(-16px)", transition:"opacity .5s, transform .5s" }}>
+          <div style={{ flexShrink:0, width:40, height:40, borderRadius:"50%", background:"linear-gradient(145deg,#B88050,#9A6030)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"Georgia,serif", fontSize:18, fontWeight:700, color:"#fff", boxShadow:"0 2px 8px rgba(154,96,48,.25)" }}>{s.n}</div>
           <div>
-            <div style={{fontSize:16,fontWeight:800,color:B.text}}>🗓 Disciplines & Horaires</div>
-            <div style={{fontSize:12,color:B.sub,marginTop:2}}>Configurez les cours de votre studio</div>
-          </div>
-          <button onClick={onClose} style={{background:"none",border:`1.5px solid ${B.border}`,borderRadius:9,padding:"5px 10px",cursor:"pointer",fontSize:16,color:B.sub}}>✕</button>
-        </div>
-        <div style={{display:"flex",flex:1,overflow:"hidden"}}>
-          {/* Gauche — liste disciplines */}
-          <div style={{width:185,borderRight:`1px solid ${B.border}`,overflowY:"auto",padding:"10px 8px",flexShrink:0,background:B.bg}}>
-            <div style={{fontSize:10,fontWeight:700,color:B.muted,textTransform:"uppercase",letterSpacing:.8,marginBottom:8,paddingLeft:4}}>Disciplines</div>
-            {DISC_OPTS.map(d=>{
-              const sel=discs.some(x=>x.name===d.name)
-              const idx=discs.findIndex(x=>x.name===d.name)
-              return (
-                <div key={d.name} onClick={()=>{toggle(d);if(!sel)setTimeout(()=>setActive(discs.length),10)}}
-                  style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:9,marginBottom:2,cursor:"pointer",
-                    background:sel?"#F5EBE0":"transparent",border:`1px solid ${sel&&idx===active?B.accent:sel?"rgba(160,104,56,.25)":"transparent"}`,transition:"all .15s"}}>
-                  <span style={{fontSize:15}}>{d.icon}</span>
-                  <span style={{fontSize:12,fontWeight:sel?700:400,color:sel?B.accent:B.text,flex:1,lineHeight:1.2}}>{d.name}</span>
-                  {sel&&<span onClick={e=>{e.stopPropagation();setActive(idx)}} style={{fontSize:10,color:B.accent}}>→</span>}
-                </div>
-              )
-            })}
-          </div>
-          {/* Droite — horaires */}
-          <div style={{flex:1,overflowY:"auto",padding:"16px 18px"}}>
-            {discs.length===0 ? (
-              <div style={{textAlign:"center",padding:"48px 0",color:B.muted}}>
-                <div style={{fontSize:36,marginBottom:8}}>🗓</div>
-                <div style={{fontSize:13}}>Sélectionnez des disciplines</div>
-              </div>
-            ) : (
-              <>
-                <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:16}}>
-                  {discs.map((d,i)=>(
-                    <button key={d.name} onClick={()=>setActive(i)}
-                      style={{padding:"5px 11px",borderRadius:20,border:`1.5px solid ${i===active?B.accent:B.border}`,
-                        background:i===active?"#F5EBE0":"#fff",color:i===active?B.accent:B.sub,
-                        fontSize:12,fontWeight:i===active?700:400,cursor:"pointer"}}>
-                      {d.icon} {d.name}
-                    </button>
-                  ))}
-                </div>
-                {discs[active] && (
-                  <div>
-                    <div style={{fontSize:13,fontWeight:700,color:B.text,marginBottom:12}}>{discs[active].icon} {discs[active].name} — Créneaux</div>
-                    {discs[active].slots.map((slot,si)=>(
-                      <div key={si} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                        <select value={slot.day} onChange={e=>upSlot(active,si,"day",e.target.value)}
-                          style={{padding:"8px 10px",borderRadius:9,border:`1.5px solid ${B.border}`,fontSize:13,color:B.text,background:"#FDFAF7",flex:1,outline:"none"}}>
-                          {DAYS.map(d=><option key={d}>{d}</option>)}
-                        </select>
-                        <input type="time" value={slot.time} onChange={e=>upSlot(active,si,"time",e.target.value)}
-                          style={{padding:"8px 10px",borderRadius:9,border:`1.5px solid ${B.border}`,fontSize:13,color:B.text,background:"#FDFAF7",flex:1,outline:"none"}}/>
-                        {discs[active].slots.length>1 &&
-                          <button onClick={()=>rmSlot(active,si)}
-                            style={{padding:"6px 10px",borderRadius:9,border:`1px solid ${B.border}`,background:"#fff",color:"#F87171",cursor:"pointer",fontSize:13}}>✕</button>}
-                      </div>
-                    ))}
-                    <button onClick={()=>addSlot(active)}
-                      style={{width:"100%",padding:"9px",borderRadius:9,border:"1.5px dashed #C4A87A",background:"transparent",color:B.accent,fontSize:13,fontWeight:600,cursor:"pointer",marginTop:4}}>
-                      + Ajouter un créneau
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
+            <div style={{ fontSize:16, fontWeight:700, color:"#2A1F14", marginBottom:5 }}>{s.title}</div>
+            <div style={{ fontSize:14, color:"#8C7B6C", lineHeight:1.6 }}>{s.desc}</div>
           </div>
         </div>
-        <div style={{padding:"14px 24px",borderTop:`1px solid ${B.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{fontSize:12,color:B.muted}}>{discs.length} discipline{discs.length!==1?"s":""} · {discs.reduce((n,d)=>n+d.slots.length,0)} créneau{discs.reduce((n,d)=>n+d.slots.length,0)!==1?"x":""}</div>
-          <div style={{display:"flex",gap:10}}>
-            <button onClick={onClose} style={{padding:"9px 18px",borderRadius:10,border:`1.5px solid ${B.border}`,background:"#fff",color:B.sub,fontSize:14,fontWeight:600,cursor:"pointer"}}>Annuler</button>
-            <button onClick={()=>onSave(discs)} style={{padding:"9px 20px",borderRadius:10,border:"none",background:"linear-gradient(145deg,#B88050,#9A6030)",color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>
-              Valider {discs.length>0?`(${discs.length})`:""}
-            </button>
-          </div>
+      ))}
+    </div>
+  )
+}
+
+export default function LandingPage() {
+  const [scrolled, setScrolled] = useState(false)
+  useEffect(() => {
+    const fn = () => setScrolled(window.scrollY > 40)
+    window.addEventListener("scroll", fn)
+    return () => window.removeEventListener("scroll", fn)
+  }, [])
+
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600&display=swap');
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+        :root{
+          --bg:#F4EFE8;--bg2:#EDE7DD;--surface:#FDFAF7;--border:rgba(160,104,56,.15);
+          --text:#2A1F14;--mid:#5C4A38;--soft:#8C7B6C;--muted:#B0A090;
+          --accent:#A06838;--gold:#C4922A;
+          --btn:linear-gradient(145deg,#B88050,#9A6030);
+          --display:'Cormorant Garamond',Georgia,serif;
+          --body:'DM Sans',system-ui,sans-serif;
+        }
+        html{scroll-behavior:smooth;}
+        body{background:var(--bg);color:var(--text);font-family:var(--body);line-height:1.6;}
+        .step.visible{opacity:1!important;transform:translateX(0)!important;}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+        .hero-tag{animation:fadeUp .6s ease both;}
+        .hero-h1{animation:fadeUp .6s .1s ease both;}
+        .hero-sub{animation:fadeUp .6s .2s ease both;}
+        .hero-btns{animation:fadeUp .6s .3s ease both;}
+        .hero-note{animation:fadeUp .6s .4s ease both;}
+        @media(max-width:640px){
+          .how-grid{grid-template-columns:1fr!important;}
+          .plans-grid{grid-template-columns:1fr!important;}
+          nav .nav-links a:not(.nav-cta){display:none;}
+        }
+        @media(max-width:860px){
+          .how-grid{grid-template-columns:1fr!important;}
+        }
+      `}</style>
+
+      {/* NAV */}
+      <nav style={{ position:"fixed", top:0, left:0, right:0, zIndex:100, height:64, padding:"0 40px", display:"flex", alignItems:"center", justifyContent:"space-between", transition:"background .3s, box-shadow .3s", background: scrolled ? "rgba(244,239,232,.92)" : "transparent", backdropFilter: scrolled ? "blur(12px)" : "none", boxShadow: scrolled ? "0 1px 0 rgba(160,104,56,.12)" : "none" }}>
+        <a href="/" style={{ display:"flex", alignItems:"center", gap:10, textDecoration:"none" }}>
+          <FleurDeLys size={32}/>
+          <span style={{ fontFamily:"var(--display)", fontSize:22, fontWeight:700, color:"#2A1F14", letterSpacing:"-.3px" }}>Fydelys</span>
+        </a>
+        <div className="nav-links" style={{ display:"flex", alignItems:"center", gap:6 }}>
+          <a href="#fonctionnalites" style={{ padding:"8px 14px", borderRadius:8, fontSize:14, fontWeight:500, color:"#5C4A38", textDecoration:"none" }}>Fonctionnalités</a>
+          <a href="#tarifs" style={{ padding:"8px 14px", borderRadius:8, fontSize:14, fontWeight:500, color:"#5C4A38", textDecoration:"none" }}>Tarifs</a>
+          <a href="/login" style={{ padding:"8px 16px", borderRadius:8, fontSize:14, fontWeight:500, color:"#5C4A38", textDecoration:"none" }}>Connexion</a>
+          <a href="/login?tab=register" style={{ padding:"9px 20px", background:"linear-gradient(145deg,#B88050,#9A6030)", borderRadius:9, fontSize:14, fontWeight:600, color:"#fff", textDecoration:"none", boxShadow:"0 2px 8px rgba(154,96,48,.3)" }}>Créer mon studio</a>
         </div>
+      </nav>
+
+      {/* HERO */}
+      <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"100px 24px 80px", position:"relative", overflow:"hidden", textAlign:"center" }}>
+        {/* BG */}
+        <div style={{ position:"absolute", inset:0, pointerEvents:"none", background:"radial-gradient(ellipse 70% 50% at 20% 30%, rgba(196,146,42,.12) 0%, transparent 60%), radial-gradient(ellipse 50% 60% at 80% 70%, rgba(160,104,56,.1) 0%, transparent 55%)" }}/>
+        {/* Orbs */}
+        <div style={{ position:"absolute", width:280, height:280, top:"5%", left:"-8%", borderRadius:"50%", background:"radial-gradient(circle, rgba(196,146,42,.15) 0%, transparent 70%)", animation:"float 16s ease-in-out infinite", pointerEvents:"none" }}/>
+        <div style={{ position:"absolute", width:160, height:160, bottom:"12%", right:"2%", borderRadius:"50%", background:"radial-gradient(circle, rgba(160,104,56,.12) 0%, transparent 70%)", animation:"float 20s ease-in-out infinite", animationDelay:"5s", pointerEvents:"none" }}/>
+
+        <div className="hero-tag" style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"5px 14px", background:"rgba(196,146,42,.1)", border:"1px solid rgba(196,146,42,.25)", borderRadius:20, fontSize:11, fontWeight:700, color:"#C4922A", letterSpacing:".8px", textTransform:"uppercase", marginBottom:28 }}>
+          ✦ Plateforme de gestion · Studios & Bien-être
+        </div>
+
+        <h1 className="hero-h1" style={{ fontFamily:"var(--display)", fontSize:"clamp(48px,8vw,88px)", fontWeight:700, lineHeight:1.05, letterSpacing:"-2px", color:"#2A1F14", maxWidth:800, marginBottom:24 }}>
+          Gérez votre studio<br/>avec <em style={{ fontStyle:"italic", color:"#A06838" }}>sérénité</em>
+        </h1>
+
+        <p className="hero-sub" style={{ fontSize:"clamp(16px,2vw,19px)", color:"#8C7B6C", maxWidth:520, lineHeight:1.65, marginBottom:44 }}>
+          Planning, membres, paiements — tout ce dont votre studio de yoga, pilates ou bien-être a besoin, dans une plateforme élégante et intuitive.
+        </p>
+
+        <div className="hero-btns" style={{ display:"flex", gap:12, flexWrap:"wrap", justifyContent:"center" }}>
+          <a href="/login?tab=register" style={{ padding:"14px 32px", background:"linear-gradient(145deg,#B88050,#9A6030)", borderRadius:11, fontSize:15, fontWeight:600, color:"#fff", textDecoration:"none", boxShadow:"0 4px 16px rgba(154,96,48,.35)" }}>
+            Démarrer l'essai gratuit →
+          </a>
+          <a href="#fonctionnalites" style={{ padding:"14px 32px", border:"1.5px solid rgba(160,104,56,.2)", borderRadius:11, fontSize:15, fontWeight:600, color:"#5C4A38", textDecoration:"none", background:"rgba(255,255,255,.5)" }}>
+            Découvrir Fydelys
+          </a>
+        </div>
+
+        <p className="hero-note" style={{ marginTop:20, fontSize:13, color:"#B0A090" }}>
+          <strong style={{ color:"#C4922A" }}>15 jours offerts</strong> · Sans carte bancaire · Annulable à tout moment
+        </p>
       </div>
-    </div>
-  )
-}
 
-type Ctx = "superadmin" | "tenant-login"
-
-// FR / SR définis HORS de LoginPage pour éviter la perte de focus
-type FRProps = { label:string; k:string; placeholder?:string; type?:string; required?:boolean; value:string; onChange:(k:string,v:string)=>void; error?:string }
-function FR({ label, k, placeholder, type="text", required=false, value, onChange, error }:FRProps) {
-  const [lf,setLf] = useState(false)
-  const inp=(f=false,err=false)=>({
-    width:"100%",padding:"11px 14px",border:`1.5px solid ${err?"#F87171":f?"rgba(160,104,56,.6)":"#DDD5C8"}`,
-    borderRadius:10,fontSize:14,outline:"none",color:"#2A1F14",background:"#FDFAF7",
-    boxSizing:"border-box" as const,boxShadow:f?"0 0 0 3px rgba(160,104,56,.07)":"none"
-  })
-  const lbl={fontSize:11,fontWeight:700,color:"#8C7B6C",textTransform:"uppercase" as const,letterSpacing:.8,display:"block",marginBottom:5}
-  return (
-    <div>
-      <label style={lbl}>{label}{required&&<span style={{color:"#F87171"}}> *</span>}</label>
-      <input type={type} value={value} onChange={e=>onChange(k,e.target.value)}
-        onFocus={()=>setLf(true)} onBlur={()=>setLf(false)} placeholder={placeholder} style={inp(lf,!!error)}/>
-      {error&&<div style={{fontSize:11,color:"#F87171",marginTop:3}}>{error}</div>}
-    </div>
-  )
-}
-type SRProps = { label:string; k:string; opts:{v:string;l:string}[]; value:string; onChange:(k:string,v:string)=>void }
-function SR({ label, k, opts, value, onChange }:SRProps) {
-  const inp=()=>({
-    width:"100%",padding:"11px 14px",border:"1.5px solid #DDD5C8",
-    borderRadius:10,fontSize:14,outline:"none",color:"#2A1F14",background:"#FDFAF7",
-    boxSizing:"border-box" as const
-  })
-  const lbl={fontSize:11,fontWeight:700,color:"#8C7B6C",textTransform:"uppercase" as const,letterSpacing:.8,display:"block",marginBottom:5}
-  return (
-    <div>
-      <label style={lbl}>{label}</label>
-      <select value={value} onChange={e=>onChange(k,e.target.value)}
-        style={{...inp(),appearance:"none" as const}}>
-        {opts.map((o)=><option key={o.v} value={o.v}>{o.l}</option>)}
-      </select>
-    </div>
-  )
-}
-
-export default function LoginPage() {
-  const [ctx, setCtx]           = useState<Ctx>("tenant-login")
-  const [studioName, setStudioName] = useState("")
-  const [tab, setTab]           = useState<"login"|"register">("login")
-  const [email, setEmail]       = useState("")
-  const [loading, setLoading]   = useState(false)
-  const [sent, setSent]         = useState(false)
-  const [error, setError]       = useState<string|null>(null)
-  const [focused, setFocused]   = useState(false)
-  const [reg, setReg] = useState({
-    studioName:"", slug:"", city:"", zip:"", address:"",
-    type:"Yoga", firstName:"", lastName:"", email:"", phone:"",
-    isCoach:false, disciplines:[] as DisciplineConfig[],
-  })
-  const [regErrors, setRegErrors] = useState<Record<string,string>>({})
-  const [regStep, setRegStep]     = useState(1)
-  const [regSent, setRegSent]     = useState(false)
-  const [discModal, setDiscModal] = useState(false)
-
-  const supabase = createClient()
-
-  useEffect(()=>{
-    const h = window.location.hostname
-    if(h.startsWith("app.")||h==="localhost"||h.startsWith("localhost:")) {
-      setCtx("superadmin"); setTab("login")
-    } else {
-      const m = h.match(/^([a-z0-9-]+)\.fydelys\.fr/)
-      if(m) supabase.from("studios").select("name").eq("slug",m[1]).single()
-        .then(({data})=>{ if(data) setStudioName(data.name) })
-    }
-  },[])
-
-  const toSlug = (s:string) =>
-    s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
-     .replace(/[^a-z0-9]/g,"")  // supprime tout sauf lettres et chiffres, pas de tirets
-  const validSlug = (s:string) => /^[a-z0-9]+$/.test(s)
-  const updReg = (k:string,v:any) => {
-    const n:any={...reg,[k]:v}
-    if(k==="studioName") n.slug=toSlug(v)
-    if(k==="slug") n.slug=v.toLowerCase().replace(/[^a-z0-9]/g,"")
-    setReg(n); setRegErrors(e=>({...e,[k]:undefined as any}))
-  }
-
-  async function handleLogin(e:React.FormEvent){
-    e.preventDefault(); setLoading(true); setError(null)
-    const {error}=await supabase.auth.signInWithOtp({email,
-      options:{emailRedirectTo:`${window.location.origin}/auth/callback?next=/dashboard`}})
-    if(error&&!error.message?.includes("Database error")) setError(error.message)
-    else setSent(true)
-    setLoading(false)
-  }
-
-  async function handleRegister(){
-    setLoading(true); setError(null)
-    const {data:ex}=await supabase.from("studios").select("id").eq("slug",reg.slug).single()
-    if(ex){ setRegErrors({slug:"Ce sous-domaine est déjà pris"}); setRegStep(1); setLoading(false); return }
-    const {error:se}=await supabase.from("pending_registrations").upsert({
-      email:reg.email,
-      data:{studioName:reg.studioName,slug:reg.slug,city:reg.city,zip:reg.zip||null,address:reg.address||null,
-            type:reg.type,firstName:reg.firstName,lastName:reg.lastName,phone:reg.phone,
-            isCoach:reg.isCoach,disciplines:reg.disciplines},
-      expires_at:new Date(Date.now()+24*3600*1000).toISOString(),
-    },{onConflict:"email"})
-    if(se){ setError("Erreur lors de l'enregistrement."); setLoading(false); return }
-    const {error}=await supabase.auth.signInWithOtp({email:reg.email,options:{
-      emailRedirectTo:`${window.location.origin}/auth/callback?next=/dashboard&register=1`,
-      shouldCreateUser:true,
-      data:{first_name:reg.firstName,last_name:reg.lastName},
-    }})
-    if(error&&!error.message?.includes("Database error")) setError(error.message)
-    else setRegSent(true)
-    setLoading(false)
-  }
-
-  const step1valid = () => {
-    const e:Record<string,string>={}
-    if(!reg.studioName.trim()) e.studioName="Obligatoire"
-    if(!reg.city.trim())       e.city="Obligatoire"
-    if(!reg.slug.trim())       e.slug="Obligatoire"
-    else if(!validSlug(reg.slug)) e.slug="Lettres minuscules et chiffres uniquement, sans tirets"
-    return e
-  }
-  const step2valid = () => {
-    const e:Record<string,string>={}
-    if(!reg.firstName.trim()) e.firstName="Obligatoire"
-    if(!reg.lastName.trim())  e.lastName="Obligatoire"
-    if(!reg.email.includes("@")) e.email="Email invalide"
-    if(!reg.phone.trim())     e.phone="Obligatoire"
-    return e
-  }
-
-  const C = {
-    bg:"#F8F2EA",
-    glow:"radial-gradient(ellipse 80% 60% at 50% 0%, rgba(176,120,72,.08) 0%, transparent 70%)",
-    card:"rgba(255,255,255,.88)", border:"1px solid rgba(221,213,200,.8)",
-    title:"#2A1F14", accent:"#A06838", sub:"#8C7B6C",
-    input:{bg:"#FDFAF7",color:"#2A1F14",border:(f:boolean)=>f?"#A06838":"#DDD5C8"},
-    btn:"linear-gradient(145deg,#B88050,#9A6030)",
-    btnGhost:"rgba(160,104,56,.08)", logo:"#F0EAE0",
-    footer:"#B0A090", label:"#8C7B6C",
-  }
-  const inp=(f=false,err=false)=>({
-    width:"100%",padding:"11px 14px",border:`1.5px solid ${err?"#F87171":C.input.border(f)}`,
-    borderRadius:10,fontSize:14,outline:"none",color:C.input.color,background:C.input.bg,
-    boxSizing:"border-box" as const,boxShadow:f?"0 0 0 3px rgba(160,104,56,.07)":"none"
-  })
-  const lbl={fontSize:11,fontWeight:700,color:C.label,textTransform:"uppercase" as const,letterSpacing:.8,display:"block",marginBottom:5}
-  const btn=(ghost=false)=>({
-    width:"100%",padding:"13px",background:ghost?C.btnGhost:C.btn,
-    color:ghost?C.accent:"#fff",border:ghost?"1px solid rgba(160,104,56,.2)":"none",
-    borderRadius:12,fontSize:15,fontWeight:700,cursor:"pointer",letterSpacing:-0.2
-  })
-
-
-
-  const totalSlots = reg.disciplines.reduce((n,d)=>n+d.slots.length,0)
-
-  return (
-    <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'Inter',-apple-system,sans-serif"}}>
-      <div style={{position:"fixed",inset:0,background:C.glow,pointerEvents:"none"}}/>
-
-      <div style={{width:"100%",maxWidth:ctx==="superadmin"&&tab==="register"?500:400,position:"relative"}}>
-
-        {/* Logo */}
-        <div style={{textAlign:"center",marginBottom:32}}>
-          <div style={{width:80,height:80,borderRadius:24,background:C.logo,display:"flex",alignItems:"center",
-            justifyContent:"center",margin:"0 auto 18px",
-            boxShadow:"0 4px 24px rgba(160,104,56,.16), inset 0 1px 0 rgba(255,255,255,.9), inset 0 -1px 0 rgba(160,104,56,.12)",
-            border:"1.5px solid rgba(210,180,140,.35)"}}>
-            <FleurDeLys size={50}/>
-          </div>
-          <h1 style={{fontSize:30,fontWeight:800,color:C.title,margin:"0 0 6px",letterSpacing:-0.8,lineHeight:1}}>
-            Fyde<span style={{color:C.accent}}>lys</span>
-          </h1>
-          <p style={{color:C.sub,fontSize:13,margin:0,fontWeight:500}}>
-            {ctx==="superadmin" ? "Plateforme de gestion · Studios & Bien-être"
-             : studioName ? `Bienvenue chez ${studioName}` : "Gestion de studio · Yoga & Bien-être"}
-          </p>
-        </div>
-
-        {/* Tabs */}
-        {ctx==="superadmin" && (
-          <div style={{display:"flex",background:"rgba(160,104,56,.08)",borderRadius:12,padding:4,marginBottom:20,border:"1px solid rgba(160,104,56,.2)"}}>
-            {([["login","Se connecter"],["register","Créer mon studio"]] as const).map(([t,l])=>(
-              <button key={t} onClick={()=>{setTab(t);setError(null);setSent(false);setRegSent(false)}}
-                style={{flex:1,padding:"9px",borderRadius:9,border:"none",fontWeight:700,fontSize:14,cursor:"pointer",
-                  background:tab===t?C.btn:"transparent",color:tab===t?"#fff":C.sub}}>
-                {l}
-              </button>
+      {/* FEATURES */}
+      <section id="fonctionnalites" style={{ padding:"96px 24px", background:"var(--bg2)" }}>
+        <div style={{ maxWidth:1100, margin:"0 auto" }}>
+          <div style={{ marginBottom:8, fontSize:11, fontWeight:700, letterSpacing:"1.2px", textTransform:"uppercase", color:"#A06838" }}>✦ Fonctionnalités</div>
+          <h2 style={{ fontFamily:"var(--display)", fontSize:"clamp(32px,5vw,52px)", fontWeight:700, lineHeight:1.1, letterSpacing:"-1px", color:"#2A1F14", marginBottom:12 }}>Tout ce dont vous avez besoin</h2>
+          <p style={{ fontSize:16, color:"#8C7B6C", maxWidth:480, lineHeight:1.65, marginBottom:56 }}>Une solution complète conçue pour les gérants de studios de bien-être exigeants.</p>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:2, border:"1.5px solid rgba(160,104,56,.15)", borderRadius:20, overflow:"hidden" }}>
+            {FEATURES.map((f, i) => (
+              <div key={i} style={{ padding:"32px 28px", background:"#FDFAF7", borderRight:"1.5px solid rgba(160,104,56,.1)", borderBottom:"1.5px solid rgba(160,104,56,.1)" }}>
+                <div style={{ fontSize:28, marginBottom:16, display:"block" }}>{f.icon}</div>
+                <div style={{ fontSize:16, fontWeight:700, color:"#2A1F14", marginBottom:8 }}>{f.title}</div>
+                <div style={{ fontSize:14, color:"#8C7B6C", lineHeight:1.6 }}>{f.desc}</div>
+              </div>
             ))}
           </div>
-        )}
-
-        <div style={{background:C.card,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",border:C.border,borderRadius:20,padding:"28px 26px",boxShadow:"0 8px 40px rgba(42,31,20,.08)"}}>
-
-          {/* LOGIN */}
-          {(ctx!=="superadmin"||tab==="login") && !sent && (
-            <>
-              <div style={{marginBottom:20}}>
-                <h2 style={{fontSize:17,fontWeight:700,color:C.title,margin:"0 0 5px",letterSpacing:-0.3}}>Connexion sans mot de passe</h2>
-                <p style={{fontSize:13,color:C.sub,margin:0,lineHeight:1.6}}>Recevez un lien sécurisé dans votre boîte mail.</p>
-              </div>
-              <form onSubmit={handleLogin}>
-                <div style={{marginBottom:14}}>
-                  <label style={{...lbl,color:focused?C.accent:C.label}}>Adresse email</label>
-                  <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
-                    onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)}
-                    placeholder="vous@studio.com" required style={inp(focused)}/>
-                </div>
-                {error&&<div style={{background:"#FDF0EC",border:"1px solid #EFC8BC",borderRadius:9,padding:"9px 13px",marginBottom:12,fontSize:13,color:"#A85030"}}>⚠ {error}</div>}
-                <button type="submit" disabled={loading||!email} style={{...btn(),opacity:loading||!email?.includes("@")?0.5:1}}>
-                  {loading?"Envoi…":"Recevoir le lien ✦"}
-                </button>
-              </form>
-            </>
-          )}
-
-          {(ctx!=="superadmin"||tab==="login") && sent && (
-            <div style={{textAlign:"center",padding:"8px 0"}}>
-              <div style={{width:56,height:56,borderRadius:"50%",background:"rgba(52,211,153,.1)",border:"1.5px solid rgba(52,211,153,.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,margin:"0 auto 16px"}}>✉</div>
-              <h2 style={{fontSize:18,fontWeight:800,color:C.title,marginBottom:8}}>Vérifiez vos emails !</h2>
-              <p style={{fontSize:13,color:C.sub,marginBottom:4}}>Lien envoyé à</p>
-              <p style={{fontWeight:700,color:C.accent,background:"#F5EBE0",borderRadius:8,padding:"6px 14px",display:"inline-block",marginBottom:16}}>{email}</p>
-              <p style={{fontSize:12,color:C.footer,lineHeight:1.7}}>Expire dans <strong>1h</strong> · Vérifiez vos spams</p>
-              <button onClick={()=>{setSent(false);setEmail("")}} style={{marginTop:16,...btn(true),fontSize:13,padding:"9px"}}>← Changer d&apos;adresse</button>
-            </div>
-          )}
-
-          {/* REGISTER */}
-          {ctx==="superadmin" && tab==="register" && !regSent && (
-            <>
-              <div style={{display:"flex",gap:6,marginBottom:22}}>
-                {["Studio","Contact","Confirmation"].map((s,i)=>(
-                  <div key={s} style={{flex:1}}>
-                    <div style={{height:3,borderRadius:2,background:i+1<=regStep?C.accent:"#DDD5C8",marginBottom:4}}/>
-                    <div style={{fontSize:10,fontWeight:600,color:i+1<=regStep?C.accent:"#B0A090",textAlign:"center"}}>{s}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Étape 1 */}
-              {regStep===1 && (
-                <div style={{display:"flex",flexDirection:"column",gap:14}}>
-                  <FR label="Nom du studio / centre" k="studioName" placeholder="Ex: Yoga Flow Paris" required value={reg.studioName} onChange={updReg} error={regErrors.studioName}/>
-
-                  {/* Slug — format input.fydelys.fr */}
-                  <div>
-                    <label style={lbl}>Adresse web <span style={{color:"#B0A090"}}>(auto)</span> <span style={{color:"#F87171"}}>*</span></label>
-                    <div style={{display:"flex",alignItems:"center",background:"#FAFAF8",border:`1.5px solid ${regErrors.slug?"#F87171":"#DDD5C8"}`,borderRadius:10,overflow:"hidden"}}>
-                      <input value={reg.slug} onChange={e=>updReg("slug",e.target.value)} placeholder="yoga-flow-paris"
-                        style={{...inp(),border:"none",background:"transparent",flex:1,padding:"11px 12px",textAlign:"right"}}/>
-                      <span style={{padding:"11px 12px",color:"#8C7B6C",fontSize:13,borderLeft:"1px solid #DDD5C8",whiteSpace:"nowrap",flexShrink:0,fontWeight:600}}>.fydelys.fr</span>
-                    </div>
-                    {regErrors.slug&&<div style={{fontSize:11,color:"#F87171",marginTop:3}}>{regErrors.slug}</div>}
-                    <div style={{fontSize:11,color:"#B0A090",marginTop:4}}>
-                      ✓ Votre URL : <code style={{color:C.accent}}>{reg.slug||"monstudio"}.fydelys.fr</code> · uniquement lettres et chiffres
-                    </div>
-                  </div>
-
-                  <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:12}}>
-                    <FR label="Ville" k="city" placeholder="Paris" required value={reg.city} onChange={updReg} error={regErrors.city}/>
-                    <FR label="Code postal" k="zip" placeholder="75001" value={reg.zip} onChange={updReg}/>
-                  </div>
-                  <FR label="Adresse" k="address" placeholder="12 rue de la Paix" value={reg.address} onChange={updReg}/>
-                  <SR label="Type de pratique" k="type" value={reg.type} onChange={updReg} opts={[
-                    {v:"Yoga",l:"🧘 Yoga"},{v:"Pilates",l:"⚡ Pilates"},{v:"Danse",l:"💃 Danse"},
-                    {v:"Fitness",l:"🏋 Fitness"},{v:"Méditation",l:"☯ Méditation"},{v:"Multi",l:"🌀 Multi"}
-                  ]}/>
-
-                  <button onClick={()=>{const e=step1valid();if(Object.keys(e).length){setRegErrors(e);return};setRegStep(2)}}
-                    style={btn()}>Continuer →</button>
-                </div>
-              )}
-
-              {/* Étape 2 */}
-              {regStep===2 && (
-                <div style={{display:"flex",flexDirection:"column",gap:14}}>
-                  <div style={{padding:"10px 14px",background:"#FBF6EE",borderRadius:9,border:"1px solid rgba(160,104,56,.2)",fontSize:13,color:C.sub}}>
-                    👤 Vos coordonnées (gérant du studio)
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                    <FR label="Prénom" k="firstName" placeholder="Marie" required value={reg.firstName} onChange={updReg} error={regErrors.firstName}/>
-                    <FR label="Nom" k="lastName" placeholder="Laurent" required value={reg.lastName} onChange={updReg} error={regErrors.lastName}/>
-                  </div>
-                  <FR label="Email professionnel" k="email" type="email" placeholder="marie@studio.fr" required value={reg.email} onChange={updReg} error={regErrors.email}/>
-                  <FR label="Téléphone" k="phone" type="tel" placeholder="+33 6 12 34 56 78" required value={reg.phone} onChange={updReg} error={regErrors.phone}/>
-                  <div onClick={()=>updReg("isCoach",!reg.isCoach)}
-                    style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",
-                      background:reg.isCoach?"#F5EBE0":"#FAFAF8",border:`1px solid ${reg.isCoach?"rgba(160,104,56,.3)":"#DDD5C8"}`,
-                      borderRadius:10,cursor:"pointer",userSelect:"none"}}>
-                    <div>
-                      <div style={{fontSize:13,fontWeight:700,color:reg.isCoach?"#8C5E38":"#5C4A38"}}>🎯 Je donne aussi des cours</div>
-                      <div style={{fontSize:11,color:"#B0A090",marginTop:2}}>Gérant et coach intervenant dans le studio</div>
-                    </div>
-                    <div style={{width:40,height:22,borderRadius:11,background:reg.isCoach?C.accent:"rgba(160,104,56,.15)",position:"relative",flexShrink:0,transition:"background .2s"}}>
-                      <div style={{position:"absolute",top:3,left:reg.isCoach?20:3,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
-                    </div>
-                  </div>
-                  <div style={{display:"flex",gap:10}}>
-                    <button onClick={()=>setRegStep(1)} style={{...btn(true),flex:1}}>← Retour</button>
-                    <button onClick={()=>{const e=step2valid();if(Object.keys(e).length){setRegErrors(e);return};setRegStep(3)}}
-                      style={{...btn(),flex:2}}>Vérifier →</button>
-                  </div>
-                </div>
-              )}
-
-              {/* Étape 3 — Récap */}
-              {regStep===3 && (
-                <div style={{display:"flex",flexDirection:"column",gap:14}}>
-                  <div style={{padding:"14px",background:"rgba(52,211,153,.06)",borderRadius:12,border:"1px solid rgba(52,211,153,.2)"}}>
-                    <div style={{fontSize:13,fontWeight:700,color:"#34D399",marginBottom:10}}>✅ Récapitulatif</div>
-                    {[
-                      ["Studio",      reg.studioName],
-                      ["URL",         `${reg.slug||"—"}.fydelys.fr`],
-                      ["Ville",       reg.city],
-                      ["Code postal",  reg.zip],
-                      ["Type",        reg.type],
-                      ["Plan",        "À choisir après l'activation (9 · 29 · 69 €/mois)"],
-                      ["Gérant",      `${reg.firstName} ${reg.lastName}`],
-                      ["Email",       reg.email],
-                      ["Téléphone",   reg.phone],
-                      ["Rôle",        reg.isCoach?"Gérant + Coach":"Gérant"],
-                    ].map(([k,v])=>(
-                      <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #EDE6DC",fontSize:13}}>
-                        <span style={{color:"#8C7B6C"}}>{k}</span>
-                        <span style={{color:C.title,fontWeight:600,textAlign:"right",maxWidth:"58%"}}>{v}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{padding:"10px 14px",background:"#FBF6EE",borderRadius:9,border:"1px solid rgba(160,104,56,.2)",fontSize:12,color:C.sub,lineHeight:1.6}}>
-                    🌱 Abonnements de base et une séance de démo seront créés automatiquement.
-                  </div>
-                  {error&&<div style={{background:"#FDF0EC",border:"1px solid #EFC8BC",borderRadius:9,padding:"9px 13px",fontSize:13,color:"#A85030"}}>⚠ {error}</div>}
-                  <div style={{display:"flex",gap:10}}>
-                    <button onClick={()=>setRegStep(2)} style={{...btn(true),flex:1}}>← Retour</button>
-                    <button onClick={handleRegister} disabled={loading} style={{...btn(),flex:2,opacity:loading?0.6:1}}>
-                      {loading?"Envoi…":"🚀 Créer mon studio"}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {ctx==="superadmin" && tab==="register" && regSent && (
-            <div style={{textAlign:"center",padding:"8px 0"}}>
-              <div style={{width:56,height:56,borderRadius:"50%",background:"rgba(52,211,153,.1)",border:"1.5px solid rgba(52,211,153,.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,margin:"0 auto 16px"}}>✉</div>
-              <h2 style={{fontSize:18,fontWeight:800,color:C.title,marginBottom:8}}>Vérifiez vos emails !</h2>
-              <p style={{fontSize:13,color:C.sub,marginBottom:4}}>Lien de confirmation envoyé à</p>
-              <p style={{fontWeight:700,color:C.accent,background:"#F5EBE0",borderRadius:8,padding:"6px 14px",display:"inline-block",marginBottom:16}}>{reg.email}</p>
-              <p style={{fontSize:12,color:C.footer,lineHeight:1.7}}>
-                Cliquez sur le lien pour activer votre studio.<br/>
-                Vous serez redirigé vers <strong style={{color:C.accent}}>{reg.slug}.fydelys.fr</strong>
-              </p>
-            </div>
-          )}
         </div>
+      </section>
 
-        <p style={{textAlign:"center",color:C.footer,fontSize:11,marginTop:20}}>© 2026 Fydelys · Connexion 100% sécurisée</p>
-      </div>
-    </div>
+      {/* HOW IT WORKS */}
+      <section style={{ padding:"96px 24px" }}>
+        <div className="how-grid" style={{ maxWidth:1100, margin:"0 auto", display:"grid", gridTemplateColumns:"1fr 1fr", gap:80, alignItems:"center" }}>
+          <div>
+            <div style={{ marginBottom:8, fontSize:11, fontWeight:700, letterSpacing:"1.2px", textTransform:"uppercase", color:"#A06838" }}>✦ En 3 étapes</div>
+            <h2 style={{ fontFamily:"var(--display)", fontSize:"clamp(32px,5vw,52px)", fontWeight:700, lineHeight:1.1, letterSpacing:"-1px", color:"#2A1F14" }}>Lancez votre studio en 5 minutes</h2>
+            <StepsAnimated/>
+          </div>
+          <div style={{ background:"#FDFAF7", border:"1.5px solid rgba(160,104,56,.15)", borderRadius:24, padding:40, boxShadow:"0 20px 60px rgba(42,31,20,.06)" }}>
+            <div style={{ fontFamily:"var(--display)", fontSize:22, fontWeight:600, color:"#2A1F14", marginBottom:24, fontStyle:"italic", lineHeight:1.4 }}>
+              "Fydelys a transformé la gestion de mon studio. Mes adhérents adorent leur espace dédié."
+            </div>
+            <div style={{ display:"flex", gap:12, alignItems:"center", marginBottom:20 }}>
+              <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#E8C88A,#C4922A)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, fontWeight:700, color:"#fff", fontFamily:"Georgia,serif" }}>M</div>
+              <div>
+                <div style={{ fontSize:14, fontWeight:700, color:"#2A1F14" }}>Marie L.</div>
+                <div style={{ fontSize:12, color:"#8C7B6C" }}>Studio Yoga · Lyon</div>
+              </div>
+            </div>
+            <div style={{ padding:16, background:"#F4EFE8", borderRadius:12, fontSize:13, color:"#8C7B6C", lineHeight:1.6 }}>
+              <span style={{ color:"#C4922A", fontWeight:700 }}>⭐⭐⭐⭐⭐</span>
+              <span style={{ marginLeft:8 }}>Onboarding en 10 minutes, support réactif</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* PRICING */}
+      <section id="tarifs" style={{ padding:"96px 24px", background:"var(--bg2)" }}>
+        <div style={{ maxWidth:1100, margin:"0 auto", textAlign:"center" }}>
+          <div style={{ marginBottom:8, fontSize:11, fontWeight:700, letterSpacing:"1.2px", textTransform:"uppercase", color:"#A06838" }}>✦ Tarifs</div>
+          <h2 style={{ fontFamily:"var(--display)", fontSize:"clamp(32px,5vw,52px)", fontWeight:700, lineHeight:1.1, letterSpacing:"-1px", color:"#2A1F14", marginBottom:12 }}>Simple et transparent</h2>
+          <p style={{ fontSize:16, color:"#8C7B6C", maxWidth:460, margin:"0 auto 56px", lineHeight:1.65 }}>15 jours d'essai offerts sur toutes les formules. Sans engagement.</p>
+          <div className="plans-grid" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:20, alignItems:"start" }}>
+            {PLANS.map(plan => (
+              <div key={plan.name} style={{ background:"#FDFAF7", border:`1.5px solid ${plan.popular ? "#C4922A" : "rgba(160,104,56,.15)"}`, borderRadius:20, padding:"28px 24px", position:"relative", boxShadow: plan.popular ? "0 4px 24px rgba(196,146,42,.15)" : "none" }}>
+                {plan.popular && <div style={{ position:"absolute", top:-11, left:"50%", transform:"translateX(-50%)", background:"#C4922A", color:"#fff", fontSize:11, fontWeight:700, padding:"3px 14px", borderRadius:12, whiteSpace:"nowrap" }}>⭐ Populaire</div>}
+                <div style={{ fontSize:13, fontWeight:700, color:"#A06838", marginBottom:4 }}>{plan.name}</div>
+                <div style={{ fontFamily:"var(--display)", fontSize:44, fontWeight:700, color:"#2A1F14", lineHeight:1 }}>{plan.price}€<span style={{ fontSize:15, fontWeight:400, color:"#8C7B6C", fontFamily:"var(--body)" }}>/mois</span></div>
+                <div style={{ fontSize:13, color:"#8C7B6C", margin:"6px 0 20px" }}>{plan.desc}</div>
+                <ul style={{ listStyle:"none", display:"flex", flexDirection:"column", gap:8, marginBottom:24, textAlign:"left" }}>
+                  {plan.features.map(f => <li key={f} style={{ fontSize:13, color:"#5C4A38", display:"flex", gap:8 }}><span style={{ color:"#A06838", fontWeight:700 }}>✓</span>{f}</li>)}
+                </ul>
+                <a href="/login?tab=register" style={{ display:"block", width:"100%", padding:"11px", borderRadius:10, textAlign:"center", textDecoration:"none", fontSize:14, fontWeight:700, background:"linear-gradient(145deg,#B88050,#9A6030)", color:"#fff" }}>
+                  Commencer gratuitement
+                </a>
+              </div>
+            ))}
+          </div>
+          <p style={{ marginTop:20, fontSize:12, color:"#B0A090" }}>Tous les plans incluent l'hébergement, les mises à jour et le support.</p>
+        </div>
+      </section>
+
+      {/* CTA BAND */}
+      <section style={{ padding:"48px 24px 96px" }}>
+        <div style={{ background:"linear-gradient(135deg,#2A1F14 0%,#3D2E1E 50%,#2A1F14 100%)", borderRadius:28, padding:"72px 40px", textAlign:"center", position:"relative", overflow:"hidden" }}>
+          <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse 60% 70% at 50% 50%, rgba(196,146,42,.12) 0%, transparent 60%)", pointerEvents:"none" }}/>
+          <h2 style={{ fontFamily:"var(--display)", fontSize:"clamp(32px,5vw,52px)", fontWeight:700, color:"#F4EFE8", marginBottom:16, position:"relative", letterSpacing:"-1px", lineHeight:1.1 }}>
+            Prêt à simplifier<br/>votre <em style={{ fontStyle:"italic", color:"#C4922A" }}>quotidien</em> ?
+          </h2>
+          <p style={{ fontSize:16, color:"rgba(244,239,232,.6)", marginBottom:36, position:"relative" }}>Rejoignez les gérants qui pilotent leur studio avec Fydelys.</p>
+          <a href="/login?tab=register" style={{ display:"inline-block", padding:"16px 40px", background:"linear-gradient(145deg,#B88050,#9A6030)", borderRadius:11, fontSize:16, fontWeight:600, color:"#fff", textDecoration:"none", boxShadow:"0 4px 16px rgba(154,96,48,.35)", position:"relative" }}>
+            Créer mon studio gratuitement →
+          </a>
+        </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer style={{ padding:"32px 40px", display:"flex", alignItems:"center", justifyContent:"space-between", borderTop:"1px solid rgba(160,104,56,.12)", flexWrap:"wrap", gap:16 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <FleurDeLys size={26}/>
+          <span style={{ fontFamily:"var(--display)", fontSize:18, fontWeight:700, color:"#5C4A38" }}>Fydelys</span>
+        </div>
+        <div style={{ display:"flex", gap:24 }}>
+          <a href="/login" style={{ fontSize:13, color:"#B0A090", textDecoration:"none" }}>Connexion</a>
+          <a href="/login?tab=register" style={{ fontSize:13, color:"#B0A090", textDecoration:"none" }}>Créer un studio</a>
+          <a href="mailto:info@lysia.fr" style={{ fontSize:13, color:"#B0A090", textDecoration:"none" }}>Contact</a>
+        </div>
+        <div style={{ fontSize:12, color:"#B0A090" }}>© 2025 Fydelys · Gestion studios & bien-être</div>
+      </footer>
+    </>
   )
 }

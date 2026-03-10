@@ -20,3 +20,6 @@ export async function createServerSupabase() {
     }
   )
 }
+
+// Alias pour compatibilité avec les routes API Stripe
+export const createClient = createServerSupabase

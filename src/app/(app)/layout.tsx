@@ -21,7 +21,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Tout accès à window EST dans useEffect — jamais au niveau module/rendu
     const hostname    = window.location.hostname
-    const isAppHost   = hostname.startsWith("app.") || hostname === "localhost" || hostname === "localhost:3000"
+    const isAppHost   = hostname === "fydelys.fr" || hostname === "localhost" || hostname === "localhost:3000"
     const tenantMatch = hostname.match(/^([a-z0-9-]+)\.fydelys\.fr/)
     const slug        = tenantMatch ? tenantMatch[1] : ""
 
@@ -68,7 +68,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }
       } else if (slug) {
         if (role === "superadmin") {
-          window.location.href = "https://app.fydelys.fr/dashboard"
+          window.location.href = "https://fydelys.fr/dashboard"
           return
         }
         // Charger le billing status pour les admins

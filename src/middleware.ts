@@ -6,7 +6,7 @@ export async function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl
 
   // ── Détecter le contexte domaine ─────────────────────────────────────────────
-  const isApp      = hostname.startsWith("app.fydelys.fr") || hostname.startsWith("app.localhost")
+  const isApp      = hostname === "fydelys.fr" || hostname === "fydelys.fr:3000" || hostname === "localhost" || hostname === "localhost:3000"
   const isLocal    = hostname === "localhost:3000" || hostname === "localhost"
   const tenantSlug = (() => {
     if (isApp || isLocal) return null
@@ -58,12 +58,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url))
   }
 
-  // SuperAdmin sur domaine tenant → rediriger vers app.fydelys.fr
+  // SuperAdmin sur domaine tenant → rediriger vers fydelys.fr
   if (user && isTenant && isProtected) {
     const { data: profile } = await supabase
       .from("profiles").select("role, studio_id").eq("id", user.id).single()
     if (profile?.role === "superadmin") {
-      return NextResponse.redirect(new URL(`https://app.fydelys.fr/dashboard`, request.url))
+      return NextResponse.redirect(new URL(`https://fydelys.fr/dashboard`, request.url))
     }
 
     // ── Billing guard : vérifier l'accès du studio ──────────────────────────
@@ -90,9 +90,25 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Rediriger / → /dashboard si connecté
-  if (user && pathname === "/") {
+  // Sur fydelys.fr : / = landing publique, /login = auth
+  // Sur slug.fydelys.fr : / redirige vers /dashboard si connecté
+  if (user && pathname === "/" && isTenant) {
     return NextResponse.redirect(new URL("/dashboard", request.url))
+  }
+  // Sur fydelys.fr : si connecté et va sur /login → redirect /dashboard
+  if (user && pathname === "/login" && isApp) {
+    const { data: profile } = await supabase
+      .from("profiles").select("role, studio_id").eq("id", user.id).single()
+    if (profile?.role === "superadmin") {
+      return NextResponse.redirect(new URL("/dashboard", request.url))
+    }
+    if (profile?.role === "admin" && profile.studio_id) {
+      const { data: studio } = await supabase
+        .from("studios").select("slug").eq("id", profile.studio_id).single()
+      if (studio?.slug) {
+        return NextResponse.redirect(new URL(\`https://\${studio.slug}.fydelys.fr/dashboard\`))
+      }
+    }
   }
 
   setHeaders(supabaseResponse)
