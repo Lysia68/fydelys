@@ -1,11 +1,16 @@
+export type Role = "superadmin" | "admin" | "coach" | "adherent"
+
 export type Studio = {
   id: string
   name: string
   slug: string
   address: string | null
+  city: string | null
   phone: string | null
   email: string | null
   plan: "starter" | "pro" | "business"
+  status: "actif" | "suspendu"
+  suspended_at: string | null
   created_at: string
 }
 
@@ -14,8 +19,19 @@ export type Profile = {
   studio_id: string | null
   first_name: string | null
   last_name: string | null
-  role: "admin" | "staff"
+  role: Role
   created_at: string
+}
+
+export type Invitation = {
+  id: string
+  studio_id: string
+  email: string
+  role: "coach"
+  token: string
+  used: boolean
+  created_at: string
+  expires_at: string
 }
 
 export type Discipline = {
@@ -44,12 +60,14 @@ export type Member = {
   id: string
   studio_id: string
   subscription_id: string | null
+  auth_user_id: string | null
   first_name: string
   last_name: string
   email: string
   phone: string | null
   status: "actif" | "suspendu" | "nouveau"
   credits: number
+  credits_total: number
   joined_at: string
   next_payment: string | null
   notes: string | null

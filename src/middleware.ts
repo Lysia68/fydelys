@@ -3,18 +3,31 @@ import { NextResponse, type NextRequest } from "next/server"
 
 export async function middleware(request: NextRequest) {
   const hostname = request.headers.get("host") || ""
+  const { pathname, searchParams } = request.nextUrl
 
-  // Détecter le type de domaine
-  const isApp       = hostname.startsWith("app.")        // app.fydelys.fr → SuperAdmin
-  const isLocalhost = hostname.includes("localhost")
-  const subdomain   = hostname.split(".")[0]
-  const isTenant    = !isApp && !isLocalhost &&
-                      hostname.includes(".fydelys.fr") &&
-                      subdomain !== "www"
+  // ── Détecter le contexte domaine ─────────────────────────────────────────────
+  const isApp      = hostname.startsWith("app.fydelys.fr") || hostname.startsWith("app.localhost")
+  const isLocal    = hostname === "localhost:3000" || hostname === "localhost"
+  const tenantSlug = (() => {
+    if (isApp || isLocal) return null
+    const match = hostname.match(/^([a-z0-9-]+)\.fydelys\.fr/)
+    return match ? match[1] : null
+  })()
+  const isTenant = !!tenantSlug
 
-  let supabaseResponse = NextResponse.next({ request })
-  supabaseResponse.headers.set("x-tenant-mode",  isTenant ? "studio"     : isApp ? "superadmin" : "default")
-  supabaseResponse.headers.set("x-studio-slug",  isTenant ? subdomain    : "")
+  // Injecter le contexte dans les headers
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set("x-tenant-slug",  tenantSlug || "")
+  requestHeaders.set("x-is-app",       isApp ? "1" : "0")
+  requestHeaders.set("x-is-tenant",    isTenant ? "1" : "0")
+  requestHeaders.set("x-hostname",     hostname)
+
+  let supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } })
+  const setHeaders = (res: NextResponse) => {
+    res.headers.set("x-tenant-slug",  tenantSlug || "")
+    res.headers.set("x-is-app",       isApp ? "1" : "0")
+    res.headers.set("x-is-tenant",    isTenant ? "1" : "0")
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -24,9 +37,8 @@ export async function middleware(request: NextRequest) {
         getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet: { name: string; value: string; options?: any }[]) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({ request })
-          supabaseResponse.headers.set("x-tenant-mode", isTenant ? "studio" : isApp ? "superadmin" : "default")
-          supabaseResponse.headers.set("x-studio-slug", isTenant ? subdomain : "")
+          supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } })
+          setHeaders(supabaseResponse)
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           )
@@ -36,13 +48,31 @@ export async function middleware(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-  const path = request.nextUrl.pathname
-  const protectedPaths = ["/dashboard", "/planning", "/members", "/subscriptions", "/payments", "/disciplines", "/settings"]
-  const isProtected = protectedPaths.some(p => path.startsWith(p))
+  const isProtected = pathname.startsWith("/dashboard") || pathname.startsWith("/planning") ||
+                      pathname.startsWith("/members") || pathname.startsWith("/subscriptions") ||
+                      pathname.startsWith("/payments") || pathname.startsWith("/disciplines") ||
+                      pathname.startsWith("/settings")
 
-  if (!user && isProtected) return NextResponse.redirect(new URL("/", request.url))
-  if (user && path === "/")  return NextResponse.redirect(new URL("/dashboard", request.url))
+  // Auth guard
+  if (!user && isProtected) {
+    return NextResponse.redirect(new URL("/", request.url))
+  }
 
+  // SuperAdmin sur domaine tenant → rediriger vers app.fydelys.fr
+  if (user && isTenant && isProtected) {
+    const { data: profile } = await supabase
+      .from("profiles").select("role").eq("id", user.id).single()
+    if (profile?.role === "superadmin") {
+      return NextResponse.redirect(new URL(`https://app.fydelys.fr/dashboard`, request.url))
+    }
+  }
+
+  // Rediriger / → /dashboard si connecté
+  if (user && pathname === "/") {
+    return NextResponse.redirect(new URL("/dashboard", request.url))
+  }
+
+  setHeaders(supabaseResponse)
   return supabaseResponse
 }
 

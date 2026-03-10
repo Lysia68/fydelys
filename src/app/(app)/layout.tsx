@@ -10,64 +10,74 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const supabase = createClient()
   const [initialRole, setInitialRole] = useState<string | null>(null)
+  const [studioSlug, setStudioSlug]   = useState<string>("")
+  const [coachName, setCoachName]     = useState<string>("")
+  const [coachDisciplines, setCoachDisciplines] = useState<any[]>([])
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) { router.push("/"); return }
 
-      const hostname = window.location.hostname
-      const isApp    = hostname.startsWith("app.")
-      const isTenant = hostname.includes(".fydelys.fr") && !isApp && hostname !== "fydelys.fr"
-      const isLocal  = hostname === "localhost"
+      const hostname    = window.location.hostname
+      const isApp       = hostname.startsWith("app.") || hostname === "localhost" || hostname === "localhost:3000"
+      const tenantMatch = hostname.match(/^([a-z0-9-]+)\.fydelys\.fr/)
+      const slug        = tenantMatch ? tenantMatch[1] : ""
+
+      setStudioSlug(slug)
 
       const { data: profile } = await supabase
-        .from("profiles")
-        .select("role, studio_id")
-        .eq("id", user.id)
-        .single()
+        .from("profiles").select("role, studio_id, first_name, last_name").eq("id", user.id).single()
 
-      if (isApp || isLocal) {
-        // app.fydelys.fr → SuperAdmin uniquement
-        if (profile?.role === "superadmin") {
+      const role = profile?.role || "adherent"
+
+      // Construire le nom complet pour la vue coach
+      if (role === "coach" || (role === "admin" && (profile as any)?.is_coach)) {
+        const fullName = `${profile?.first_name || ""} ${profile?.last_name || ""}`.trim()
+        setCoachName(fullName)
+        // Récupérer les disciplines affectées à ce coach
+        const { data: discLinks } = await supabase
+          .from("coach_disciplines")
+          .select("discipline_id, disciplines(id, name, icon, color)")
+          .eq("profile_id", user.id)
+        if (discLinks) {
+          setCoachDisciplines(discLinks.map((r: any) => r.disciplines).filter(Boolean))
+        }
+      }
+
+      if (isApp) {
+        // Sur app.fydelys.fr — seul le superadmin est autorisé
+        if (role === "superadmin") {
           setInitialRole("superadmin")
-        } else {
-          // Admin sur app. → rediriger vers son sous-domaine
+        } else if (role === "admin") {
+          // Admin sur app → rediriger vers son studio
           const { data: studio } = await supabase
-            .from("studios")
-            .select("slug")
-            .eq("id", profile?.studio_id)
-            .single()
+            .from("studios").select("slug").eq("id", profile?.studio_id).single()
           if (studio?.slug) {
             window.location.href = `https://${studio.slug}.fydelys.fr/dashboard`
           } else {
             setInitialRole("admin")
           }
-        }
-      } else if (isTenant) {
-        // monStudio.fydelys.fr → vue Studio ou Adhérent
-        const slug = hostname.split(".")[0]
-        // Vérifier si l'user est adhérent de ce studio
-        const { data: member } = await supabase
-          .from("members")
-          .select("id")
-          .eq("auth_user_id", user.id)
-          .single()
-        if (member) {
-          setInitialRole("adherent")
         } else {
-          setInitialRole(profile?.role === "staff" ? "staff" : "admin")
+          router.push("/")
         }
+      } else if (slug) {
+        // Sur slug.fydelys.fr — admin, coach ou adhérent
+        if (role === "superadmin") {
+          window.location.href = "https://app.fydelys.fr/dashboard"
+          return
+        }
+        setInitialRole(role)
       } else {
-        setInitialRole(profile?.role || "admin")
+        setInitialRole(role)
       }
     })
   }, [])
 
   if (!initialRole) return (
-    <div style={{ minHeight: "100vh", background: "#F4EFE8", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ fontFamily: "Arial", color: "#A06838", fontSize: 16, fontWeight: 600 }}>Chargement…</div>
+    <div style={{ minHeight:"100vh", background: window?.location?.hostname?.startsWith("app.") ? "#0F0A1E" : "#F4EFE8", display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ fontFamily:"Arial", color:"#A06838", fontSize:16, fontWeight:600 }}>Chargement…</div>
     </div>
   )
 
-  return <FydelysV4 initialRole={initialRole} />
+  return <FydelysV4 initialRole={initialRole} studioSlug={studioSlug} coachName={coachName} coachDisciplines={coachDisciplines} />
 }
