@@ -3,9 +3,9 @@ export const dynamic = "force-dynamic"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase"
-import dynamic from "next/dynamic"
+import dynamicImport from "next/dynamic"
 
-const FydelysV4 = dynamic(() => import("@/components/FydelysV4"), { ssr: false })
+const FydelysV4 = dynamicImport(() => import("@/components/FydelysV4"), { ssr: false })
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
