@@ -67,6 +67,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(callbackUrl)
   }
 
+  // Debug temporaire — à retirer après fix
+  const allCookies = request.cookies.getAll()
+  const authCookies = allCookies.filter(c => c.name.includes("auth") || c.name.includes("sb-"))
+  if (authCookies.length === 0 && pathname.startsWith("/dashboard")) {
+    console.log("NO_AUTH_COOKIES | hostname:", hostname, "| all cookies:", allCookies.map(c=>c.name).join(","))
+  } else if (authCookies.length > 0) {
+    console.log("AUTH_COOKIES_FOUND:", authCookies.map(c=>c.name).join(","), "| hostname:", hostname)
+  }
+
   const { data: { user } } = await supabase.auth.getUser()
   const isProtected = pathname.startsWith("/dashboard") || pathname.startsWith("/planning") ||
                       pathname.startsWith("/members") || pathname.startsWith("/subscriptions") ||
