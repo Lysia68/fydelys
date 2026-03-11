@@ -700,6 +700,7 @@ function Planning({ isMobile }) {
   const [recTo, setRecTo]     = useState("");
   const [recSlots, setRecSlots] = useState([]); // créneaux sélectionnés [{day,time,duration,disciplineId}]
   const [recPreview, setRecPreview] = useState([]); // dates générées prévisualisées
+  const [recFilterDisc, setRecFilterDisc] = useState(null); // filtre discipline étape 1
   const p = isMobile?12:28;
 
   // Utilitaire : convertir "Lun/Mar/…" → numéro JS getDay()
@@ -862,9 +863,11 @@ function Planning({ isMobile }) {
           {/* ── MODE RÉCURRENCE ── */}
           {recMode && (() => {
             // Utiliser les discs du context (modifiés dans DisciplinesPage)
-            const allSlots = (discs||[]).flatMap(d =>
-              (d.slots||[]).map((s,i) => ({ key:`${d.id}-${i}`, disciplineId:d.id, discName:d.name, discIcon:d.icon||"🏃", day:s.day, time:s.time, duration:s.duration||60, teacher:"" }))
+            const allSlotsRaw = (discs||[]).flatMap(d =>
+              (d.slots||[]).map((s,i) => ({ key:`${d.id}-${i}`, disciplineId:d.id, discName:d.name, discColor:d.color||C.accent, discIcon:d.icon||"🏃", day:s.day, time:s.time, duration:s.duration||60, teacher:"" }))
             );
+            // Filtre par discipline
+            const allSlots = recFilterDisc ? allSlotsRaw.filter(s=>s.disciplineId===recFilterDisc) : allSlotsRaw;
             const isSelected = (k) => recSlots.some(s=>s.key===k);
             const dayLabel = (d) => ({Lun:"Lundi",Mar:"Mardi",Mer:"Mercredi",Jeu:"Jeudi",Ven:"Vendredi",Sam:"Samedi",Dim:"Dimanche"}[d]||d);
 
@@ -897,12 +900,26 @@ function Planning({ isMobile }) {
 
                 {/* ── ÉTAPE 1 : Créneaux ── */}
                 <div style={{ marginBottom:4 }}>
-                  <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, textTransform:"uppercase", letterSpacing:.8, marginBottom:8 }}>
-                    1 · Créneaux à inclure
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, textTransform:"uppercase", letterSpacing:.8 }}>
+                      1 · Créneaux à inclure
+                    </div>
+                    {allSlotsRaw.length > 0 && (
+                      <select value={recFilterDisc||""} onChange={e=>setRecFilterDisc(e.target.value?Number(e.target.value):null)}
+                        style={{ fontSize:12, padding:"5px 10px", border:`1.5px solid ${C.border}`, borderRadius:8, background:C.surface, color:C.text, outline:"none", cursor:"pointer", maxWidth:160 }}>
+                        <option value="">Toutes les disciplines</option>
+                        {(discs||[]).filter(d=>(d.slots||[]).length>0).map(d=>(
+                          <option key={d.id} value={d.id}>{d.icon||""} {d.name}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
-                  {allSlots.length === 0 ? (
+                  {allSlotsRaw.length === 0 ? (
                     <div style={{ padding:"14px", background:"#FFF8F0", borderRadius:10, border:`1px dashed ${C.border}`, fontSize:13, color:C.textSoft, marginBottom:12 }}>
-                      ℹ Aucun créneau configuré. Allez dans <strong>Disciplines</strong> pour définir les horaires.
+                      {recFilterDisc
+                        ? <>ℹ Aucun créneau pour cette discipline. Allez dans <strong>Disciplines</strong> pour en ajouter.</>
+                        : <>ℹ Aucun créneau configuré. Allez dans <strong>Disciplines</strong> pour définir les horaires.</>
+                      }
                     </div>
                   ) : (
                     <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:16 }}>
@@ -1499,15 +1516,77 @@ const DAYS_FR = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
 function DisciplinesPage({ isMobile }) {
   // Utiliser le context global pour partager les discs avec Planning (récurrence)
   const { discs, setDiscs } = useContext(AppCtx);
+  const { studioSlug } = useContext(AppCtx);
   const [nD, setND]         = useState({ name:"", icon:"🏃", color:C.accent });
-  const [editDisc, setEditDisc]   = useState(null); // discipline en cours de config horaires
-  const [editName, setEditName]   = useState(null); // {id, name, icon} — renommage en cours
-  const [confirmDel, setConfirmDel] = useState(null); // id discipline à supprimer
+  const [editDisc, setEditDisc]   = useState(null);
+  const [editName, setEditName]   = useState(null);
+  const [confirmDel, setConfirmDel] = useState(null);
+  const [loadingDb, setLoadingDb] = useState(false);
   const [toast, setToast] = useState(null);
-  const showToast = (msg, ok=true) => { setToast({msg,ok}); setTimeout(()=>setToast(null),3000); };
+  const showToast = (msg, ok=true) => { setToast({msg,ok}); setTimeout(()=>setToast(null),3500); };
   const p = isMobile?16:28;
 
-  // Slots helpers
+  // ── Charger les disciplines depuis Supabase au montage ──────────────────
+  useEffect(() => {
+    const load = async () => {
+      setLoadingDb(true);
+      try {
+        const { createClient } = await import("@/lib/supabase").catch(()=>({ createClient: null }));
+        if (!createClient) return;
+        const sb = createClient();
+        const { data: profile } = await sb.from("profiles").select("studio_id").eq("id",(await sb.auth.getUser()).data.user?.id).single();
+        if (!profile?.studio_id) return;
+        const { data } = await sb.from("disciplines").select("id,name,icon,color,slots").eq("studio_id", profile.studio_id).order("created_at");
+        if (data && data.length > 0) {
+          setDiscs(data.map(d=>({ ...d, slots: d.slots||[] })));
+        }
+      } catch(e) { console.error("load disciplines", e); }
+      finally { setLoadingDb(false); }
+    };
+    load();
+  }, []);
+
+  // ── Helpers DB ──────────────────────────────────────────────────────────
+  const getStudioId = async (sb) => {
+    const { data: p } = await sb.from("profiles").select("studio_id").eq("id",(await sb.auth.getUser()).data.user?.id).single();
+    return p?.studio_id;
+  };
+
+  const dbSaveSlots = async (discId, slots) => {
+    try {
+      const { createClient } = await import("@/lib/supabase");
+      const sb = createClient();
+      await sb.from("disciplines").update({ slots }).eq("id", discId);
+    } catch(e) { console.error("save slots", e); }
+  };
+
+  const dbAddDisc = async (disc) => {
+    try {
+      const { createClient } = await import("@/lib/supabase");
+      const sb = createClient();
+      const studioId = await getStudioId(sb);
+      const { data } = await sb.from("disciplines").insert({ studio_id:studioId, name:disc.name, icon:disc.icon, color:disc.color||C.accent, slots:[] }).select().single();
+      return data;
+    } catch(e) { console.error("add disc", e); return null; }
+  };
+
+  const dbUpdateDisc = async (discId, updates) => {
+    try {
+      const { createClient } = await import("@/lib/supabase");
+      const sb = createClient();
+      await sb.from("disciplines").update(updates).eq("id", discId);
+    } catch(e) { console.error("update disc", e); }
+  };
+
+  const dbDeleteDisc = async (discId) => {
+    try {
+      const { createClient } = await import("@/lib/supabase");
+      const sb = createClient();
+      await sb.from("disciplines").delete().eq("id", discId);
+    } catch(e) { console.error("delete disc", e); }
+  };
+
+  // Slots helpers (state local + sync DB)
   const addSlot = (id) => setDiscs(prev=>prev.map(d=>d.id===id?{...d,slots:[...(d.slots||[]),{day:"Lun",time:"09:00"}]}:d));
   const rmSlot  = (id,si) => setDiscs(prev=>prev.map(d=>d.id===id?{...d,slots:d.slots.filter((_,j)=>j!==si)}:d));
   const upSlot  = (id,si,field,val) => setDiscs(prev=>prev.map(d=>d.id===id?{...d,slots:d.slots.map((s,j)=>j===si?{...s,[field]:val}:s)}:d));
@@ -1553,7 +1632,12 @@ function DisciplinesPage({ isMobile }) {
 
         <div style={{padding:"14px 22px",borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"flex-end",gap:10}}>
           <Button variant="ghost" onClick={()=>setEditDisc(null)}>Fermer</Button>
-          <Button variant="primary" onClick={()=>{ showToast("Horaires enregistrés !"); setEditDisc(null); }}>Enregistrer</Button>
+          <Button variant="primary" onClick={async ()=>{
+            const d = discs.find(x=>x.id===editDisc.id);
+            await dbSaveSlots(editDisc.id, d?.slots||[]);
+            showToast("Horaires enregistrés !");
+            setEditDisc(null);
+          }}>Enregistrer</Button>
         </div>
       </div>
     </div>
@@ -1562,6 +1646,11 @@ function DisciplinesPage({ isMobile }) {
 
   return (
     <div style={{ padding:p }}>
+      {loadingDb && (
+        <div style={{ textAlign:"center", padding:"24px", color:C.textMuted, fontSize:13 }}>
+          Chargement des disciplines…
+        </div>
+      )}
       {/* Toast local DisciplinesPage */}
       {toast && (
         <div style={{ position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)", zIndex:9999,
@@ -1585,9 +1674,10 @@ function DisciplinesPage({ isMobile }) {
               </div>
               <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
                 <Button variant="ghost" onClick={()=>setEditName(null)}>Annuler</Button>
-                <Button variant="primary" onClick={()=>{
+                <Button variant="primary" onClick={async ()=>{
                   if(!editName.name)return;
                   setDiscs(prev=>prev.map(d=>d.id===editName.id?{...d,name:editName.name,icon:editName.icon}:d));
+                  await dbUpdateDisc(editName.id, { name:editName.name, icon:editName.icon });
                   showToast(`"${editName.name}" mis à jour ✓`);
                   setEditName(null);
                 }}>Enregistrer</Button>
@@ -1605,9 +1695,10 @@ function DisciplinesPage({ isMobile }) {
               </div>
               <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
                 <Button variant="ghost" onClick={()=>setConfirmDel(null)}>Annuler</Button>
-                <Button variant="danger" onClick={()=>{
+                <Button variant="danger" onClick={async ()=>{
                   const name = discs.find(d=>d.id===confirmDel)?.name;
                   setDiscs(prev=>prev.filter(x=>x.id!==confirmDel));
+                  await dbDeleteDisc(confirmDel);
                   showToast(`"${name}" supprimée`, false);
                   setConfirmDel(null);
                 }}>Supprimer</Button>
@@ -1640,7 +1731,18 @@ function DisciplinesPage({ isMobile }) {
           <Field label="Icône" value={nD.icon} onChange={v=>setND({...nD,icon:v})}/>
           <Field label="Nom" value={nD.name} onChange={v=>setND({...nD,name:v})} placeholder="Ex: Hot Yoga"/>
           <div style={{ paddingTop:22 }}>
-            <Button variant="primary" onClick={()=>{ if(!nD.name)return; setDiscs(prev=>[...prev,{id:Date.now(),...nD,slots:[]}]); setND({name:"",icon:"🏃",color:C.accent}); }}>＋</Button>
+            <Button variant="primary" onClick={async ()=>{
+              if(!nD.name)return;
+              const tempId = Date.now();
+              setDiscs(prev=>[...prev,{id:tempId,...nD,slots:[]}]);
+              setND({name:"",icon:"🏃",color:C.accent});
+              const saved = await dbAddDisc(nD);
+              if(saved) {
+                // Remplacer l'id temporaire par l'uuid Supabase
+                setDiscs(prev=>prev.map(d=>d.id===tempId?{...d,id:saved.id}:d));
+              }
+              showToast(`"${nD.name}" créée ✓`);
+            }}>＋</Button>
           </div>
         </div>
       </Card>
@@ -4782,8 +4884,24 @@ function AdherentView({ onSwitch, isMobile }) {
 export default function App({ initialRole = "admin", studioSlug = "", studioName = "", planName = "", membersCount = 0, userName = "", userRole = "", coachName = "", coachDisciplines = [], billingStatus = "trialing", trialEndsAt = null, onSignOut = null }) {
   const [role, setRole] = useState(initialRole); // "superadmin" | "admin" | "coach" | "adherent"
   const [page, setPage] = useState("planning");
-  // State global des disciplines — partagé entre DisciplinesPage et Planning
-  const [discs, setDiscs] = useState(DISCIPLINES.map(d=>({ ...d, slots:[] })));
+
+  // ── Disciplines persistées dans localStorage ──────────────────────────────
+  // Clé unique par studio pour éviter les collisions entre tenants
+  const discStorageKey = `fydelys_discs_${studioSlug||"default"}`;
+  const [discs, setDiscs] = useState(() => {
+    try {
+      const saved = typeof window !== "undefined" && localStorage.getItem(discStorageKey);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return DISCIPLINES.map(d => ({ ...d, slots: [] }));
+  });
+
+  // Sauvegarder automatiquement à chaque modification
+  useEffect(() => {
+    try { localStorage.setItem(discStorageKey, JSON.stringify(discs)); } catch {}
+  }, [discs, discStorageKey]);
+  // ─────────────────────────────────────────────────────────────────────────
+
   const width = useWidth();
   const isMobile = width < 768;
 
