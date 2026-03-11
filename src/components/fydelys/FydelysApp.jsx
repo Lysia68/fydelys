@@ -36,7 +36,23 @@ export default function App({
     settings:Settings, aide:AidePage,
   };
   const [role, setRole] = useState(initialRole);
-  const [page, setPage] = useState("planning");
+
+  // Lire la page initiale depuis l'URL (ex: /members → "members")
+  const getPageFromUrl = () => {
+    if (typeof window === "undefined") return "planning";
+    const path = window.location.pathname.replace(/^\//, "").split("/")[0];
+    const validPages = ["dashboard","planning","members","subscriptions","payments","disciplines","settings","aide"];
+    return validPages.includes(path) ? path : "planning";
+  };
+  const [page, setPage] = useState(getPageFromUrl);
+
+  // Synchroniser l'URL quand on change de page
+  const handleNav = (newPage) => {
+    setPage(newPage);
+    if (typeof window !== "undefined") {
+      window.history.pushState(null, "", `/${newPage}`);
+    }
+  };
 
   // Disciplines persistées dans localStorage
   const discStorageKey = `fydelys_discs_${studioSlug||"default"}`;
@@ -97,7 +113,7 @@ export default function App({
           ::-webkit-scrollbar-thumb { background:#D0C4B8; border-radius:3px; }
           ::-webkit-scrollbar-track { background:transparent; }
         `}</style>
-        {!isMobile && <Sidebar active={page} onNav={setPage} studioName={studioName} planName={planName} membersCount={membersCount} userName={userName} userRole={userRole}/>}
+        {!isMobile && <Sidebar active={page} onNav={handleNav} studioName={studioName} planName={planName} membersCount={membersCount} userName={userName} userRole={userRole}/>}
         <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, paddingBottom:isMobile?60:0 }}>
           <TopBar title={PAGE_TITLES[page]} isMobile={isMobile} onSignOut={onSignOut} isSuperAdmin={initialRole==="superadmin"} studioName={studioName}/>
           {showTrialBanner && (
@@ -129,7 +145,7 @@ export default function App({
             <Page isMobile={isMobile}/>
           </div>
         </div>
-        {isMobile && <BottomNav active={page} onNav={setPage}/>}
+        {isMobile && <BottomNav active={page} onNav={handleNav}/>}
       </div>
     </AppCtx.Provider>
   );

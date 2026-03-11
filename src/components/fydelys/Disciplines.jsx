@@ -1,9 +1,10 @@
 import React, { useState, useContext } from "react";
+import { createClient } from "@/lib/supabase";
 import { AppCtx } from "./context";
 import { C } from "./theme";
 import { DISCIPLINES } from "./demoData";
 import { IcoLayers, IcoX, IcoChevron, DISC_ICONS } from "./icons";
-import { Card, SectionHead, Button, Field, Pill, EmptyState } from "./ui";
+import { Card, SectionHead, Button, Field, Pill, EmptyState, DemoBanner } from "./ui";
 import { TimePicker, DurationPicker, DaySelect } from "./pickers";
 
 function DisciplinesPage({ isMobile }) {

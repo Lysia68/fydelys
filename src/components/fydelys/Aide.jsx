@@ -1,6 +1,8 @@
-import React from "react";
+import React, { useContext } from "react";
 import { C } from "./theme";
 import { DISCIPLINES } from "./demoData";
+import { IC } from "./icons";
+import { AppCtx } from "./context";
 import { Card, SectionHead, Button } from "./ui";
 
 function AideIllustration({ type, color = "#3A6E90" }) {
