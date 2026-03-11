@@ -1396,16 +1396,20 @@ function Payments({ isMobile }) {
 }
 
 
-// ── TIME PICKER — demi-heures avec saisie libre ───────────────────────────────
+// ── TIME PICKER — spinners ▲▼ + saisie libre + dropdown optionnel ────────────
 function TimePicker({ value, onChange }) {
-  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [inputVal, setInputVal] = useState(value || "09:00");
+  const [open, setOpen] = useState(false);
   const ref = React.useRef(null);
+  const inputRef = React.useRef(null);
+  const listRef = React.useRef(null);
 
-  // Sync inputVal quand value change de l'extérieur
-  React.useEffect(() => { setInputVal(value || "09:00"); }, [value]);
+  React.useEffect(() => {
+    if (!editing) setInputVal(value || "09:00");
+  }, [value, editing]);
 
-  // Fermer si clic extérieur
+  // Fermer dropdown si clic extérieur
   React.useEffect(() => {
     if (!open) return;
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -1413,23 +1417,7 @@ function TimePicker({ value, onChange }) {
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // Générer les demi-heures 06:00 → 22:00
-  const slots = [];
-  for (let h = 6; h <= 22; h++) {
-    slots.push(`${String(h).padStart(2,"0")}:00`);
-    if (h < 22) slots.push(`${String(h).padStart(2,"0")}:30`);
-  }
-
-  const commit = (v) => {
-    // Valider format HH:MM
-    const m = v.match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
-    if (m) { const clean = `${m[1].padStart(2,"0")}:${m[2]}`; setInputVal(clean); onChange(clean); }
-    else { setInputVal(value || "09:00"); } // revert si invalide
-    setOpen(false);
-  };
-
-  // Ref pour auto-scroll sur la valeur courante
-  const listRef = React.useRef(null);
+  // Auto-scroll dans dropdown
   React.useEffect(() => {
     if (open && listRef.current) {
       const active = listRef.current.querySelector('[data-active="true"]');
@@ -1437,52 +1425,97 @@ function TimePicker({ value, onChange }) {
     }
   }, [open]);
 
-  // Position du dropdown : calcul pour ne pas sortir de l'écran
-  const triggerRef2 = React.useRef(null);
-  const [dropStyle, setDropStyle] = React.useState({});
+  // Demi-heures 06:00 → 22:00
+  const slots = [];
+  for (let h = 6; h <= 22; h++) {
+    slots.push(`${String(h).padStart(2,"0")}:00`);
+    if (h < 22) slots.push(`${String(h).padStart(2,"0")}:30`);
+  }
+
+  const toMinutes = (v) => {
+    const m = v.match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+    return m ? parseInt(m[1])*60 + parseInt(m[2]) : null;
+  };
+  const fromMinutes = (min) => {
+    const h = Math.floor(min/60), m = min%60;
+    return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+  };
+
+  const commit = (v) => {
+    setEditing(false);
+    const min = toMinutes(v);
+    if (min !== null) {
+      const clean = fromMinutes(Math.max(0, Math.min(1439, Math.round(min/30)*30)));
+      setInputVal(clean); onChange(clean);
+    } else {
+      setInputVal(value || "09:00");
+    }
+  };
+
+  // Incrémenter/décrémenter par 30 min
+  const step = (dir) => {
+    const min = toMinutes(value || "09:00") ?? 540;
+    const next = Math.max(360, Math.min(1320, min + dir*30)); // 06:00 → 22:00
+    const v = fromMinutes(next);
+    setInputVal(v); onChange(v);
+  };
+
+  // Position dropdown (au-dessus si manque de place)
+  const triggerRef = React.useRef(null);
+  const [dropUp, setDropUp] = React.useState(false);
   React.useEffect(() => {
-    if (open && triggerRef2.current) {
-      const r = triggerRef2.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - r.bottom;
-      const dropH = Math.min(200, slots.length * 37);
-      const goUp = spaceBelow < dropH + 8 && r.top > dropH + 8;
-      setDropStyle(goUp
-        ? { bottom:"calc(100% + 4px)", top:"auto" }
-        : { top:"calc(100% + 4px)", bottom:"auto" }
-      );
+    if (open && triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect();
+      setDropUp(window.innerHeight - r.bottom < 220 && r.top > 220);
     }
   }, [open]);
 
   return (
     <div ref={ref} style={{ position:"relative", flex:1 }}>
-      <div ref={triggerRef2} style={{ display:"flex", alignItems:"center", border:`1.5px solid ${open ? C.accent : C.border}`, borderRadius:9, background:C.surfaceWarm, overflow:"hidden", transition:"border-color .15s" }}>
-        <span style={{ padding:"0 10px", fontSize:15, color:C.textMuted, userSelect:"none" }}>🕐</span>
+      <div ref={triggerRef} style={{ display:"flex", alignItems:"center", border:`1.5px solid ${editing||open ? C.accent : C.border}`, borderRadius:9, background:C.surfaceWarm, overflow:"hidden", transition:"border-color .15s" }}>
+        {/* Spinner bas */}
+        <button onMouseDown={e=>{e.preventDefault();step(-1);}} tabIndex={-1}
+          style={{ background:"none", border:"none", borderRight:`1px solid ${C.border}`, padding:"0 8px", height:38, cursor:"pointer", color:C.textMuted, fontSize:13, flexShrink:0, display:"flex", alignItems:"center" }}>
+          ▼
+        </button>
+        {/* Input texte */}
         <input
+          ref={inputRef}
           value={inputVal}
-          onChange={e => setInputVal(e.target.value)}
-          onFocus={() => setOpen(true)}
+          onChange={e => { setEditing(true); setInputVal(e.target.value); }}
+          onFocus={() => { setEditing(true); setOpen(false); }}
           onBlur={e => commit(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter") { e.target.blur(); } if (e.key === "Escape") { setInputVal(value); setOpen(false); } }}
-          placeholder="09:00"
-          style={{ flex:1, border:"none", outline:"none", background:"transparent", padding:"9px 0", fontSize:13, color:C.text, fontWeight:600, minWidth:0 }}
+          onKeyDown={e => {
+            if (e.key === "Enter") { e.target.blur(); }
+            if (e.key === "Escape") { setEditing(false); setInputVal(value||"09:00"); inputRef.current?.blur(); }
+            if (e.key === "ArrowUp")   { e.preventDefault(); step(1); }
+            if (e.key === "ArrowDown") { e.preventDefault(); step(-1); }
+          }}
+          style={{ flex:1, border:"none", outline:"none", background:"transparent", padding:"0 6px", fontSize:14, color:C.text, fontWeight:700, minWidth:0, textAlign:"center", height:38 }}
         />
-        <button onClick={() => setOpen(o => !o)} tabIndex={-1}
-          style={{ background:"none", border:"none", padding:"0 10px", cursor:"pointer", color:C.textMuted, fontSize:11 }}>
-          {open ? "▲" : "▼"}
+        {/* Spinner haut */}
+        <button onMouseDown={e=>{e.preventDefault();step(1);}} tabIndex={-1}
+          style={{ background:"none", border:"none", borderLeft:`1px solid ${C.border}`, padding:"0 8px", height:38, cursor:"pointer", color:C.textMuted, fontSize:13, flexShrink:0, display:"flex", alignItems:"center" }}>
+          ▲
+        </button>
+        {/* Ouvre le dropdown */}
+        <button onMouseDown={e=>{e.preventDefault();setOpen(o=>!o);setEditing(false);}} tabIndex={-1}
+          style={{ background:"none", border:"none", borderLeft:`1px solid ${C.border}`, padding:"0 9px", height:38, cursor:"pointer", color:open?C.accent:C.textMuted, fontSize:11, flexShrink:0, display:"flex", alignItems:"center" }}>
+          ☰
         </button>
       </div>
       {open && (
-        <div ref={listRef} style={{ position:"absolute", left:0, right:0, ...dropStyle, background:C.surface, border:`1.5px solid ${C.accent}`, borderRadius:10, boxShadow:"0 8px 32px rgba(42,31,20,.18)", zIndex:9999, maxHeight:200, overflowY:"auto" }}>
+        <div ref={listRef} style={{ position:"absolute", left:0, right:0, [dropUp?"bottom":"top"]:"calc(100% + 4px)", background:C.surface, border:`1.5px solid ${C.accent}`, borderRadius:10, boxShadow:"0 8px 32px rgba(42,31,20,.18)", zIndex:9999, maxHeight:200, overflowY:"auto" }}>
           {slots.map(t => (
-            <button key={t} data-active={t === value ? "true" : "false"}
-              onClick={() => { setInputVal(t); onChange(t); setOpen(false); }}
-              style={{ display:"block", width:"100%", textAlign:"left", padding:"9px 14px", border:"none",
-                background: t === value ? C.accentLight : "transparent",
-                color: t === value ? C.accent : C.text,
-                fontWeight: t === value ? 700 : 400, fontSize:13, cursor:"pointer",
-                borderBottom:`1px solid ${C.border}30` }}
-              onMouseEnter={e => { if (t !== value) e.currentTarget.style.background = "rgba(160,104,56,.06)"; }}
-              onMouseLeave={e => { e.currentTarget.style.background = t === value ? C.accentLight : "transparent"; }}>
+            <button key={t} data-active={t===value?"true":"false"}
+              onMouseDown={e=>{e.preventDefault(); setInputVal(t); onChange(t); setOpen(false);}}
+              style={{ display:"block", width:"100%", textAlign:"center", padding:"8px 14px", border:"none",
+                background: t===value ? C.accentLight : "transparent",
+                color: t===value ? C.accent : C.text,
+                fontWeight: t===value ? 700 : 400, fontSize:13, cursor:"pointer",
+                borderBottom:`1px solid ${C.border}20` }}
+              onMouseEnter={e=>{ if(t!==value) e.currentTarget.style.background="rgba(160,104,56,.06)"; }}
+              onMouseLeave={e=>{ e.currentTarget.style.background=t===value?C.accentLight:"transparent"; }}>
               {t}
             </button>
           ))}
@@ -1587,7 +1620,11 @@ function DisciplinesPage({ isMobile }) {
   };
 
   // Slots helpers (state local + sync DB)
-  const addSlot = (id) => setDiscs(prev=>prev.map(d=>d.id===id?{...d,slots:[...(d.slots||[]),{day:"Lun",time:"09:00"}]}:d));
+  const addSlot = (id) => setDiscs(prev=>prev.map(d=>{
+    if(d.id!==id) return d;
+    const lastSlot = (d.slots||[]).at(-1);
+    return {...d, slots:[...(d.slots||[]), {day: lastSlot?.day||"Lun", time:"09:00"}]};
+  }));
   const rmSlot  = (id,si) => setDiscs(prev=>prev.map(d=>d.id===id?{...d,slots:d.slots.filter((_,j)=>j!==si)}:d));
   const upSlot  = (id,si,field,val) => setDiscs(prev=>prev.map(d=>d.id===id?{...d,slots:d.slots.map((s,j)=>j===si?{...s,[field]:val}:s)}:d));
 
