@@ -72,11 +72,15 @@ export async function middleware(request: NextRequest) {
   const authCookies = allCookies.filter(c => c.name.includes("auth") || c.name.includes("sb-"))
   if (authCookies.length === 0 && pathname.startsWith("/dashboard")) {
     console.log("NO_AUTH_COOKIES | hostname:", hostname, "| all cookies:", allCookies.map(c=>c.name).join(","))
-  } else if (authCookies.length > 0) {
-    console.log("AUTH_COOKIES_FOUND:", authCookies.map(c=>c.name).join(","), "| hostname:", hostname)
   }
 
-  const { data: { user } } = await supabase.auth.getUser()
+  let user = null
+  try {
+    const { data } = await supabase.auth.getUser()
+    user = data.user
+  } catch {
+    // Refresh token invalide / expiré — on traite comme non-authentifié
+  }
   const isProtected = pathname.startsWith("/dashboard") || pathname.startsWith("/planning") ||
                       pathname.startsWith("/members") || pathname.startsWith("/subscriptions") ||
                       pathname.startsWith("/payments") || pathname.startsWith("/disciplines") ||
