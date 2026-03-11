@@ -22,6 +22,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [membersCount, setMembersCount]         = useState<number>(0)
   const [userName, setUserName]                 = useState<string>("")
   const [userRole, setUserRole]                 = useState<string>("")
+  const [studioId, setStudioId]                 = useState<string>("")
 
   useEffect(() => {
     const run = async () => {
@@ -81,6 +82,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       if (isAppHost) {
         if (role === "superadmin") {
           setInitialRole("superadmin")
+          if (profile?.studio_id) setStudioId(profile.studio_id)
         } else if (role === "admin") {
           const { data: studio } = await supabase
             .from("studios").select("slug").eq("id", profile?.studio_id).single()
@@ -104,6 +106,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         // Charger les données studio pour admin/coach/adhérent
         if (profile?.studio_id) {
+          setStudioId(profile.studio_id)
           const { data: studioData } = await supabase
             .from("studios")
             .select("name, billing_status, trial_ends_at, plan_slug")
@@ -150,6 +153,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       initialRole={initialRole}
       studioSlug={studioSlug}
       studioName={studioName}
+      studioId={studioId}
       planName={planName}
       membersCount={membersCount}
       userName={userName}

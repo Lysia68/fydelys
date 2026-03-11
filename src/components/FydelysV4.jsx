@@ -727,35 +727,28 @@ function Planning({ isMobile }) {
   // Utilitaire : convertir "Lun/Mar/…" → numéro JS getDay()
   const DAY_NUM = { Lun:1, Mar:2, Mer:3, Jeu:4, Ven:5, Sam:6, Dim:0 };
 
-  // Charger la liste des coachs depuis Supabase au montage
+  // Charger la liste des coachs (utilise studioId du context)
   useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return;
-      const { data: profile } = await supabase.from("profiles").select("studio_id").eq("id", user.id).single();
-      if (!profile?.studio_id) return;
-      const { data: coaches } = await supabase
-        .from("profiles")
-        .select("id, first_name, last_name")
-        .eq("studio_id", profile.studio_id)
-        .in("role", ["coach", "admin"]);
-      if (coaches) {
-        setCoachesList(coaches.map(c => ({ id: c.id, name: `${c.first_name || ""} ${c.last_name || ""}`.trim() })));
-      }
-    });
+    if (!studioId) return;
+    createClient().from("profiles")
+      .select("id, first_name, last_name")
+      .eq("studio_id", studioId)
+      .in("role", ["coach", "admin"])
+      .then(({ data: coaches }) => {
+        if (coaches) setCoachesList(coaches.map(c => ({ id: c.id, name: `${c.first_name || ""} ${c.last_name || ""}`.trim() })));
+      });
   }, []);
 
-  // Charger les sessions depuis Supabase dès que studioId est disponible
+  // Charger les sessions dès que studioId est disponible dans le context
   useEffect(() => {
     if (!studioId) return;
     setDbLoading(true);
-    const sb = createClient();
-    sb.from("sessions")
+    createClient().from("sessions")
       .select("id, discipline_id, teacher, room, level, session_date, session_time, duration_min, spots, status")
       .eq("studio_id", studioId).order("session_date").order("session_time")
       .then(({ data, error }) => {
-        if (error) { console.error("load sessions", error); setDbLoading(false); return; }
-        if (data) setSessions(data.map(s => ({
+        if (error) console.error("load sessions", error);
+        else if (data) setSessions(data.map(s => ({
           id: s.id, disciplineId: s.discipline_id,
           teacher: s.teacher || "", room: s.room || "Studio A", level: s.level || "Tous niveaux",
           date: s.session_date, time: s.session_time?.slice(0,5) || "09:00",
@@ -924,8 +917,11 @@ function Planning({ isMobile }) {
                     {coachesList.length === 0 && <option disabled>Aucun coach configuré</option>}
                   </select>
                 </div>
-                <Field label="Date" type="date" value={nS.date} onChange={v=>setNS({...nS,date:v})}/>
-                <Field label="Heure" type="time" value={nS.time} onChange={v=>setNS({...nS,time:v})}/>
+                <DatePicker label="Date" value={nS.date} onChange={v=>setNS({...nS,date:v})}/>
+                <div>
+                  <div style={{fontSize:11,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:.8,marginBottom:5}}>Heure</div>
+                  <TimePicker value={nS.time} onChange={v=>setNS({...nS,time:v})}/>
+                </div>
                 <Field label="Durée (min)" type="number" value={nS.duration} onChange={v=>setNS({...nS,duration:v})}/>
                 <Field label="Places" type="number" value={nS.spots} onChange={v=>setNS({...nS,spots:v})}/>
                 <Field label="Niveau" value={nS.level} onChange={v=>setNS({...nS,level:v})} opts={["Tous niveaux","Débutant","Intermédiaire","Avancé"]}/>
@@ -1059,8 +1055,8 @@ function Planning({ isMobile }) {
                 {/* ── ÉTAPE 3 : Période ── */}
                 <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, textTransform:"uppercase", letterSpacing:.8, marginBottom:8 }}>3 · Période</div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:20 }}>
-                  <Field label="Du" type="date" value={recFrom} onChange={v=>setRecFrom(v)}/>
-                  <Field label="Au" type="date" value={recTo} onChange={v=>setRecTo(v)}/>
+                  <DatePicker label="Du" value={recFrom} onChange={v=>setRecFrom(v)}/>
+                  <DatePicker label="Au" value={recTo} onChange={v=>setRecTo(v)} minDate={recFrom}/>
                 </div>
 
                 {/* ── PRÉVISUALISATION éditable ── */}
@@ -1595,6 +1591,142 @@ function Payments({ isMobile }) {
 }
 
 
+
+// ── DATE PICKER — calendrier mini popup élégant ──────────────────────────────
+function DatePicker({ value, onChange, label, minDate }) {
+  const [open, setOpen] = useState(false);
+  const ref = React.useRef(null);
+
+  // value = "YYYY-MM-DD" ou ""
+  const parsed = value ? new Date(value + "T12:00:00") : null;
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  const [viewYear, setViewYear] = useState(() => parsed?.getFullYear() || today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => parsed?.getMonth() ?? today.getMonth());
+
+  React.useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+
+  // Sync view au changement de value
+  React.useEffect(() => {
+    if (parsed) { setViewYear(parsed.getFullYear()); setViewMonth(parsed.getMonth()); }
+  }, [value]);
+
+  const MONTHS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+  const DAYS_H = ["Lu","Ma","Me","Je","Ve","Sa","Di"];
+
+  const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y=>y-1); } else setViewMonth(m=>m-1); };
+  const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y=>y+1); } else setViewMonth(m=>m+1); };
+
+  // Jours du mois + padding pour commencer lundi
+  const firstDay = new Date(viewYear, viewMonth, 1);
+  const startPad = (firstDay.getDay() + 6) % 7; // 0=Lun
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const cells = Array(startPad).fill(null).concat(Array.from({length:daysInMonth},(_,i)=>i+1));
+
+  const minD = minDate ? new Date(minDate + "T12:00:00") : null;
+
+  const selectDay = (day) => {
+    const m = String(viewMonth+1).padStart(2,"0"), d = String(day).padStart(2,"0");
+    onChange(`${viewYear}-${m}-${d}`);
+    setOpen(false);
+  };
+
+  const isSelected = (day) => {
+    if (!parsed || !day) return false;
+    return parsed.getFullYear()===viewYear && parsed.getMonth()===viewMonth && parsed.getDate()===day;
+  };
+  const isToday = (day) => {
+    return today.getFullYear()===viewYear && today.getMonth()===viewMonth && today.getDate()===day;
+  };
+  const isDisabled = (day) => {
+    if (!day || !minD) return false;
+    return new Date(viewYear, viewMonth, day) < minD;
+  };
+
+  const displayValue = parsed
+    ? parsed.toLocaleDateString("fr-FR", {weekday:"short", day:"numeric", month:"long", year:"numeric"})
+    : "";
+
+  // Position (au-dessus si manque de place)
+  const triggerRef = React.useRef(null);
+  const [dropUp, setDropUp] = React.useState(false);
+  React.useEffect(() => {
+    if (open && triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect();
+      setDropUp(window.innerHeight - r.bottom < 300 && r.top > 300);
+    }
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position:"relative" }}>
+      {label && <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, textTransform:"uppercase", letterSpacing:.8, marginBottom:5 }}>{label}</div>}
+      <button ref={triggerRef} onClick={()=>setOpen(o=>!o)}
+        style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"9px 12px", border:`1.5px solid ${open?C.accent:C.border}`, borderRadius:9, background:C.surfaceWarm, cursor:"pointer", transition:"border-color .15s", textAlign:"left" }}>
+        <span style={{ fontSize:16, color:C.textMuted }}>📅</span>
+        <span style={{ flex:1, fontSize:13, color:displayValue?C.text:C.textMuted, fontWeight:displayValue?600:400 }}>
+          {displayValue || "Choisir une date…"}
+        </span>
+        <span style={{ fontSize:10, color:C.textMuted }}>{open?"▲":"▼"}</span>
+      </button>
+
+      {open && (
+        <div style={{ position:"absolute", left:0, [dropUp?"bottom":"top"]:"calc(100% + 6px)", zIndex:9999, background:C.surface, border:`1.5px solid ${C.accent}`, borderRadius:14, boxShadow:"0 12px 40px rgba(42,31,20,.2)", padding:16, minWidth:260 }}>
+          {/* Navigation mois */}
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+            <button onClick={prevMonth} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, width:32, height:32, cursor:"pointer", fontSize:14, color:C.textMid, display:"flex", alignItems:"center", justifyContent:"center" }}>‹</button>
+            <div style={{ fontSize:14, fontWeight:700, color:C.text }}>{MONTHS[viewMonth]} {viewYear}</div>
+            <button onClick={nextMonth} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, width:32, height:32, cursor:"pointer", fontSize:14, color:C.textMid, display:"flex", alignItems:"center", justifyContent:"center" }}>›</button>
+          </div>
+
+          {/* Entêtes jours */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:2, marginBottom:4 }}>
+            {DAYS_H.map(d=>(
+              <div key={d} style={{ textAlign:"center", fontSize:11, fontWeight:700, color:C.textMuted, padding:"2px 0" }}>{d}</div>
+            ))}
+          </div>
+
+          {/* Cellules jours */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:2 }}>
+            {cells.map((day,i)=>{
+              const sel = isSelected(day);
+              const tod = isToday(day);
+              const dis = isDisabled(day);
+              return (
+                <button key={i} disabled={!day||dis} onClick={()=>day&&!dis&&selectDay(day)}
+                  style={{
+                    height:34, borderRadius:8, border:"none", fontSize:13, fontWeight:sel?700:400,
+                    background: sel ? C.accent : tod ? C.accentLight : "transparent",
+                    color: !day ? "transparent" : sel ? "#fff" : dis ? C.textMuted : C.text,
+                    cursor: !day||dis ? "default" : "pointer",
+                    opacity: dis ? .4 : 1,
+                    transition:"background .1s",
+                  }}
+                  onMouseEnter={e=>{ if(day&&!dis&&!sel) e.currentTarget.style.background=C.accentLight; }}
+                  onMouseLeave={e=>{ if(!sel&&!tod) e.currentTarget.style.background="transparent"; if(tod&&!sel) e.currentTarget.style.background=C.accentLight; }}>
+                  {day||""}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Aujourd'hui */}
+          <div style={{ marginTop:10, textAlign:"center" }}>
+            <button onClick={()=>{ const d=today; selectDay(d.getDate()); setViewYear(d.getFullYear()); setViewMonth(d.getMonth()); }}
+              style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:7, padding:"5px 14px", fontSize:12, color:C.accent, fontWeight:600, cursor:"pointer" }}>
+              Aujourd'hui
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── DURATION PICKER — durées prédéfinies + saisie libre ─────────────────────
 const DURATIONS = [30, 45, 60, 75, 90, 105, 120];
 function DurationPicker({ value, onChange }) {
@@ -1645,7 +1777,7 @@ function DurationPicker({ value, onChange }) {
   const label = (n) => n < 60 ? `${n}mn` : n === 60 ? `1h` : n % 60 === 0 ? `${n/60}h` : `${Math.floor(n/60)}h${String(n%60).padStart(2,"0")}`;
 
   return (
-    <div ref={ref} style={{ position:"relative", width:92, flexShrink:0 }}>
+    <div ref={ref} style={{ position:"relative", width:"100%" }}>
       <div ref={triggerRef} style={{ display:"flex", alignItems:"center", border:`1.5px solid ${open ? C.accent : C.border}`, borderRadius:9, background:C.surfaceWarm, overflow:"hidden", transition:"border-color .15s" }}>
         <button onMouseDown={e=>{e.preventDefault();step(-1);}} tabIndex={-1}
           style={{ background:"none", border:"none", borderRight:`1px solid ${C.border}`, padding:"0 6px", height:38, cursor:"pointer", color:C.textMuted, fontSize:13, flexShrink:0 }}>
@@ -1656,7 +1788,7 @@ function DurationPicker({ value, onChange }) {
           onChange={e=>setInputVal(e.target.value)}
           onBlur={e=>commit(e.target.value)}
           onKeyDown={e=>{ if(e.key==="Enter") e.target.blur(); if(e.key==="ArrowUp"){e.preventDefault();step(1);} if(e.key==="ArrowDown"){e.preventDefault();step(-1);} }}
-          style={{ width:0, flex:1, border:"none", outline:"none", background:"transparent", padding:"0 4px", fontSize:13, color:C.text, fontWeight:700, textAlign:"center", height:38 }}
+          style={{ width:0, flex:1, minWidth:28, border:"none", outline:"none", background:"transparent", padding:"0 2px", fontSize:13, color:C.text, fontWeight:700, textAlign:"center", height:38 }}
         />
         <button onMouseDown={e=>{e.preventDefault();step(1);}} tabIndex={-1}
           style={{ background:"none", border:"none", borderLeft:`1px solid ${C.border}`, padding:"0 6px", height:38, cursor:"pointer", color:C.textMuted, fontSize:13, flexShrink:0 }}>
@@ -1763,7 +1895,7 @@ function TimePicker({ value, onChange }) {
   }, [open]);
 
   return (
-    <div ref={ref} style={{ position:"relative", flex:1 }}>
+    <div ref={ref} style={{ position:"relative", width:"100%" }}>
       <div ref={triggerRef} style={{ display:"flex", alignItems:"center", border:`1.5px solid ${editing||open ? C.accent : C.border}`, borderRadius:9, background:C.surfaceWarm, overflow:"hidden", transition:"border-color .15s" }}>
         {/* Spinner bas */}
         <button onMouseDown={e=>{e.preventDefault();step(-1);}} tabIndex={-1}
@@ -1826,12 +1958,12 @@ function DaySelect({ value, onChange }) {
     { short:"Dim", label:"Dimanche" }
   ];
   return (
-    <div style={{ position:"relative", flex:1 }}>
+    <div style={{ position:"relative", width:"100%" }}>
       <select value={value} onChange={e => onChange(e.target.value)}
-        style={{ width:"100%", padding:"9px 32px 9px 12px", borderRadius:9, border:`1.5px solid ${C.border}`, fontSize:13, color:C.text, background:C.surfaceWarm, outline:"none", appearance:"none", WebkitAppearance:"none", cursor:"pointer", fontWeight:600 }}>
+        style={{ width:"100%", padding:"9px 28px 9px 10px", borderRadius:9, border:`1.5px solid ${C.border}`, fontSize:13, color:C.text, background:C.surfaceWarm, outline:"none", appearance:"none", WebkitAppearance:"none", cursor:"pointer", fontWeight:600 }}>
         {DAYS_FULL.map(d => <option key={d.short} value={d.short}>{d.label}</option>)}
       </select>
-      <span style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none", fontSize:10, color:C.textMuted }}>▼</span>
+      <span style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", pointerEvents:"none", fontSize:10, color:C.textMuted }}>▼</span>
     </div>
   );
 }
@@ -1928,12 +2060,26 @@ function DisciplinesPage({ isMobile }) {
               Aucun créneau — cliquez sur "Ajouter" pour commencer
             </div>
           ) : disc.slots.map((slot,si)=>(
-            <div key={si} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-              <DaySelect value={slot.day} onChange={v=>upSlot(disc.id,si,"day",v)}/>
-              <TimePicker value={slot.time} onChange={v=>upSlot(disc.id,si,"time",v)}/>
-              <DurationPicker value={slot.duration||60} onChange={v=>upSlot(disc.id,si,"duration",v)}/>
+            <div key={si} style={{
+              display:"grid", gridTemplateColumns:"1fr 1fr 1fr auto",
+              gap:8, alignItems:"end", marginBottom:10,
+              padding:"10px 12px", borderRadius:10,
+              background:C.surfaceWarm, border:`1px solid ${C.border}`
+            }}>
+              <div>
+                <div style={{fontSize:10,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:.6,marginBottom:4}}>Jour</div>
+                <DaySelect value={slot.day} onChange={v=>upSlot(disc.id,si,"day",v)}/>
+              </div>
+              <div>
+                <div style={{fontSize:10,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:.6,marginBottom:4}}>Heure</div>
+                <TimePicker value={slot.time} onChange={v=>upSlot(disc.id,si,"time",v)}/>
+              </div>
+              <div>
+                <div style={{fontSize:10,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:.6,marginBottom:4}}>Durée</div>
+                <DurationPicker value={slot.duration||60} onChange={v=>upSlot(disc.id,si,"duration",v)}/>
+              </div>
               <button onClick={()=>rmSlot(disc.id,si)}
-                style={{width:32,height:38,borderRadius:9,border:`1px solid ${C.border}`,background:C.surface,color:"#F87171",cursor:"pointer",fontSize:16,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+                style={{width:32,height:38,borderRadius:9,border:`1px solid ${C.border}`,background:C.surface,color:"#F87171",cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",alignSelf:"end"}}>✕</button>
             </div>
           ))}
           <button onClick={()=>addSlot(disc.id)}
@@ -5193,7 +5339,7 @@ function AdherentView({ onSwitch, isMobile }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // ROOT — switch automatique par rôle
 // ══════════════════════════════════════════════════════════════════════════════
-export default function App({ initialRole = "admin", studioSlug = "", studioName = "", planName = "", membersCount = 0, userName = "", userRole = "", coachName = "", coachDisciplines = [], billingStatus = "trialing", trialEndsAt = null, onSignOut = null }) {
+export default function App({ initialRole = "admin", studioSlug = "", studioName = "", studioId: propStudioId = "", planName = "", membersCount = 0, userName = "", userRole = "", coachName = "", coachDisciplines = [], billingStatus = "trialing", trialEndsAt = null, onSignOut = null }) {
   const [role, setRole] = useState(initialRole); // "superadmin" | "admin" | "coach" | "adherent"
   const [page, setPage] = useState("planning");
 
@@ -5229,17 +5375,18 @@ export default function App({ initialRole = "admin", studioSlug = "", studioName
   if (role === "adherent")   return <AdherentView   onSwitch={setRole} isMobile={isMobile}/>;
   // admin avec is_coach → vue admin normale (ils ont accès à tout)
   const Page = PAGES[page] || Dashboard;
-  // studioId partagé dans le context pour éviter les fetches profiles répétés
-  const [sharedStudioId, setSharedStudioId] = useState(null);
+  // studioId partagé dans le context — priorité à la prop passée par layout.tsx
+  const [sharedStudioId, setSharedStudioId] = useState(propStudioId || null);
   useEffect(() => {
+    if (propStudioId) { setSharedStudioId(propStudioId); return; }
     if (sharedStudioId) return;
-    const sb = createClient();
-    sb.auth.getUser().then(async ({ data: { user } }) => {
+    // Fallback : résolution via Supabase si prop absente
+    createClient().auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
-      const { data: prof } = await sb.from("profiles").select("studio_id").eq("id", user.id).single();
+      const { data: prof } = await createClient().from("profiles").select("studio_id").eq("id", user.id).single();
       if (prof?.studio_id) setSharedStudioId(prof.studio_id);
     });
-  }, []);
+  }, [propStudioId]);
   const appCtxValue = { studioName, studioSlug, userName, planName, membersCount, userRole, userEmail: "", discs, setDiscs, studioId: sharedStudioId, setStudioId: setSharedStudioId };
   return (
     <AppCtx.Provider value={appCtxValue}>
