@@ -534,7 +534,7 @@ function KpiCard({ icon, label, value, delta, accentColor, isMobile }) {
       {/* Icône + delta sur la même ligne */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
         <div style={{ width:30, height:30, borderRadius:8, background:C.bg, border:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{icon}</div>
-        <span style={{ fontSize:11, color:accentColor||C.ok, fontWeight:700, background:C.bg, padding:"2px 7px", borderRadius:10 }}>↑ {delta}</span>
+        {delta && <span style={{ fontSize:11, color:accentColor||C.ok, fontWeight:700, background:C.bg, padding:"2px 7px", borderRadius:10 }}>↑ {delta}</span>}
       </div>
       {/* Valeur */}
       <div style={{ fontSize:22, fontWeight:800, color:C.text, lineHeight:1, marginBottom:3 }}>{value}</div>
@@ -546,7 +546,7 @@ function KpiCard({ icon, label, value, delta, accentColor, isMobile }) {
     <Card style={{ padding:"18px 20px" }}>
       <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:10 }}>
         <div style={{ width:40, height:40, borderRadius:10, background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, border:`1.5px solid ${C.border}` }}>{icon}</div>
-        <span style={{ fontSize:12, color:accentColor||C.ok, fontWeight:700, background:C.bg, padding:"2px 8px", borderRadius:10 }}>↑ {delta}</span>
+        {delta && <span style={{ fontSize:12, color:accentColor||C.ok, fontWeight:700, background:C.bg, padding:"2px 8px", borderRadius:10 }}>↑ {delta}</span>}
       </div>
       <div style={{ fontSize:28, fontWeight:800, color:C.text, lineHeight:1, marginBottom:4 }}>{value}</div>
       <div style={{ fontSize:13, color:C.textSoft, fontWeight:500 }}>{label}</div>
@@ -581,7 +581,7 @@ function DemoBanner() {
 
 function Dashboard({ isMobile }) {
   const p = isMobile?12:28;
-  const { studioId } = useContext(AppCtx);
+  const { studioId, discs } = useContext(AppCtx);
   const [expandedId, setExpandedId] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [bookings, setBookings] = useState({});
@@ -641,22 +641,43 @@ function Dashboard({ isMobile }) {
 
   // KPIs
   const monthStr = todayStr.slice(0,7);
-  const activeMembers = isDemo ? members.filter(m=>m.status==="actif").length : members.filter(m=>m.status==="active"||m.status==="actif").length;
+  const activeMembers = members.filter(m=>m.status==="active"||m.status==="actif").length;
   const monthSessions = sessions.filter(s=>s.date?.startsWith(monthStr)).length;
   const totalBooked = sessions.reduce((acc,s)=>{ const bks=bookings[s.id]||[]; return acc+(bks.length?bks.filter(b=>b.st==="confirmed").length:s.booked||0); },0);
   const totalCap = sessions.reduce((acc,s)=>acc+(s.spots||0),0);
   const fillRate = totalCap>0 ? Math.round(totalBooked/totalCap*100) : 0;
-  const monthRevenue = payments.filter(p=>p.date?.startsWith(monthStr)&&p.status==="payé").reduce((s,p)=>s+(p.amount||0),0);
+  const monthRevenue = payments.filter(p=>p.date?.startsWith(monthStr)&&(p.status==="payé"||p.status==="paid")).reduce((s,p)=>s+(p.amount||0),0);
+
+  // Alertes calculées depuis les vraies données
+  const unpaidAmount = payments.filter(p=>p.status==="impayé"||p.status==="unpaid").reduce((s,p)=>s+(p.amount||0),0);
+  const waitlistCount = Object.values(bookings).reduce((acc,bl)=>acc+(bl||[]).filter(b=>b.st==="waitlist").length,0);
+  const alerts = [
+    unpaidAmount > 0 && { label:"Impayés en cours", value:`${unpaidAmount.toLocaleString("fr-FR")} €`, c:C.warn, bg:C.warnBg },
+    waitlistCount > 0 && { label:"Liste d'attente", value:`${waitlistCount} membre${waitlistCount>1?"s":""}`, c:C.info, bg:C.infoBg },
+  ].filter(Boolean);
+
+  // Membres récents triés par date d'inscription
+  const recentMembers = [...members].sort((a,b)=>{
+    const da = a.joinedAt||a.joined_at||a.created_at||"";
+    const db = b.joinedAt||b.joined_at||b.created_at||"";
+    return db.localeCompare(da);
+  }).slice(0,3);
+
+  const EmptyCard = ({label}) => (
+    <div style={{padding:"28px 16px",textAlign:"center",color:C.textMuted,fontSize:14,fontStyle:"italic"}}>
+      {label}
+    </div>
+  );
 
   return (
     <div>
       {isDemo && <DemoBanner/>}
       <div style={{ padding:p }}>
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:isMobile?8:14, marginBottom:isMobile?12:20 }}>
-          <KpiCard icon={<IcoUsers s={isMobile?16:18} c={C.ok}/>}      label="Adhérents actifs" value={String(activeMembers)}                        delta="+3 ce mois"   accentColor={C.ok}     isMobile={isMobile}/>
-          <KpiCard icon={<IcoCalendar s={isMobile?16:18} c="#6B9E7A"/>} label="Séances ce mois"  value={String(monthSessions)}                         delta="ce mois"      accentColor="#6B9E7A"  isMobile={isMobile}/>
-          <KpiCard icon={<IcoBarChart s={isMobile?16:18} c="#6A8FAE"/>} label="Taux remplissage" value={fillRate+" %"}                                  delta="+5 pts"       accentColor="#6A8FAE"  isMobile={isMobile}/>
-          <KpiCard icon={<IcoEuro s={isMobile?16:18} c={C.accent}/>}   label="CA du mois"        value={monthRevenue.toLocaleString("fr-FR")+" €"}     delta="+12 %"        accentColor={C.accent} isMobile={isMobile}/>
+          <KpiCard icon={<IcoUsers s={isMobile?16:18} c={C.ok}/>}      label="Adhérents actifs" value={activeMembers>0?String(activeMembers):"—"}  delta={null} accentColor={C.ok}     isMobile={isMobile}/>
+          <KpiCard icon={<IcoCalendar s={isMobile?16:18} c="#6B9E7A"/>} label="Séances ce mois"  value={monthSessions>0?String(monthSessions):"—"}   delta={null} accentColor="#6B9E7A"  isMobile={isMobile}/>
+          <KpiCard icon={<IcoBarChart s={isMobile?16:18} c="#6A8FAE"/>} label="Taux remplissage" value={totalCap>0?fillRate+" %":"—"}                 delta={null} accentColor="#6A8FAE"  isMobile={isMobile}/>
+          <KpiCard icon={<IcoEuro s={isMobile?16:18} c={C.accent}/>}   label="CA du mois"        value={monthRevenue>0?monthRevenue.toLocaleString("fr-FR")+" €":"—"} delta={null} accentColor={C.accent} isMobile={isMobile}/>
         </div>
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1.6fr 1fr", gap:16 }}>
           <Card noPad>
@@ -664,28 +685,34 @@ function Dashboard({ isMobile }) {
             {loading
               ? <div style={{padding:"28px",textAlign:"center",color:C.textMuted,fontSize:14}}>Chargement…</div>
               : todaySessions.length === 0
-                ? <div style={{padding:"28px",textAlign:"center",color:C.textMuted,fontSize:14}}>Aucune séance programmée aujourd'hui</div>
+                ? <EmptyCard label="Aucune séance programmée aujourd'hui"/>
                 : todaySessions.map(s=>(
-                  <DashboardSessionCard key={s.id} sess={s} expandedId={expandedId} bookings={bookings} onToggle={handleToggle} onChangeStatus={handleChangeStatus} isDemo={isDemo}/>
+                  <DashboardSessionCard key={s.id} sess={s} expandedId={expandedId} bookings={bookings} onToggle={handleToggle} onChangeStatus={handleChangeStatus} isDemo={isDemo} discs={discs}/>
                 ))}
           </Card>
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <Card noPad>
               <SectionHead><span style={{display:"flex",alignItems:"center",gap:6}}><IcoAlert s={15} c={C.warn}/>Alertes</span></SectionHead>
-              {[
-                {label:"Impayés en cours",     value:"178 €",     c:C.warn,   bg:C.warnBg},
-                {label:"Abonnements expirant", value:"2",         c:C.accent, bg:C.accentBg},
-                {label:"Liste d'attente",      value:"3 membres", c:C.info,   bg:C.infoBg},
-              ].map(a=>(
-                <div key={a.label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 16px", borderBottom:`1.5px solid ${C.borderSoft}` }}>
-                  <span style={{ fontSize:15, color:C.textMid }}>{a.label}</span>
-                  <span style={{ fontSize:15, fontWeight:700, color:a.c, background:a.bg, padding:"3px 12px", borderRadius:12 }}>{a.value}</span>
-                </div>
-              ))}
+              {loading
+                ? <EmptyCard label="Chargement…"/>
+                : alerts.length === 0
+                  ? <EmptyCard label="Aucune alerte pour le moment"/>
+                  : alerts.map(a=>(
+                    <div key={a.label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 16px", borderBottom:`1.5px solid ${C.borderSoft}` }}>
+                      <span style={{ fontSize:15, color:C.textMid }}>{a.label}</span>
+                      <span style={{ fontSize:15, fontWeight:700, color:a.c, background:a.bg, padding:"3px 12px", borderRadius:12 }}>{a.value}</span>
+                    </div>
+                  ))
+              }
             </Card>
             <Card noPad style={{ flex:1 }}>
               <SectionHead>Derniers inscrits</SectionHead>
-              {MEMBERS.slice(-3).reverse().map(m=><MemberRow key={m.id} m={m} onSelect={()=>{}} selected={false}/>)}
+              {loading
+                ? <EmptyCard label="Chargement…"/>
+                : recentMembers.length === 0
+                  ? <EmptyCard label="Aucun adhérent pour le moment"/>
+                  : recentMembers.map(m=><MemberRow key={m.id} m={m} onSelect={()=>{}} selected={false}/>)
+              }
             </Card>
           </div>
         </div>
@@ -844,8 +871,9 @@ function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onCh
 }
 
 // ── DASHBOARD SESSION CARD (réutilise PlanningAccordion) ─────────────────────
-function DashboardSessionCard({ sess, expandedId, bookings, onToggle, onChangeStatus, isDemo }) {
-  const disc  = DISCIPLINES.find(d=>d.id===sess.disciplineId)||DISCIPLINES[0];
+function DashboardSessionCard({ sess, expandedId, bookings, onToggle, onChangeStatus, isDemo, discs }) {
+  const allDiscs = (discs && discs.length) ? discs : DISCIPLINES;
+  const disc  = allDiscs.find(d=>d.id===sess.disciplineId) || { name: sess.discipline_name || sess.disciplineId || "Discipline", color:"#C4956A" };
   const bl    = bookings[sess.id]||[];
   const booked= bl.length ? bl.filter(b=>b.st==="confirmed").length : sess.booked;
   const wait  = bl.length ? bl.filter(b=>b.st==="waitlist").length  : sess.waitlist;
