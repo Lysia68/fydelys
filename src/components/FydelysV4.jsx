@@ -1010,7 +1010,9 @@ function Planning({ isMobile }) {
   };
 
   return (
-    <div style={{ padding:p }}>
+    <div>
+      {isDemoData && <DemoBanner/>}
+      <div style={{ padding:p }}>
       <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:4, marginBottom:18, alignItems:"center", WebkitOverflowScrolling:"touch" }}>
         <Button sm variant={fd===null?"primary":"ghost"} onClick={()=>setFd(null)}>Toutes</Button>
         {(discs||DISCIPLINES).map(d=>{ const Ico=DISC_ICONS[d.id]; return <Button key={d.id} sm variant={fd===d.id?"primary":"ghost"} onClick={()=>setFd(d.id)}><span style={{display:"flex",alignItems:"center",gap:5}}>{Ico&&<Ico s={13} c={fd===d.id?C.surface:d.color}/>}{d.name}</span></Button>; })}
@@ -1271,6 +1273,7 @@ function Members({ isMobile }) {
   const { studioId } = useContext(AppCtx);
   const [members, setMembers] = useState([]);
   const [dbLoading, setDbLoading] = useState(true);
+  const [isDemoData, setIsDemoData] = useState(false);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -1287,7 +1290,7 @@ function Members({ isMobile }) {
       .eq("studio_id", studioId).order("last_name")
       .then(({ data, error }) => {
         if (error) { console.error("load members", error); setDbLoading(false); return; }
-        if (!data || data.length === 0) { setMembers(MEMBERS_DEMO); setDbLoading(false); return; }
+        if (!data || data.length === 0) { setMembers(MEMBERS_DEMO); setIsDemoData(true); setDbLoading(false); return; }
         if (data) setMembers(data.map(m => ({
           id: m.id, firstName: m.first_name, lastName: m.last_name,
           email: m.email, phone: m.phone || "", status: m.status || "actif",
@@ -1450,7 +1453,9 @@ function Members({ isMobile }) {
   );
 
   return (
-    <div style={{ padding:p }}>
+    <div>
+      {isDemoData && <DemoBanner/>}
+      <div style={{ padding:p }}>
       {modal?.type==="email"        && <EmailModal/>}
       {modal?.type==="subscription" && <SubscriptionModal/>}
       {modal?.type==="history"      && <HistoryModal/>}
@@ -1507,6 +1512,7 @@ function Members({ isMobile }) {
         </Card>
       )}
     </div>
+    </div>
   );
 }
 
@@ -1514,6 +1520,7 @@ function Subscriptions({ isMobile }) {
   const { studioId } = useContext(AppCtx);
   const [subs, setSubs] = useState([]);
   const [dbLoading, setDbLoading] = useState(true);
+  const [isDemoData, setIsDemoData] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState(null);
   const [nSub, setNSub] = useState({ name:"", price:"", period:"mois", description:"" });
@@ -1528,7 +1535,7 @@ function Subscriptions({ isMobile }) {
       .eq("studio_id", studioId).eq("active", true).order("price")
       .then(({ data, error }) => {
         if (error) { console.error("load subs", error); setDbLoading(false); return; }
-        if (!data || data.length === 0) { setSubs(SUBSCRIPTIONS_DEMO); setDbLoading(false); return; }
+        if (!data || data.length === 0) { setSubs(SUBSCRIPTIONS_DEMO); setIsDemoData(true); setDbLoading(false); return; }
         if (data) setSubs(data.map(s => ({ ...s, color: s.color || "#B8936A" })));
         setDbLoading(false);
       });
@@ -1550,7 +1557,9 @@ function Subscriptions({ isMobile }) {
   };
 
   return (
-    <div style={{ padding:p }}>
+    <div>
+      {isDemoData && <DemoBanner/>}
+      <div style={{ padding:p }}>
       <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:18 }}><Button sm variant="primary" onClick={()=>setShowAdd(!showAdd)}>＋ Abonnement</Button></div>
       {showAdd && (
         <Card style={{ marginBottom:18, borderTop:`3px solid ${C.accent}` }}>
@@ -1641,6 +1650,7 @@ function Payments({ isMobile }) {
   const [payments, setPayments] = useState([]);
   const { studioId } = useContext(AppCtx);
   const [dbLoading, setDbLoading] = useState(true);
+  const [isDemoData, setIsDemoData] = useState(false);
   const [toast, setToast] = useState(null);
   const total  = payments.filter(p=>p.status==="payé").reduce((s,p)=>s+p.amount,0);
   const unpaid = payments.filter(p=>p.status==="impayé").reduce((s,p)=>s+p.amount,0);
@@ -1654,7 +1664,7 @@ function Payments({ isMobile }) {
       .eq("studio_id", studioId).order("payment_date", { ascending: false })
       .then(({ data, error }) => {
         if (error) { console.error("load payments", error); setDbLoading(false); return; }
-        if (!data || data.length === 0) { setPayments(PAYMENTS_DEMO); setDbLoading(false); return; }
+        if (!data || data.length === 0) { setPayments(PAYMENTS_DEMO); setIsDemoData(true); setDbLoading(false); return; }
         if (data) setPayments(data.map(pay => ({
           id: pay.id, memberId: pay.member_id,
           member: pay.members ? `${pay.members.first_name} ${pay.members.last_name}` : "—",
@@ -1682,7 +1692,9 @@ function Payments({ isMobile }) {
     {lbl:"Transactions",     val:payments.length,    icon:<IcoBarChart s={20} c={C.info}/>,  c:C.info, bg:C.infoBg},
   ];
   return (
-    <div style={{ padding:p }}>
+    <div>
+      {isDemoData && <DemoBanner/>}
+      <div style={{ padding:p }}>
       {/* Toast */}
       {toast && (
         <div style={{ position:"fixed", top:20, right:20, zIndex:600, display:"flex", alignItems:"center", gap:10, padding:"12px 18px", background:C.ok, borderRadius:10, color:"white", fontSize:14, fontWeight:600, boxShadow:"0 8px 24px rgba(0,0,0,.15)" }}>
@@ -1722,6 +1734,7 @@ function Payments({ isMobile }) {
           </div>
         ))}
       </Card>
+    </div>
     </div>
   );
 }
@@ -2143,7 +2156,7 @@ function DisciplinesPage({ isMobile }) {
                   style={{width:26,height:26,borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,color:"#F87171",cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
               </div>
               {/* Ligne 2 : Jour / Heure / Durée */}
-              <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8}}>
+              <div style={{display:"grid", gridTemplateColumns:"2fr 1.2fr 1fr", gap:8}}>
                 <div>
                   <div style={{fontSize:10,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:.6,marginBottom:4}}>Jour</div>
                   <DaySelect value={slot.day} onChange={v=>upSlot(disc.id,si,"day",v)}/>
@@ -3367,12 +3380,54 @@ function InviteCoachModal({ C, inviteEmail, setInviteEmail, inviteName, setInvit
 }
 
 function Settings({ isMobile }) {
-  const { studioName, userName, userEmail, planName, membersCount, userRole } = useContext(AppCtx);
+  const { studioName, userName, userEmail, planName, membersCount, userRole, studioId } = useContext(AppCtx);
   const p = isMobile?12:28;
-  // currentRole = rôle réel de l'utilisateur (depuis AppCtx)
-  // Pas de useState avec valeur en dur — on dérive depuis userRole
-  const realRole = userRole || "admin"; // fallback admin si pas encore chargé
+  const realRole = userRole || "admin";
   const [currentRole, setCurrentRole] = useState(realRole);
+  // ── Données studio depuis Supabase
+  const [studioForm, setStudioForm] = useState({ name:"", address:"", phone:"", email:"", website:"", cancel_delay_h:12, booking_days_ahead:7, waitlist_max:10 });
+  const [studioSaving, setStudioSaving] = useState(false);
+  const [studioToast, setStudioToast] = useState(null);
+  const showStudioToast = (msg, ok=true) => { setStudioToast({msg,ok}); setTimeout(()=>setStudioToast(null),3000); };
+
+  React.useEffect(() => {
+    if (!studioId) return;
+    createClient().from("studios")
+      .select("name, address, city, phone, email, website, cancel_delay_h, booking_days_ahead, waitlist_max")
+      .eq("id", studioId).single()
+      .then(({ data }) => {
+        if (data) setStudioForm({
+          name: data.name || "",
+          address: data.address || "",
+          city: data.city || "",
+          phone: data.phone || "",
+          email: data.email || "",
+          website: data.website || "",
+          cancel_delay_h: data.cancel_delay_h ?? 12,
+          booking_days_ahead: data.booking_days_ahead ?? 7,
+          waitlist_max: data.waitlist_max ?? 10,
+        });
+      });
+  }, [studioId]);
+
+  const saveStudio = async () => {
+    if (!studioId) return;
+    setStudioSaving(true);
+    const { error } = await createClient().from("studios").update({
+      name: studioForm.name,
+      address: studioForm.address,
+      city: studioForm.city,
+      phone: studioForm.phone,
+      email: studioForm.email,
+      website: studioForm.website,
+      cancel_delay_h: parseInt(studioForm.cancel_delay_h) || 12,
+      booking_days_ahead: parseInt(studioForm.booking_days_ahead) || 7,
+      waitlist_max: parseInt(studioForm.waitlist_max) || 10,
+    }).eq("id", studioId);
+    setStudioSaving(false);
+    if (error) showStudioToast("Erreur : " + error.message, false);
+    else showStudioToast("Paramètres enregistrés ✓");
+  };
   // Sync si userRole change (chargement async)
   React.useEffect(() => {
     if (userRole) {
@@ -3680,31 +3735,75 @@ function Settings({ isMobile }) {
   );
 
   // ── Tab: Studio settings ──────────────────────────────────────────────────
-  const TabStudio = () => (
-    <div>
-      {[
-        { title:"Informations du studio", fields:[["Nom du studio", studioName||""],["Adresse",""],["Téléphone",""],["Email contact",""],["Site web",""]] },
-        { title:"Paramètres de réservation", fields:[["Délai d'annulation (h)","12"],["Ouverture réservations (j avant)","7"],["Liste d'attente max","10"],["Confirmation automatique","Oui"]] },
-        { title:"Notifications", fields:[["Email confirmation réservation","Activé"],["SMS rappel J-1","Activé"],["Alerte impayé","Activé"],["Rapport hebdomadaire","Activé"]] },
-      ].map(sec=>(
-        <Card key={sec.title} noPad style={{ marginBottom:14 }}>
-          <SectionHead>{sec.title}</SectionHead>
-          <div style={{ padding:"16px 18px", display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:12 }}>
-            {sec.fields.map(([lbl,val])=>(
-              <div key={lbl}>
-                <FieldLabel>{lbl}</FieldLabel>
-                <input defaultValue={val} disabled={!isAdmin}
-                  style={{ width:"100%", padding:"9px 12px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:14, outline:"none", boxSizing:"border-box", color:C.text, background:isAdmin?C.surfaceWarm:"#F8F5F2", opacity:isAdmin?1:0.7 }}
-                  onFocus={e=>{ if(isAdmin) e.target.style.borderColor=C.accent; }}
-                  onBlur={e=>e.target.style.borderColor=C.border}/>
-              </div>
-            ))}
+  const TabStudio = () => {
+    const SI = ({ label, fkey, type="text", placeholder="" }) => (
+      <div>
+        <FieldLabel>{label}</FieldLabel>
+        <input type={type} value={studioForm[fkey]||""} placeholder={placeholder} disabled={!isAdmin}
+          onChange={e=>setStudioForm(f=>({...f,[fkey]:e.target.value}))}
+          style={{ width:"100%", padding:"9px 12px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:14, outline:"none", boxSizing:"border-box", color:C.text, background:isAdmin?C.surfaceWarm:"#F8F5F2", opacity:isAdmin?1:0.7, transition:"border-color .15s" }}
+          onFocus={e=>{ if(isAdmin) e.target.style.borderColor=C.accent; }}
+          onBlur={e=>e.target.style.borderColor=C.border}/>
+      </div>
+    );
+    return (
+      <div>
+        {studioToast && (
+          <div style={{ marginBottom:12, padding:"10px 14px", borderRadius:9, background:studioToast.ok?"#D1FAE5":"#FEE2E2", color:studioToast.ok?"#065F46":"#991B1B", fontSize:13, fontWeight:600 }}>
+            {studioToast.ok?"✓":"✗"} {studioToast.msg}
           </div>
-          {isAdmin && <div style={{ padding:"0 18px 16px" }}><Button sm variant="primary" onClick={()=>showToast("Paramètres enregistrés !")}>Enregistrer</Button></div>}
+        )}
+        {!studioId && (
+          <div style={{ padding:"12px 16px", background:"#FEF3C7", borderRadius:9, marginBottom:14, fontSize:13, color:"#92400E" }}>
+            ⏳ Chargement des données studio…
+          </div>
+        )}
+        <Card noPad style={{ marginBottom:14 }}>
+          <SectionHead>Informations du studio</SectionHead>
+          <div style={{ padding:"16px 18px", display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:12 }}>
+            <div style={{ gridColumn:isMobile?"1":"1 / -1" }}>
+              <SI label="Nom du studio" fkey="name" placeholder="Mon Studio Yoga"/>
+            </div>
+            <SI label="Adresse" fkey="address" placeholder="12 rue de la Paix"/>
+            <SI label="Ville" fkey="city" placeholder="Paris"/>
+            <SI label="Téléphone" fkey="phone" type="tel" placeholder="06 00 00 00 00"/>
+            <SI label="Email de contact" fkey="email" type="email" placeholder="contact@studio.fr"/>
+            <SI label="Site web" fkey="website" placeholder="https://monstudio.fr"/>
+          </div>
+          {isAdmin && (
+            <div style={{ padding:"0 18px 16px", display:"flex", alignItems:"center", gap:10 }}>
+              <Button sm variant="primary" onClick={saveStudio}>{studioSaving?"Enregistrement…":"Enregistrer"}</Button>
+            </div>
+          )}
         </Card>
-      ))}
-    </div>
-  );
+
+        <Card noPad style={{ marginBottom:14 }}>
+          <SectionHead>Paramètres de réservation</SectionHead>
+          <div style={{ padding:"16px 18px", display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr", gap:12 }}>
+            <SI label="Délai annulation (h)" fkey="cancel_delay_h" type="number"/>
+            <SI label="Ouverture résa (j avant)" fkey="booking_days_ahead" type="number"/>
+            <SI label="Liste d'attente max" fkey="waitlist_max" type="number"/>
+          </div>
+          {isAdmin && (
+            <div style={{ padding:"0 18px 16px" }}>
+              <Button sm variant="primary" onClick={saveStudio}>{studioSaving?"Enregistrement…":"Enregistrer"}</Button>
+            </div>
+          )}
+        </Card>
+
+        <Card noPad>
+          <SectionHead>Votre forfait</SectionHead>
+          <div style={{ padding:"16px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div>
+              <div style={{ fontSize:16, fontWeight:800, color:C.text }}>{planName || "Essentiel"}</div>
+              <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>{membersCount} adhérent{membersCount>1?"s":""} actif{membersCount>1?"s":""}</div>
+            </div>
+            <Button sm variant="ghost" onClick={()=>window.open("https://fydelys.fr/#pricing","_blank")}>Changer de forfait</Button>
+          </div>
+        </Card>
+      </div>
+    );
+  };
 
   // ── Tab: Users ────────────────────────────────────────────────────────────
   const TabUsers = () => {

@@ -84,9 +84,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           setInitialRole("superadmin")
           if (profile?.studio_id) setStudioId(profile.studio_id)
         } else if (role === "admin") {
+          if (profile?.studio_id) setStudioId(profile.studio_id)
           const { data: studio } = await supabase
             .from("studios").select("slug").eq("id", profile?.studio_id).single()
-          if (studio?.slug) {
+          if (studio?.slug && !isAppHost) {
             window.location.href = `https://${studio.slug}.fydelys.fr/dashboard`
           } else {
             setInitialRole("admin")
@@ -128,6 +129,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }
         setInitialRole(role)
       } else {
+        if (profile?.studio_id) setStudioId(profile.studio_id)
         setInitialRole(role)
       }
     })()
