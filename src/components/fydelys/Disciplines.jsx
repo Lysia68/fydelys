@@ -2,7 +2,7 @@ import React, { useState, useContext } from "react";
 import { AppCtx } from "./context";
 import { C } from "./theme";
 import { DISCIPLINES } from "./demoData";
-import { IcoLayers, IcoX, IcoChevron } from "./icons";
+import { IcoLayers, IcoX, IcoChevron, DISC_ICONS } from "./icons";
 import { Card, SectionHead, Button, Field, Pill, EmptyState } from "./ui";
 import { TimePicker, DurationPicker, DaySelect } from "./pickers";
 

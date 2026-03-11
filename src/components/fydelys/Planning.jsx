@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase";
 import { AppCtx } from "./context";
 import { C } from "./theme";
 import { DISCIPLINES, SESSIONS_INIT, BOOKINGS_INIT, SESSIONS_DEMO } from "./demoData";
-import { IcoChevron, IcoCalendar, IcoCheck, IcoX, IcoMail } from "./icons";
+import { IcoChevron, IcoCalendar, IcoCheck, IcoX, IcoMail, DISC_ICONS } from "./icons";
 import { Card, SectionHead, Button, Field, DateLabel, Pill, DemoBanner, EmptyState } from "./ui";
 import { DatePicker, TimePicker, DurationPicker, DaySelect } from "./pickers";
 import { PlanningAccordion, stLbl, stStyle } from "./accordion";
