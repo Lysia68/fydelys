@@ -1644,7 +1644,6 @@ function Subscriptions({ isMobile }) {
         ))}
       </div>
       </div>
-      </div>
     </div>
   );
 }
