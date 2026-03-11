@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase";
 import React, { useState, useEffect, useContext, createContext } from "react";
 
-const AppCtx = createContext({ studioName:"", studioSlug:"", userName:"", userEmail:"", planName:"", membersCount:0, userRole:"" });
+const AppCtx = createContext({ studioName:"", studioSlug:"", userName:"", userEmail:"", planName:"", membersCount:0, userRole:"", discs:[], setDiscs:()=>{} });
 
 // ── ConfirmModal — remplace window.confirm ────────────────────────────────────
 function ConfirmModal({ message, onConfirm, onCancel }) {
@@ -685,6 +685,8 @@ function DashboardSessionCard({ sess, expandedId, bookings, onToggle, onChangeSt
 
 // ── PLANNING ──────────────────────────────────────────────────────────────────
 function Planning({ isMobile }) {
+  // Récupérer les disciplines depuis le context global (modifiées dans DisciplinesPage)
+  const { discs } = useContext(AppCtx);
   const [sessions, setSessions] = useState(SESSIONS_INIT);
   const [bookings, setBookings] = useState(() => JSON.parse(JSON.stringify(BOOKINGS_INIT)));
   const [expandedId, setExpandedId] = useState(null);
@@ -806,7 +808,7 @@ function Planning({ isMobile }) {
     <div style={{ padding:p }}>
       <div style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:4, marginBottom:18, alignItems:"center", WebkitOverflowScrolling:"touch" }}>
         <Button sm variant={fd===null?"primary":"ghost"} onClick={()=>setFd(null)}>Toutes</Button>
-        {DISCIPLINES.map(d=>{ const Ico=DISC_ICONS[d.id]; return <Button key={d.id} sm variant={fd===d.id?"primary":"ghost"} onClick={()=>setFd(d.id)}><span style={{display:"flex",alignItems:"center",gap:5}}>{Ico&&<Ico s={13} c={fd===d.id?C.surface:d.color}/>}{d.name}</span></Button>; })}
+        {(discs||DISCIPLINES).map(d=>{ const Ico=DISC_ICONS[d.id]; return <Button key={d.id} sm variant={fd===d.id?"primary":"ghost"} onClick={()=>setFd(d.id)}><span style={{display:"flex",alignItems:"center",gap:5}}>{Ico&&<Ico s={13} c={fd===d.id?C.surface:d.color}/>}{d.name}</span></Button>; })}
         <div style={{ marginLeft:"auto", flexShrink:0 }}><Button sm variant="primary" onClick={()=>setShowAdd(!showAdd)}>＋ Séance</Button></div>
       </div>
 
@@ -833,7 +835,7 @@ function Planning({ isMobile }) {
                   const disc = DISCIPLINES.find(d=>d.id===parseInt(v));
                   const slot = disc?.slots?.[0];
                   setNS({...nS, disciplineId:v, ...(slot?{time:slot.time, duration:slot.duration||60}:{})});
-                }} opts={DISCIPLINES.map(d=>({v:d.id,l:d.name}))}/>
+                }} opts={(discs||DISCIPLINES).map(d=>({v:d.id,l:d.name}))}/>
                 <div>
                   <label style={{fontSize:11,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:5}}>Professeur</label>
                   <select value={nS.teacher} onChange={e=>setNS({...nS,teacher:e.target.value})}
@@ -859,8 +861,9 @@ function Planning({ isMobile }) {
 
           {/* ── MODE RÉCURRENCE ── */}
           {recMode && (() => {
-            const allSlots = DISCIPLINES.flatMap(d =>
-              (d.slots||[]).map((s,i) => ({ key:`${d.id}-${i}`, disciplineId:d.id, discName:d.name, discIcon:d.icon, day:s.day, time:s.time, duration:s.duration||60, teacher:"" }))
+            // Utiliser les discs du context (modifiés dans DisciplinesPage)
+            const allSlots = (discs||[]).flatMap(d =>
+              (d.slots||[]).map((s,i) => ({ key:`${d.id}-${i}`, disciplineId:d.id, discName:d.name, discIcon:d.icon||"🏃", day:s.day, time:s.time, duration:s.duration||60, teacher:"" }))
             );
             const isSelected = (k) => recSlots.some(s=>s.key===k);
             const dayLabel = (d) => ({Lun:"Lundi",Mar:"Mardi",Mer:"Mercredi",Jeu:"Jeudi",Ven:"Vendredi",Sam:"Samedi",Dim:"Dimanche"}[d]||d);
@@ -1408,9 +1411,34 @@ function TimePicker({ value, onChange }) {
     setOpen(false);
   };
 
+  // Ref pour auto-scroll sur la valeur courante
+  const listRef = React.useRef(null);
+  React.useEffect(() => {
+    if (open && listRef.current) {
+      const active = listRef.current.querySelector('[data-active="true"]');
+      if (active) active.scrollIntoView({ block:"center" });
+    }
+  }, [open]);
+
+  // Position du dropdown : calcul pour ne pas sortir de l'écran
+  const triggerRef2 = React.useRef(null);
+  const [dropStyle, setDropStyle] = React.useState({});
+  React.useEffect(() => {
+    if (open && triggerRef2.current) {
+      const r = triggerRef2.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - r.bottom;
+      const dropH = Math.min(200, slots.length * 37);
+      const goUp = spaceBelow < dropH + 8 && r.top > dropH + 8;
+      setDropStyle(goUp
+        ? { bottom:"calc(100% + 4px)", top:"auto" }
+        : { top:"calc(100% + 4px)", bottom:"auto" }
+      );
+    }
+  }, [open]);
+
   return (
     <div ref={ref} style={{ position:"relative", flex:1 }}>
-      <div style={{ display:"flex", alignItems:"center", border:`1.5px solid ${open ? C.accent : C.border}`, borderRadius:9, background:C.surfaceWarm, overflow:"hidden", transition:"border-color .15s" }}>
+      <div ref={triggerRef2} style={{ display:"flex", alignItems:"center", border:`1.5px solid ${open ? C.accent : C.border}`, borderRadius:9, background:C.surfaceWarm, overflow:"hidden", transition:"border-color .15s" }}>
         <span style={{ padding:"0 10px", fontSize:15, color:C.textMuted, userSelect:"none" }}>🕐</span>
         <input
           value={inputVal}
@@ -1427,12 +1455,17 @@ function TimePicker({ value, onChange }) {
         </button>
       </div>
       {open && (
-        <div style={{ position:"absolute", top:"calc(100% + 4px)", left:0, right:0, background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,.12)", zIndex:700, maxHeight:200, overflowY:"auto" }}>
+        <div ref={listRef} style={{ position:"absolute", left:0, right:0, ...dropStyle, background:C.surface, border:`1.5px solid ${C.accent}`, borderRadius:10, boxShadow:"0 8px 32px rgba(42,31,20,.18)", zIndex:9999, maxHeight:200, overflowY:"auto" }}>
           {slots.map(t => (
-            <button key={t} onClick={() => { setInputVal(t); onChange(t); setOpen(false); }}
-              style={{ display:"block", width:"100%", textAlign:"left", padding:"8px 14px", border:"none", background: t === value ? C.accentLight : "transparent", color: t === value ? C.accent : C.text, fontWeight: t === value ? 700 : 400, fontSize:13, cursor:"pointer", borderBottom:`1px solid ${C.border}20` }}
-              onMouseEnter={e => e.currentTarget.style.background = C.accentLight}
-              onMouseLeave={e => e.currentTarget.style.background = t === value ? C.accentLight : "transparent"}>
+            <button key={t} data-active={t === value ? "true" : "false"}
+              onClick={() => { setInputVal(t); onChange(t); setOpen(false); }}
+              style={{ display:"block", width:"100%", textAlign:"left", padding:"9px 14px", border:"none",
+                background: t === value ? C.accentLight : "transparent",
+                color: t === value ? C.accent : C.text,
+                fontWeight: t === value ? 700 : 400, fontSize:13, cursor:"pointer",
+                borderBottom:`1px solid ${C.border}30` }}
+              onMouseEnter={e => { if (t !== value) e.currentTarget.style.background = "rgba(160,104,56,.06)"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = t === value ? C.accentLight : "transparent"; }}>
               {t}
             </button>
           ))}
@@ -1464,9 +1497,14 @@ function DaySelect({ value, onChange }) {
 const DAYS_FR = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
 
 function DisciplinesPage({ isMobile }) {
-  const [discs, setDiscs] = useState(DISCIPLINES.map(d=>({ ...d, slots:[] })));
-  const [nD, setND]       = useState({ name:"", icon:"🏃", color:C.accent });
-  const [editDisc, setEditDisc] = useState(null); // discipline en cours de config horaires
+  // Utiliser le context global pour partager les discs avec Planning (récurrence)
+  const { discs, setDiscs } = useContext(AppCtx);
+  const [nD, setND]         = useState({ name:"", icon:"🏃", color:C.accent });
+  const [editDisc, setEditDisc]   = useState(null); // discipline en cours de config horaires
+  const [editName, setEditName]   = useState(null); // {id, name, icon} — renommage en cours
+  const [confirmDel, setConfirmDel] = useState(null); // id discipline à supprimer
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, ok=true) => { setToast({msg,ok}); setTimeout(()=>setToast(null),3000); };
   const p = isMobile?16:28;
 
   // Slots helpers
@@ -1524,13 +1562,64 @@ function DisciplinesPage({ isMobile }) {
 
   return (
     <div style={{ padding:p }}>
+      {/* Toast local DisciplinesPage */}
+      {toast && (
+        <div style={{ position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)", zIndex:9999,
+          background:toast.ok?"#2A1F14":"#7F1D1D", color:"#fff", borderRadius:12, padding:"11px 22px",
+          fontSize:13, fontWeight:600, boxShadow:"0 4px 20px rgba(0,0,0,.25)", whiteSpace:"nowrap",
+          display:"flex", alignItems:"center", gap:8 }}>
+          {toast.ok ? "✓" : "✕"} {toast.msg}
+        </div>
+      )}
       {editDisc && <ScheduleModal disc={editDisc}/>}
 
       <div style={{ display:"grid", gridTemplateColumns:`repeat(${isMobile?2:4},1fr)`, gap:14, marginBottom:22 }}>
+        {/* Modal renommage discipline */}
+        {editName && (
+          <div style={{position:"fixed",inset:0,background:"rgba(42,31,20,.45)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+            <div style={{background:C.surface,borderRadius:16,width:"100%",maxWidth:360,padding:24,boxShadow:"0 24px 60px rgba(0,0,0,.18)"}}>
+              <div style={{fontSize:15,fontWeight:800,color:C.text,marginBottom:16}}>Modifier la discipline</div>
+              <div style={{display:"grid",gridTemplateColumns:"56px 1fr",gap:10,marginBottom:16}}>
+                <Field label="Icône" value={editName.icon} onChange={v=>setEditName(e=>({...e,icon:v}))}/>
+                <Field label="Nom" value={editName.name} onChange={v=>setEditName(e=>({...e,name:v}))} placeholder="Nom de la discipline"/>
+              </div>
+              <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+                <Button variant="ghost" onClick={()=>setEditName(null)}>Annuler</Button>
+                <Button variant="primary" onClick={()=>{
+                  if(!editName.name)return;
+                  setDiscs(prev=>prev.map(d=>d.id===editName.id?{...d,name:editName.name,icon:editName.icon}:d));
+                  showToast(`"${editName.name}" mis à jour ✓`);
+                  setEditName(null);
+                }}>Enregistrer</Button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Modal confirmation suppression */}
+        {confirmDel && (
+          <div style={{position:"fixed",inset:0,background:"rgba(42,31,20,.45)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+            <div style={{background:C.surface,borderRadius:16,width:"100%",maxWidth:360,padding:24,boxShadow:"0 24px 60px rgba(0,0,0,.18)"}}>
+              <div style={{fontSize:15,fontWeight:800,color:C.text,marginBottom:8}}>Supprimer la discipline ?</div>
+              <div style={{fontSize:13,color:C.textSoft,marginBottom:20}}>
+                Cette action supprimera <strong>{discs.find(d=>d.id===confirmDel)?.name}</strong> et tous ses créneaux. Les séances existantes ne seront pas affectées.
+              </div>
+              <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+                <Button variant="ghost" onClick={()=>setConfirmDel(null)}>Annuler</Button>
+                <Button variant="danger" onClick={()=>{
+                  const name = discs.find(d=>d.id===confirmDel)?.name;
+                  setDiscs(prev=>prev.filter(x=>x.id!==confirmDel));
+                  showToast(`"${name}" supprimée`, false);
+                  setConfirmDel(null);
+                }}>Supprimer</Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {discs.map(d=>(
           <Card key={d.id} style={{ textAlign:"center", borderTop:`3px solid ${d.color}`, padding:"16px 14px" }}>
             <div style={{ width:52, height:52, borderRadius:12, background:d.color+"18", border:`1.5px solid ${d.color}40`, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:10, marginLeft:"auto", marginRight:"auto" }}>
-              {(() => { const Ico = DISC_ICONS[d.id]; return Ico ? <Ico s={26} c={d.color}/> : null; })()}
+              {(() => { const Ico = DISC_ICONS[d.id]; return Ico ? <Ico s={26} c={d.color}/> : <span style={{fontSize:22}}>{d.icon||"🏃"}</span>; })()}
             </div>
             <div style={{ fontWeight:700, fontSize:15, color:C.text, marginBottom:4 }}>{d.name}</div>
             <div style={{ fontSize:11, color:C.textMuted, marginBottom:12 }}>
@@ -1538,7 +1627,8 @@ function DisciplinesPage({ isMobile }) {
             </div>
             <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
               <Button sm variant="primary" onClick={()=>setEditDisc(d)}>🗓 Horaires</Button>
-              <Button sm variant="danger" onClick={()=>setDiscs(prev=>prev.filter(x=>x.id!==d.id))}>Supprimer</Button>
+              <Button sm variant="ghost" onClick={()=>setEditName({id:d.id,name:d.name,icon:d.icon||"🏃"})}>✏ Renommer</Button>
+              <Button sm variant="danger" onClick={()=>setConfirmDel(d.id)}>Supprimer</Button>
             </div>
           </Card>
         ))}
@@ -4692,6 +4782,8 @@ function AdherentView({ onSwitch, isMobile }) {
 export default function App({ initialRole = "admin", studioSlug = "", studioName = "", planName = "", membersCount = 0, userName = "", userRole = "", coachName = "", coachDisciplines = [], billingStatus = "trialing", trialEndsAt = null, onSignOut = null }) {
   const [role, setRole] = useState(initialRole); // "superadmin" | "admin" | "coach" | "adherent"
   const [page, setPage] = useState("planning");
+  // State global des disciplines — partagé entre DisciplinesPage et Planning
+  const [discs, setDiscs] = useState(DISCIPLINES.map(d=>({ ...d, slots:[] })));
   const width = useWidth();
   const isMobile = width < 768;
 
@@ -4707,7 +4799,7 @@ export default function App({ initialRole = "admin", studioSlug = "", studioName
   if (role === "adherent")   return <AdherentView   onSwitch={setRole} isMobile={isMobile}/>;
   // admin avec is_coach → vue admin normale (ils ont accès à tout)
   const Page = PAGES[page] || Dashboard;
-  const appCtxValue = { studioName, studioSlug, userName, planName, membersCount, userRole, userEmail: "" };
+  const appCtxValue = { studioName, studioSlug, userName, planName, membersCount, userRole, userEmail: "", discs, setDiscs };
   return (
     <AppCtx.Provider value={appCtxValue}>
     <div style={{ display:"flex", minHeight:"100vh", background:C.bg }}>
