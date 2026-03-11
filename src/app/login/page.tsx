@@ -423,11 +423,14 @@ export default function LoginPage() {
             <FleurDeLys size={50}/>
           </div>
           <h1 style={{fontSize:30,fontWeight:800,color:C.title,margin:"0 0 6px",letterSpacing:-0.8,lineHeight:1}}>
-            Fyde<span style={{color:C.accent}}>lys</span>
+            {ctx === "tenant-login" && studioName
+              ? studioName
+              : <>Fyde<span style={{color:C.accent}}>lys</span></>
+            }
           </h1>
           <p style={{color:C.sub,fontSize:13,margin:0,fontWeight:500}}>
             {ctx==="superadmin" ? "Plateforme de gestion · Studios & Bien-être"
-             : studioName ? `Bienvenue chez ${studioName}` : "Gestion de studio · Yoga & Bien-être"}
+             : studioName ? "Votre espace membre" : "Gestion de studio · Yoga & Bien-être"}
           </p>
         </div>
 
@@ -446,7 +449,7 @@ export default function LoginPage() {
                 <p style={{fontSize:13,color:C.sub,margin:0,lineHeight:1.6}}>
                   {ctx==="superadmin"
                     ? "Recevez un lien sécurisé dans votre boîte mail."
-                    : "Nouveau ou déjà membre ? Entrez votre email — un lien vous sera envoyé."}
+                    : "Entrez votre email pour recevoir un lien de connexion. Si vous êtes nouveau, votre compte est créé automatiquement."}
                 </p>
               </div>
               <form onSubmit={handleLogin}>

@@ -33,6 +33,24 @@ export async function POST(request: NextRequest) {
   const studioName = studio.name || "Votre studio"
   const studioEmail = studio.email || "noreply@fydelys.fr"
 
+  // Vérifier si l'utilisateur existe, sinon le créer (nouvel adhérent)
+  const { data: existingUsers } = await db.auth.admin.listUsers()
+  const userExists = existingUsers?.users?.some((u: any) => u.email === email)
+
+  if (!userExists) {
+    // Créer le compte adhérent avec le studio_id dans les métadonnées
+    const { error: createErr } = await db.auth.admin.createUser({
+      email,
+      email_confirm: false,
+      app_metadata: { studio_id: studio.id, studio_slug: tenantSlug },
+      user_metadata: { role: "adherent" },
+    })
+    if (createErr && !createErr.message?.includes("already registered")) {
+      console.error("createUser error:", createErr)
+      return NextResponse.json({ error: "Impossible de créer le compte" }, { status: 500 })
+    }
+  }
+
   // Générer le magic link via Supabase Admin
   const { data: linkData, error: linkError } = await db.auth.admin.generateLink({
     type: "magiclink",
