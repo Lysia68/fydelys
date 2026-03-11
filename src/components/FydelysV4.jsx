@@ -581,45 +581,93 @@ function DemoBanner() {
 
 function Dashboard({ isMobile }) {
   const p = isMobile?12:28;
+  const { studioId } = useContext(AppCtx);
   const [expandedId, setExpandedId] = useState(null);
-  const [bookings, setBookings] = useState(() => JSON.parse(JSON.stringify(BOOKINGS_INIT)));
+  const [sessions, setSessions] = useState([]);
+  const [bookings, setBookings] = useState({});
+  const [members, setMembers] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [isDemo, setIsDemo] = useState(false);
+  const [loading, setLoading] = useState(true);
+
   const handleToggle = (id) => setExpandedId(prev => prev===id ? null : id);
   const handleChangeStatus = (bid, sid, ns) => {
     setBookings(prev => { const nb={...prev}; nb[sid]=(nb[sid]||[]).map(b=>b.id===bid?{...b,st:ns}:b); return nb; });
   };
 
-  // Date du jour formatée
+  useEffect(() => {
+    if (!studioId) return;
+    const sb = createClient();
+    const today = new Date().toISOString().slice(0,10);
+    const monthStart = today.slice(0,7);
+
+    Promise.all([
+      sb.from("sessions").select("id,discipline_id,teacher,room,duration_min,spots,session_date,session_time,status").eq("studio_id", studioId),
+      sb.from("profiles").select("id,status").eq("studio_id", studioId).eq("role","member"),
+      sb.from("payments").select("id,amount,status,payment_date").eq("studio_id", studioId),
+    ]).then(([sessRes, membRes, payRes]) => {
+      const sessData = sessRes.data || [];
+      const membData = membRes.data || [];
+      const payData  = payRes.data  || [];
+
+      if (sessData.length === 0 && membData.length === 0) {
+        // Données démo
+        setSessions(SESSIONS_INIT);
+        setBookings(JSON.parse(JSON.stringify(BOOKINGS_INIT)));
+        setMembers(MEMBERS);
+        setPayments(PAYMENTS);
+        setIsDemo(true);
+      } else {
+        setSessions(sessData.map(s=>({
+          id: s.id, disciplineId: s.discipline_id,
+          teacher: s.teacher||"", room: s.room||"Studio A",
+          duration: s.duration_min||60, spots: s.spots||12,
+          date: s.session_date, time: s.session_time?.slice(0,5)||"09:00",
+          status: s.status||"scheduled", booked:0, waitlist:0,
+        })));
+        setMembers(membData);
+        setPayments(payData.map(p=>({...p, date:p.payment_date, status:p.status})));
+        setIsDemo(false);
+      }
+      setLoading(false);
+    });
+  }, [studioId]);
+
+  // Date du jour
   const today = new Date();
   const todayStr = today.toISOString().slice(0,10);
   const todayLabel = today.toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"long"});
-  const todaySessions = SESSIONS_INIT.filter(s=>s.date===todayStr);
+  const todaySessions = sessions.filter(s=>s.date===todayStr);
 
-  // KPIs démo
-  const activeMembers = MEMBERS.filter(m=>m.status==="actif").length;
-  const monthSessions = SESSIONS_INIT.filter(s=>s.date.startsWith("2026-03")).length;
-  const totalSpots = SESSIONS_INIT.reduce((acc,s)=>{const bks=BOOKINGS_INIT[s.id]||[];return acc+bks.filter(b=>b.st==="confirmed").length;},0);
-  const totalCap = SESSIONS_INIT.reduce((acc,s)=>acc+s.spots,0);
-  const fillRate = totalCap>0 ? Math.round(totalSpots/totalCap*100) : 0;
-  const monthRevenue = PAYMENTS.filter(p=>p.date?.startsWith("2026-03")&&p.status==="payé").reduce((s,p)=>s+p.amount,0);
+  // KPIs
+  const monthStr = todayStr.slice(0,7);
+  const activeMembers = isDemo ? members.filter(m=>m.status==="actif").length : members.filter(m=>m.status==="active"||m.status==="actif").length;
+  const monthSessions = sessions.filter(s=>s.date?.startsWith(monthStr)).length;
+  const totalBooked = sessions.reduce((acc,s)=>{ const bks=bookings[s.id]||[]; return acc+(bks.length?bks.filter(b=>b.st==="confirmed").length:s.booked||0); },0);
+  const totalCap = sessions.reduce((acc,s)=>acc+(s.spots||0),0);
+  const fillRate = totalCap>0 ? Math.round(totalBooked/totalCap*100) : 0;
+  const monthRevenue = payments.filter(p=>p.date?.startsWith(monthStr)&&p.status==="payé").reduce((s,p)=>s+(p.amount||0),0);
 
   return (
     <div>
-      <DemoBanner/>
+      {isDemo && <DemoBanner/>}
       <div style={{ padding:p }}>
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:isMobile?8:14, marginBottom:isMobile?12:20 }}>
-          <KpiCard icon={<IcoUsers s={isMobile?16:18} c={C.ok}/>}      label="Adhérents actifs" value={String(activeMembers)}       delta="+3 ce mois"   accentColor={C.ok}     isMobile={isMobile}/>
-          <KpiCard icon={<IcoCalendar s={isMobile?16:18} c="#6B9E7A"/>} label="Séances ce mois"  value={String(monthSessions)}      delta="4 disciplines" accentColor="#6B9E7A"  isMobile={isMobile}/>
-          <KpiCard icon={<IcoBarChart s={isMobile?16:18} c="#6A8FAE"/>} label="Taux remplissage" value={fillRate+" %"}               delta="+5 pts"        accentColor="#6A8FAE"  isMobile={isMobile}/>
-          <KpiCard icon={<IcoEuro s={isMobile?16:18} c={C.accent}/>}   label="CA du mois"       value={monthRevenue.toLocaleString("fr-FR")+" €"} delta="+12 %" accentColor={C.accent} isMobile={isMobile}/>
+          <KpiCard icon={<IcoUsers s={isMobile?16:18} c={C.ok}/>}      label="Adhérents actifs" value={String(activeMembers)}                        delta="+3 ce mois"   accentColor={C.ok}     isMobile={isMobile}/>
+          <KpiCard icon={<IcoCalendar s={isMobile?16:18} c="#6B9E7A"/>} label="Séances ce mois"  value={String(monthSessions)}                         delta="ce mois"      accentColor="#6B9E7A"  isMobile={isMobile}/>
+          <KpiCard icon={<IcoBarChart s={isMobile?16:18} c="#6A8FAE"/>} label="Taux remplissage" value={fillRate+" %"}                                  delta="+5 pts"       accentColor="#6A8FAE"  isMobile={isMobile}/>
+          <KpiCard icon={<IcoEuro s={isMobile?16:18} c={C.accent}/>}   label="CA du mois"        value={monthRevenue.toLocaleString("fr-FR")+" €"}     delta="+12 %"        accentColor={C.accent} isMobile={isMobile}/>
         </div>
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1.6fr 1fr", gap:16 }}>
           <Card noPad>
             <SectionHead action={<Pill>{todayLabel}</Pill>}>Séances du jour</SectionHead>
-            {todaySessions.length === 0
-              ? <div style={{padding:"28px",textAlign:"center",color:C.textMuted,fontSize:14}}>Aucune séance programmée aujourd'hui</div>
-              : todaySessions.map(s=>(
-                <DashboardSessionCard key={s.id} sess={s} expandedId={expandedId} bookings={bookings} onToggle={handleToggle} onChangeStatus={handleChangeStatus} isDemo={true}/>
-              ))}
+            {loading
+              ? <div style={{padding:"28px",textAlign:"center",color:C.textMuted,fontSize:14}}>Chargement…</div>
+              : todaySessions.length === 0
+                ? <div style={{padding:"28px",textAlign:"center",color:C.textMuted,fontSize:14}}>Aucune séance programmée aujourd'hui</div>
+                : todaySessions.map(s=>(
+                  <DashboardSessionCard key={s.id} sess={s} expandedId={expandedId} bookings={bookings} onToggle={handleToggle} onChangeStatus={handleChangeStatus} isDemo={isDemo}/>
+                ))}
           </Card>
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <Card noPad>
@@ -1985,8 +2033,10 @@ function TimePicker({ value, onChange }) {
 
   const slots = [];
   for (let h = 6; h <= 22; h++) {
-    slots.push(`${String(h).padStart(2,"0")}:00`);
-    if (h < 22) slots.push(`${String(h).padStart(2,"0")}:30`);
+    [0, 15, 30, 45].forEach(m => {
+      if (h === 22 && m > 0) return;
+      slots.push(`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`);
+    });
   }
 
   const toMin = (v) => { const m = v?.match(/^([01]?\d|2[0-3]):([0-5]\d)$/); return m ? parseInt(m[1])*60+parseInt(m[2]) : null; };
@@ -1994,14 +2044,16 @@ function TimePicker({ value, onChange }) {
 
   const commit = (v) => {
     setEditing(false);
-    const min = toMin(v);
-    if (min !== null) { const c = fromMin(Math.max(0, Math.min(1439, Math.round(min/30)*30))); setInputVal(c); onChange(c); }
+    // Accepter "1615" ou "16h15" ou "16:15"
+    const normalized = v.replace(/[h\s]/,":");
+    const min = toMin(normalized);
+    if (min !== null) { const c = fromMin(Math.max(0, Math.min(1439, min))); setInputVal(c); onChange(c); }
     else setInputVal(value || "09:00");
   };
 
   const step = (dir) => {
     const min = toMin(value || "09:00") ?? 540;
-    const v = fromMin(Math.max(360, Math.min(1320, min + dir*30)));
+    const v = fromMin(Math.max(360, Math.min(1320, min + dir*15)));
     setInputVal(v); onChange(v);
   };
 
@@ -2177,7 +2229,7 @@ function DisciplinesPage({ isMobile }) {
                   style={{width:26,height:26,borderRadius:7,border:`1px solid ${C.border}`,background:C.surface,color:"#F87171",cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
               </div>
               {/* Ligne 2 : Jour / Heure / Durée */}
-              <div style={{display:"grid", gridTemplateColumns:"1.5fr 0.65fr 1.13fr", gap:8}}>
+              <div style={{display:"grid", gridTemplateColumns:"1.3fr 0.85fr 1.1fr", gap:8}}>
                 <div>
                   <div style={{fontSize:10,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:.6,marginBottom:4}}>Jour</div>
                   <DaySelect value={slot.day} onChange={v=>upSlot(disc.id,si,"day",v)}/>
