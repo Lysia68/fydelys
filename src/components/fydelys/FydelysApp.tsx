@@ -160,8 +160,14 @@ const PAGE_TITLES = {
       </div>
     </>
   );
+  const appCtxValue = {
+    studioName, studioSlug, userName, planName, membersCount,
+    userRole, userEmail: "", discs, setDiscs,
+    studioId: sharedStudioId, setStudioId: setSharedStudioId,
+  };
+
   if (role === "adherent") return (
-    <>
+    <AppCtx.Provider value={appCtxValue}>
       {impersonating && (
         <div style={{ position:"fixed", top:0, left:0, right:0, zIndex:9999, background:"#2A1F14", color:"white", padding:"8px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, fontSize:13, fontWeight:600 }}>
           <span>👁 Vue membre — {impersonating.fromRole === "superadmin" ? "Super Admin" : "Admin"}</span>
@@ -173,17 +179,11 @@ const PAGE_TITLES = {
       <div style={{ marginTop: impersonating ? 38 : 0 }}>
         <AdherentView onSwitch={setRole} isMobile={isMobile} studioName={studioName}/>
       </div>
-    </>
+    </AppCtx.Provider>
   );
 
   const Page = PAGES[page] || Dashboard;
   const isImpersonatingAdmin = impersonating?.as === "admin" && impersonating?.fromRole === "superadmin";
-
-  const appCtxValue = {
-    studioName, studioSlug, userName, planName, membersCount,
-    userRole, userEmail: "", discs, setDiscs,
-    studioId: sharedStudioId, setStudioId: setSharedStudioId,
-  };
 
   return (
     <AppCtx.Provider value={appCtxValue}>
