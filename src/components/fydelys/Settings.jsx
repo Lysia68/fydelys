@@ -752,39 +752,17 @@ function Settings({ isMobile }) {
     const [pendingInvites, setPendingInvites] = useState([]);
     const [editCoach, setEditCoach]     = useState(null);
 
-    // ── Charger les coachs + invitations en attente ───────────────────────────
+    // ── Charger les coachs + invitations en attente via API (service role) ──
     const loadCoaches = async () => {
       if (!studioId) return;
-      const sb = createClient();
-      // Profils coaches (sans colonne email)
-      const { data: profiles } = await sb.from("profiles")
-        .select("id, first_name, last_name, role")
-        .eq("studio_id", studioId)
-        .in("role", ["coach", "admin"]);
-      // Disciplines
-      const { data: links } = await sb.from("coach_disciplines")
-        .select("profile_id, discipline_id").eq("studio_id", studioId);
-      const discMap = {};
-      (links||[]).forEach(l => {
-        if (!discMap[l.profile_id]) discMap[l.profile_id] = [];
-        discMap[l.profile_id].push(l.discipline_id);
-      });
-      if (profiles?.length) {
-        setCoaches(profiles.map(p => ({
-          id: p.id,
-          fn: p.first_name || "",
-          ln: p.last_name || "",
-          role: p.role,
-          disciplines: discMap[p.id] || [],
-        })));
-      } else {
-        setCoaches([]);
+      try {
+        const res = await fetch(`/api/team?studioId=${studioId}`);
+        const data = await res.json();
+        setCoaches(data.coaches || []);
+        setPendingInvites(data.invites || []);
+      } catch(e) {
+        console.error("loadCoaches error", e);
       }
-      // Invitations en attente
-      const { data: invites } = await sb.from("invitations")
-        .select("id, email, created_at").eq("studio_id", studioId)
-        .eq("role", "coach").eq("used", false);
-      setPendingInvites(invites || []);
     };
 
     useEffect(() => { loadCoaches(); }, [studioId]);
@@ -794,15 +772,14 @@ function Settings({ isMobile }) {
       setCoaches(prev => prev.map(c => c.id===coachId ? {...c, disciplines:discIds} : c));
       setEditCoach(null);
       try {
-        const sb = createClient();
-        // Supprimer les anciens liens puis réinsérer
-        await sb.from("coach_disciplines").delete().eq("profile_id", coachId).eq("studio_id", studioId);
-        if (discIds.length > 0) {
-          await sb.from("coach_disciplines").insert(
-            discIds.map(dId => ({ profile_id: coachId, discipline_id: dId, studio_id: studioId }))
-          );
-        }
+        const res = await fetch("/api/team", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ coachId, discIds, studioId }),
+        });
+        if (!res.ok) throw new Error("Erreur API");
         showToast("Disciplines mises à jour ✓");
+        await loadCoaches();
       } catch(e) {
         console.error("saveDisciplines", e);
         showToast("Erreur lors de la sauvegarde");

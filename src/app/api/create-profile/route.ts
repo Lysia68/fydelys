@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
     id: userId, role, studio_id: studio.id,
     first_name: userMetadata?.first_name || "",
     last_name:  userMetadata?.last_name  || "",
+    is_coach: role === "coach",
   })
   if (profileErr) {
     console.error("create-profile error:", profileErr)
