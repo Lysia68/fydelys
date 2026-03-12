@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import { createBrowserClient } from "@supabase/ssr"
 
 export default function AuthConfirmPage() {
-  const [status, setStatus] = useState("Initialisation…")
+  const [status, setStatus] = useState("Connexion en cours…")
   const [detail, setDetail] = useState("")
   const [isError, setIsError] = useState(false)
 
@@ -11,10 +11,11 @@ export default function AuthConfirmPage() {
     const hash      = window.location.hash
     const params    = new URLSearchParams(window.location.search)
     const tenant    = params.get("tenant")
+    const code      = params.get("code")
     const tokenHash = params.get("token_hash")
     const type      = params.get("type") || "magiclink"
 
-    setDetail(`hash=${hash.slice(0,40)||"(vide)"} | tenant=${tenant||"(vide)"} | token_hash=${tokenHash||"(vide)"}`)
+    setDetail(`code=${code?"oui":"non"} | hash=${hash.includes("access_token")?"oui":"non"} | token_hash=${tokenHash?"oui":"non"} | tenant=${tenant||"(vide)"}`)
 
     const supabase = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,89 +23,104 @@ export default function AuthConfirmPage() {
       { auth: { flowType: "implicit" } }
     )
 
-    async function handleSession(user: any) {
-      setStatus("Session OK — création profil…")
-      const tenantSlug = tenant || user.app_metadata?.studio_slug
+    function redirectFinal(slug: string) {
+      window.location.href = `https://${slug}.fydelys.fr/dashboard`
+    }
 
+    // ── Flow 1 : ?code= (PKCE — Supabase envoie ça après /verify) ───────────
+    if (code) {
+      setStatus("Échange du code PKCE…")
+      fetch("/api/exchange-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, tenantSlug: tenant }),
+      }).then(async (res) => {
+        const result = await res.json()
+        if (!res.ok || !result.ok) {
+          setIsError(true)
+          setStatus(`Erreur: ${result.error || "exchange_failed"}`)
+          setTimeout(() => { window.location.href = "/login?error=lien_expire" }, 3000)
+          return
+        }
+        setStatus(`Redirection…`)
+        const slug = result.slug || tenant
+        if (!slug) {
+          window.location.href = "https://fydelys.fr/dashboard"
+        } else {
+          redirectFinal(slug)
+        }
+      }).catch(e => {
+        setIsError(true)
+        setStatus(`Erreur réseau: ${e.message}`)
+      })
+      return
+    }
+
+    // ── Flow 2 : ?token_hash= (lien reconstruit via generateLink) ───────────
+    if (tokenHash) {
+      setStatus("Vérification token…")
+      supabase.auth.verifyOtp({ token_hash: tokenHash, type: type as any })
+        .then(async ({ data, error }) => {
+          if (error || !data?.user) {
+            setIsError(true)
+            setStatus(`Erreur: ${error?.message || "no_user"}`)
+            setTimeout(() => { window.location.href = "/login?error=lien_expire" }, 3000)
+            return
+          }
+          await handleSessionClient(data.user)
+        })
+      return
+    }
+
+    // ── Flow 3 : #access_token= (flow implicit) ──────────────────────────────
+    if (hash && hash.includes("access_token=")) {
+      setStatus("Lecture du token…")
+      const hp           = new URLSearchParams(hash.replace("#", ""))
+      const accessToken  = hp.get("access_token")
+      const refreshToken = hp.get("refresh_token")
+      if (!accessToken || !refreshToken) {
+        setIsError(true)
+        setStatus("Token manquant dans le hash")
+        setTimeout(() => { window.location.href = "/login?error=lien_expire" }, 3000)
+        return
+      }
+      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+        .then(async ({ data, error }) => {
+          if (error || !data?.user) {
+            setIsError(true)
+            setStatus(`setSession échoué: ${error?.message}`)
+            setTimeout(() => { window.location.href = "/login?error=lien_expire" }, 3000)
+            return
+          }
+          await handleSessionClient(data.user)
+        })
+      return
+    }
+
+    // Aucun token trouvé
+    setIsError(true)
+    setStatus("Aucun token trouvé — lien expiré ou déjà utilisé")
+    setTimeout(() => { window.location.href = "/login?error=lien_expire" }, 3000)
+
+    async function handleSessionClient(user: any) {
+      const tenantSlug = tenant || user.app_metadata?.studio_slug
       if (!tenantSlug) {
         setStatus("Redirection admin…")
         window.location.href = "https://fydelys.fr/dashboard"
         return
       }
-
-      try {
-        const res = await fetch("/api/create-profile", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId:       user.id,
-            userEmail:    user.email,
-            userMetadata: user.user_metadata,
-            tenantSlug,
-          }),
-        })
-        const result = await res.json()
-        if (!res.ok) {
-          setIsError(true)
-          setStatus(`Erreur create-profile: ${result.error}`)
-          return
-        }
-        const slug = result.slug || tenantSlug
-        setStatus(`Redirection vers ${slug}.fydelys.fr…`)
-        window.location.href = `https://${slug}.fydelys.fr/dashboard`
-      } catch(e: any) {
-        setIsError(true)
-        setStatus(`Erreur réseau: ${e.message}`)
-      }
-    }
-
-    // Flow 1 : token_hash dans les query params
-    if (tokenHash) {
-      setStatus("Vérification token_hash…")
-      supabase.auth.verifyOtp({ token_hash: tokenHash, type: type as any })
-        .then(async ({ data, error }) => {
-          if (error || !data?.user) {
-            setIsError(true)
-            setStatus(`verifyOtp échoué: ${error?.message || "no_user"}`)
-            setTimeout(() => { window.location.href = "/login?error=lien_expire" }, 3000)
-            return
-          }
-          await handleSession(data.user)
-        })
-      return
-    }
-
-    // Flow 2 : #access_token dans le hash
-    if (!hash || !hash.includes("access_token=")) {
-      setIsError(true)
-      setStatus("Aucun token trouvé — lien expiré ou déjà utilisé")
-      setTimeout(() => { window.location.href = "/login?error=lien_expire" }, 3000)
-      return
-    }
-
-    setStatus("Lecture access_token depuis le hash…")
-    const hp           = new URLSearchParams(hash.replace("#", ""))
-    const accessToken  = hp.get("access_token")
-    const refreshToken = hp.get("refresh_token")
-
-    if (!accessToken || !refreshToken) {
-      setIsError(true)
-      setStatus("access_token ou refresh_token manquant")
-      setTimeout(() => { window.location.href = "/login?error=lien_expire" }, 3000)
-      return
-    }
-
-    setStatus("setSession en cours…")
-    supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
-      .then(async ({ data, error }) => {
-        if (error || !data?.user) {
-          setIsError(true)
-          setStatus(`setSession échoué: ${error?.message || "no_user"}`)
-          setTimeout(() => { window.location.href = "/login?error=lien_expire" }, 3000)
-          return
-        }
-        await handleSession(data.user)
+      setStatus("Création du profil…")
+      const res = await fetch("/api/create-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id, userEmail: user.email,
+          userMetadata: user.user_metadata, tenantSlug,
+        }),
       })
+      const result = await res.json()
+      redirectFinal(result.slug || tenantSlug)
+    }
   }, [])
 
   return (
