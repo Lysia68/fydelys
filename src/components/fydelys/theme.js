@@ -20,10 +20,13 @@ const C = {
   ok:"#4E8A58", okBg:"#E6F2E8", warn:"#A85030", warnBg:"#F5EAE6", info:"#3A6E90", infoBg:"#E6EFF5",
 };
 
-
+// Valeurs littérales — aucune dépendance sur C, pas de TDZ possible
 const statusMap = {
-  actif:[C.ok,C.okBg], suspendu:[C.warn,C.warnBg], nouveau:[C.info,C.infoBg],
-  payé:[C.ok,C.okBg], impayé:[C.warn,C.warnBg],
+  actif:    ["#4E8A58", "#E6F2E8"],
+  suspendu: ["#A85030", "#F5EAE6"],
+  nouveau:  ["#3A6E90", "#E6EFF5"],
+  payé:     ["#4E8A58", "#E6F2E8"],
+  impayé:   ["#A85030", "#F5EAE6"],
 };
 
 export { useWidth, C, statusMap };
