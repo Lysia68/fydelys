@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   if (!SENDGRID_API_KEY) {
     const db = createServiceSupabase()
     const { data: studio } = await db.from("studios").select("id").eq("slug", tenantSlug).single()
-    const redirectTo = `https://fydelys.fr/auth/callback?tenant=${tenantSlug}&next=/dashboard`
+    const redirectTo = `https://fydelys.fr/auth/confirm?tenant=${tenantSlug}`
     // Créer le compte si besoin
     if (studio) {
       const { data: existingUsers } = await db.auth.admin.listUsers()
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
     type: "magiclink",
     email,
     options: {
-      redirectTo: `https://fydelys.fr/auth/callback?tenant=${tenantSlug}&next=/dashboard`,
+      redirectTo: `https://fydelys.fr/auth/confirm?tenant=${tenantSlug}`,
     },
   })
 
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
   const actionUrl = new URL(linkData.properties.action_link)
   const tokenHash = actionUrl.searchParams.get("token_hash")
   const magicLinkUrl = tokenHash
-    ? `https://fydelys.fr/auth/callback?token_hash=${tokenHash}&type=magiclink&tenant=${tenantSlug}`
+    ? `https://fydelys.fr/auth/confirm?token_hash=${tokenHash}&type=magiclink&tenant=${tenantSlug}`
     : linkData.properties.action_link
 
   // Email brandé au nom du studio
