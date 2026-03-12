@@ -1,66 +1,165 @@
 "use client";
+
 import React, { useState, useEffect, useContext } from "react";
 import { createClient } from "@/lib/supabase";
 import { AppCtx } from "./context";
 import { C } from "./theme";
-import { SESSIONS_INIT, MEMBERS_DEMO, DISCIPLINES, SUBSCRIPTIONS_INIT, ADH_NAV_KEYS } from "./demoData";
+import { DISCIPLINES, SUBSCRIPTIONS_INIT, ADH_NAV_KEYS } from "./demoData";
 import { IcoCalendar2, IcoUser2, IcoChevron, IcoCreditCard2, IcoCheck, IcoX, IcoAlert2, IcoTag2, IcoUsers2, IcoBarChart2, IcoActivity, IcoHeart, IcoStar, IcoZap } from "./icons";
-import { Card, SectionHead, Button, Tag, Pill, EmptyState, DemoBanner, DateLabel, Field, SessionRow } from "./ui";
-
+import { Card, SectionHead, Button, Tag, Pill, EmptyState, DateLabel, Field, SessionRow } from "./ui";
 
 function AdherentView({ onSwitch, isMobile, studioName = "" }) {
   const ADH_NAV = ADH_NAV_KEYS.map((n,i) => ({ ...n, icon:[IcoCalendar2,IcoHeart,IcoActivity,IcoCreditCard2][i] }));
   const ADH_MOBILE_NAV = ADH_NAV;
-  const [page, setPage]    = useState("planning");
-  const [myBookings, setMyBookings] = useState([1,3]);
-  const [toast, setToast]  = useState(null);
+  const [page, setPage] = useState("planning");
+  const [toast, setToast] = useState(null);
   const showToast = (msg, ok=true) => { setToast({msg,ok}); setTimeout(()=>setToast(null),3000); };
   const p = isMobile ? 16 : 28;
 
-  const ME = { fn:"Sophie", ln:"Leroux", avatar:"SL", sub:"Carnet 10 séances", credits:4, total:10, joined:"2025-11-05" };
+  const { studioId, discs } = useContext(AppCtx);
+  const allDiscs = discs?.length ? discs : DISCIPLINES;
 
-  // ── Planning Adhérent ──────────────────────────────────────────────────────
+  // ── Données membre chargées depuis Supabase ─────────────────────────────────
+  const [me, setMe] = useState(null);           // fiche membre
+  const [myBookings, setMyBookings] = useState([]); // ids de sessions réservées
+  const [history, setHistory] = useState([]);   // bookings passés
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!studioId) return;
+    const sb = createClient();
+    sb.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return;
+      const email = user.email;
+
+      // Fiche membre
+      const { data: member } = await sb.from("members")
+        .select("id, first_name, last_name, email, status, credits, credits_total, created_at")
+        .eq("studio_id", studioId).eq("email", email).maybeSingle();
+      if (member) setMe(member);
+
+      // Bookings actifs (sessions futures)
+      const today = new Date().toISOString().split("T")[0];
+      const { data: bk } = await sb.from("bookings")
+        .select("session_id, status")
+        .eq("studio_id", studioId).eq("member_email", email)
+        .in("status", ["confirmed","waitlist"]);
+      setMyBookings((bk||[]).map(b => b.session_id));
+
+      // Historique (séances passées)
+      const { data: hist } = await sb.from("bookings")
+        .select("session_id, status, sessions(session_date, session_time, discipline_id, teacher, disciplines(name,color))")
+        .eq("studio_id", studioId).eq("member_email", email)
+        .lte("sessions.session_date", today)
+        .order("session_id", { ascending: false })
+        .limit(50);
+      setHistory((hist||[]).filter(h => h.sessions));
+
+      setLoading(false);
+    });
+  }, [studioId]);
+
+  // ── Planning Adhérent ───────────────────────────────────────────────────────
   function AdhPlanning() {
-    const [sessions, setSessions] = useState(SESSIONS_INIT);
+    const [sessions, setSessions] = useState([]);
     const [filterDisc, setFilterDisc] = useState(0);
     const [confirmSess, setConfirmSess] = useState(null);
+    const [loadingSess, setLoadingSess] = useState(true);
+
+    useEffect(() => {
+      if (!studioId) return;
+      const today = new Date().toISOString().split("T")[0];
+      createClient().from("sessions")
+        .select("id, discipline_id, teacher, room, level, session_date, session_time, duration_min, spots, status, disciplines(name,color,icon)")
+        .eq("studio_id", studioId)
+        .eq("status", "active")
+        .gte("session_date", today)
+        .order("session_date").order("session_time")
+        .limit(60)
+        .then(({ data }) => {
+          if (data?.length) {
+            // Compter les bookings par session
+            createClient().from("bookings")
+              .select("session_id")
+              .in("session_id", data.map(s=>s.id))
+              .in("status", ["confirmed","waitlist"])
+              .then(({ data: bk }) => {
+                const counts = {};
+                (bk||[]).forEach(b => { counts[b.session_id] = (counts[b.session_id]||0)+1; });
+                setSessions(data.map(s => ({
+                  ...s,
+                  discName: s.disciplines?.name || "",
+                  discColor: s.disciplines?.color || C.accent,
+                  discIcon: s.disciplines?.icon || "",
+                  booked: counts[s.id] || 0,
+                  date: s.session_date,
+                  time: s.session_time?.slice(0,5) || "",
+                })));
+              });
+          } else {
+            setSessions([]);
+          }
+          setLoadingSess(false);
+        });
+    }, [studioId]);
 
     const grouped = sessions
-      .filter(s => !filterDisc || s.disciplineId===filterDisc)
-      .reduce((acc,s)=>{ (acc[s.date]=acc[s.date]||[]).push(s); return acc; }, {});
+      .filter(s => !filterDisc || s.discipline_id === filterDisc)
+      .reduce((acc,s) => { (acc[s.date]=acc[s.date]||[]).push(s); return acc; }, {});
 
-    const book = (s) => {
-      setMyBookings(p=>[...p,s.id]);
-      setSessions(p=>p.map(x=>x.id===s.id?{...x,booked:x.booked+1}:x));
+    const book = async (s) => {
       setConfirmSess(null);
-      showToast(`Réservé : ${DISCIPLINES.find(d=>d.id===s.disciplineId)?.name} — ${s.time}`);
+      const sb = createClient();
+      const { data: { user } } = await sb.auth.getUser();
+      if (!user) return;
+      const { error } = await sb.from("bookings").insert({
+        session_id: s.id, studio_id: studioId,
+        member_email: user.email,
+        status: s.booked >= s.spots ? "waitlist" : "confirmed",
+      });
+      if (!error) {
+        setMyBookings(p=>[...p, s.id]);
+        setSessions(p=>p.map(x=>x.id===s.id?{...x,booked:x.booked+1}:x));
+        showToast(`Réservé : ${s.discName} — ${s.time}`);
+      } else {
+        showToast("Erreur lors de la réservation", false);
+      }
     };
-    const cancel = (s) => {
-      setMyBookings(p=>p.filter(id=>id!==s.id));
-      setSessions(p=>p.map(x=>x.id===s.id?{...x,booked:Math.max(0,x.booked-1)}:x));
-      showToast("Réservation annulée");
+
+    const cancel = async (s) => {
+      const sb = createClient();
+      const { data: { user } } = await sb.auth.getUser();
+      if (!user) return;
+      const { error } = await sb.from("bookings")
+        .delete().eq("session_id", s.id).eq("member_email", user.email);
+      if (!error) {
+        setMyBookings(p=>p.filter(id=>id!==s.id));
+        setSessions(p=>p.map(x=>x.id===s.id?{...x,booked:Math.max(0,x.booked-1)}:x));
+        showToast("Réservation annulée");
+      }
     };
+
+    if (loadingSess) return <div style={{ padding:p, color:C.textMuted, fontSize:14 }}>Chargement du planning…</div>;
 
     return (
       <div style={{ padding:p }}>
-        {/* Modal confirmation réservation */}
+        {/* Modal confirmation */}
         {confirmSess && (
           <div onClick={e=>e.target===e.currentTarget&&setConfirmSess(null)}
             style={{ position:"fixed", inset:0, background:"rgba(42,31,20,.45)", zIndex:800, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-            <div style={{ background:C.surface, borderRadius:16, padding:28, width:"100%", maxWidth:420, boxShadow:"0 24px 56px rgba(42,31,20,.18)" }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
+            <div style={{ background:C.surface, borderRadius:16, padding:28, width:"100%", maxWidth:420, boxShadow:"0 8px 32px rgba(42,31,20,.18)" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
                 <div style={{ fontSize:18, fontWeight:700, color:C.text }}>Confirmer la réservation</div>
-                <button onClick={()=>setConfirmSess(null)} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:7, padding:"3px 8px", cursor:"pointer", color:C.textSoft, fontSize:15 }}>✕</button>
+                <button onClick={()=>setConfirmSess(null)} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:6, padding:"4px 10px", cursor:"pointer", fontSize:13, color:C.textSoft }}>✕</button>
               </div>
               <div style={{ background:C.accentLight, borderRadius:10, padding:14, marginBottom:18 }}>
-                <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:4 }}>
-                  {DISCIPLINES.find(d=>d.id===confirmSess.disciplineId)?.name}
-                </div>
-                <div style={{ fontSize:13, color:C.textSoft }}>{new Date(confirmSess.date).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})} · {confirmSess.time} · {confirmSess.duration} min</div>
-                <div style={{ fontSize:13, color:C.textSoft }}>{confirmSess.teacher} · {confirmSess.room}</div>
-                {ME.credits>0 && (
+                <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:4 }}>{confirmSess.discName}</div>
+                <div style={{ fontSize:13, color:C.textSoft }}>{new Date(confirmSess.date).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}</div>
+                <div style={{ fontSize:13, color:C.textSoft }}>{confirmSess.time} · {confirmSess.duration_min} min · {confirmSess.room}</div>
+                <div style={{ fontSize:13, color:C.textSoft }}>{confirmSess.teacher}</div>
+                {me?.credits > 0 && (
                   <div style={{ marginTop:10, padding:"8px 12px", background:C.surface, borderRadius:8, fontSize:13, color:C.textMid }}>
-                    💳 Cette séance utilisera <strong>1 crédit</strong> (il vous en restera {ME.credits-1})
+                    💳 Cette séance utilisera <strong>1 crédit</strong> (il vous en restera {me.credits-1})
                   </div>
                 )}
               </div>
@@ -73,13 +172,13 @@ function AdherentView({ onSwitch, isMobile, studioName = "" }) {
         )}
 
         {/* Barre crédits */}
-        {ME.credits>0 && (
-          <div style={{ display:"flex", alignItems:"center", gap:14, padding:"12px 16px", background:C.accentLight, borderRadius:10, marginBottom:16, border:`1px solid ${C.border}` }}>
+        {me?.credits > 0 && (
+          <div style={{ display:"flex", alignItems:"center", gap:14, padding:"12px 16px", background:C.accentLight, borderRadius:12, marginBottom:18, border:`1px solid ${C.accentBg}` }}>
             <IcoCreditCard2 s={20} c={C.accent}/>
             <div style={{ flex:1 }}>
-              <div style={{ fontSize:13, fontWeight:600, color:C.text }}>Crédits restants : {ME.credits}/{ME.total}</div>
+              <div style={{ fontSize:13, fontWeight:600, color:C.text }}>Crédits restants : {me.credits}/{me.credits_total||me.credits}</div>
               <div style={{ height:4, background:C.bgDeep, borderRadius:2, marginTop:5 }}>
-                <div style={{ width:`${ME.credits/ME.total*100}%`, height:"100%", background:C.accent, borderRadius:2 }}/>
+                <div style={{ width:`${(me.credits/(me.credits_total||me.credits))*100}%`, height:"100%", background:C.accent, borderRadius:2 }}/>
               </div>
             </div>
           </div>
@@ -87,82 +186,88 @@ function AdherentView({ onSwitch, isMobile, studioName = "" }) {
 
         {/* Filtres disciplines */}
         <div style={{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap" }}>
-          {[{id:0,name:"Toutes",color:C.accent},...DISCIPLINES].map(d=>(
+          {[{id:0,name:"Toutes",color:C.accent},...allDiscs].map(d=>(
             <button key={d.id} onClick={()=>setFilterDisc(d.id)}
-              style={{ fontSize:13, padding:"5px 14px", borderRadius:20, border:`1.5px solid ${filterDisc===d.id?d.color:C.border}`, background:filterDisc===d.id?d.color+"18":C.surface, color:filterDisc===d.id?d.color:C.textMid, fontWeight:filterDisc===d.id?700:500, cursor:"pointer" }}>
+              style={{ fontSize:13, padding:"5px 14px", borderRadius:20, border:`1.5px solid ${filterDisc===d.id?d.color:C.border}`, background:filterDisc===d.id?d.color+"18":"transparent", color:filterDisc===d.id?d.color:C.textMid, cursor:"pointer", fontWeight:500 }}>
               {d.icon||""} {d.name}
             </button>
           ))}
         </div>
 
-        {Object.entries(grouped).sort(([a],[b])=>a>b?1:-1).map(([date,daySessions])=>(
-          <div key={date} style={{ marginBottom:20 }}>
-            <DateLabel date={date}/>
-            {daySessions.map(s=>{
-              const disc = DISCIPLINES.find(d=>d.id===s.disciplineId);
-              const isBooked = myBookings.includes(s.id);
-              const isFull   = s.booked >= s.spots;
-              const pct      = s.booked/s.spots;
-              return (
-                <Card key={s.id} style={{ marginBottom:8, borderLeft:`3px solid ${disc?.color||C.accent}`, opacity:isFull&&!isBooked?0.65:1 }}>
-                  <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
-                    <div style={{ fontSize:isMobile?15:16, fontWeight:700, color:C.accent, width:38, flexShrink:0, letterSpacing:-0.2 }}>{s.time}</div>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:2 }}>
-                        <span style={{ fontSize:isMobile?15:16, fontWeight:700, color:C.text }}>{disc?.name}</span>
-                        <Pill color={disc?.color||C.accent} bg={disc?.color+"18"||C.accentLight}>{s.level}</Pill>
-                        {isFull && !isBooked && <Tag s="complet"/>}
-                      </div>
-                      <div style={{ fontSize:isMobile?14:15, color:C.textSoft, marginBottom:6 }}>{s.teacher} · {s.room} · {s.duration} min</div>
-                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                        <div style={{ flex:1, maxWidth:160, height:4, background:C.bgDeep, borderRadius:2 }}>
-                          <div style={{ height:"100%", width:`${Math.min(pct*100,100)}%`, background:pct>=1?C.warn:pct>.75?C.accent:C.ok, borderRadius:2 }}/>
+        {Object.keys(grouped).length === 0
+          ? <EmptyState icon={<IcoCalendar2 s={40} c={C.textMuted}/>} title="Aucun cours planifié" sub="Aucune séance disponible pour le moment"/>
+          : Object.entries(grouped).sort(([a],[b])=>a>b?1:-1).map(([date,daySessions])=>(
+            <div key={date} style={{ marginBottom:20 }}>
+              <DateLabel date={date}/>
+              {daySessions.map(s=>{
+                const isBooked = myBookings.includes(s.id);
+                const isFull   = s.booked >= s.spots;
+                const pct      = s.booked/s.spots;
+                return (
+                  <Card key={s.id} style={{ marginBottom:8, borderLeft:`3px solid ${s.discColor}`, opacity:isFull&&!isBooked?.7:1 }}>
+                    <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
+                      <div style={{ fontSize:isMobile?15:16, fontWeight:700, color:C.accent, width:38, flexShrink:0, paddingTop:2 }}>{s.time}</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:2 }}>
+                          <span style={{ fontSize:isMobile?15:16, fontWeight:700, color:C.text }}>{s.discName}</span>
+                          <Pill color={s.discColor} bg={s.discColor+"18"}>{s.level}</Pill>
+                          {isFull && !isBooked && <Tag s="complet"/>}
                         </div>
-                        <span style={{ fontSize:12, fontWeight:600, color:pct>=1?C.warn:C.textSoft }}>{s.booked}/{s.spots} places</span>
+                        <div style={{ fontSize:isMobile?14:15, color:C.textSoft, marginBottom:6 }}>{s.teacher} · {s.room} · {s.duration_min} min</div>
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <div style={{ flex:1, maxWidth:160, height:4, background:C.bgDeep, borderRadius:2 }}>
+                            <div style={{ height:"100%", width:`${Math.min(pct*100,100)}%`, background:pct>=1?C.warn:C.ok, borderRadius:2 }}/>
+                          </div>
+                          <span style={{ fontSize:12, fontWeight:600, color:pct>=1?C.warn:C.textSoft }}>{s.booked}/{s.spots} places</span>
+                        </div>
+                      </div>
+                      <div style={{ flexShrink:0 }}>
+                        {isBooked
+                          ? <Button sm variant="danger" onClick={()=>cancel(s)}>Annuler</Button>
+                          : isFull
+                            ? <Button sm variant="secondary" onClick={()=>showToast("Ajouté à la liste d'attente")}>Liste d'attente</Button>
+                            : <Button sm onClick={()=>setConfirmSess(s)}>Réserver</Button>
+                        }
                       </div>
                     </div>
-                    <div style={{ flexShrink:0 }}>
-                      {isBooked
-                        ? <Button sm variant="danger" onClick={()=>cancel(s)}>Annuler</Button>
-                        : isFull
-                          ? <Button sm variant="secondary" onClick={()=>showToast("Ajouté à la liste d'attente")}>Liste d'attente</Button>
-                          : <Button sm onClick={()=>setConfirmSess(s)}>Réserver</Button>
-                      }
-                    </div>
-                  </div>
-                  {isBooked && (
-                    <div style={{ marginTop:10, padding:"7px 12px", background:C.okBg, borderRadius:8, fontSize:13, color:C.ok, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
-                      <IcoCheck s={14} c={C.ok}/> Vous êtes inscrit(e) à cette séance
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
-        ))}
+                    {isBooked && (
+                      <div style={{ marginTop:10, padding:"7px 12px", background:C.okBg, borderRadius:8, fontSize:13, color:C.ok, display:"flex", alignItems:"center", gap:6 }}>
+                        <IcoCheck s={14} c={C.ok}/> Vous êtes inscrit(e) à cette séance
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          ))
+        }
       </div>
     );
   }
 
-  // ── Mon Compte ─────────────────────────────────────────────────────────────
+  // ── Mon Compte ──────────────────────────────────────────────────────────────
   function AdhAccount() {
+    const initials = me ? `${me.first_name?.[0]||""}${me.last_name?.[0]||""}`.toUpperCase() : "?";
+    const bookedSessions = sessions_for_account;
     return (
       <div style={{ padding:p, maxWidth:600 }}>
         <Card style={{ marginBottom:16 }}>
           <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:18 }}>
-            <div style={{ width:54, height:54, borderRadius:"50%", background:C.accentBg, border:`2px solid #DFC0A0`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, fontWeight:700, color:C.accent }}>{ME.avatar}</div>
+            <div style={{ width:54, height:54, borderRadius:"50%", background:C.accentBg, border:`2px solid ${C.accent}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, fontWeight:700, color:C.accent }}>
+              {initials}
+            </div>
             <div>
-              <div style={{ fontSize:20, fontWeight:700, color:C.text }}>{ME.fn} {ME.ln}</div>
-              <div style={{ fontSize:14, color:C.textSoft }}>sophie.l@email.com</div>
-              <Tag s="actif"/>
+              <div style={{ fontSize:20, fontWeight:700, color:C.text }}>{me?.first_name} {me?.last_name}</div>
+              <div style={{ fontSize:14, color:C.textSoft }}>{me?.email}</div>
+              <Tag s={me?.status||"actif"}/>
             </div>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
             {[
-              { l:"Abonnement",        v:ME.sub,                                              icon:<IcoTag2 s={16} c={C.accent}/>   },
-              { l:"Crédits restants",  v:`${ME.credits} / ${ME.total}`,                       icon:<IcoCreditCard2 s={16} c={C.ok}/>  },
-              { l:"Membre depuis",     v:new Date(ME.joined).toLocaleDateString("fr-FR"),     icon:<IcoCalendar2 s={16} c={C.info}/>  },
-              { l:"Séances effectuées",v:MY_HISTORY.filter(h=>h.status==="présent").length,   icon:<IcoCheck s={16} c={C.ok}/>       },
+              { l:"Crédits restants",  v:`${me?.credits||0} / ${me?.credits_total||0}`,  icon:<IcoCreditCard2 s={16} c={C.accent}/> },
+              { l:"Membre depuis",     v:me?.created_at ? new Date(me.created_at).toLocaleDateString("fr-FR") : "—", icon:<IcoCalendar2 s={16} c={C.accent}/> },
+              { l:"Séances effectuées",v:history.filter(h=>h.status==="confirmed").length, icon:<IcoCheck s={16} c={C.ok}/> },
+              { l:"Statut",            v:me?.status||"actif",                              icon:<IcoUser2 s={16} c={C.accent}/> },
             ].map(k=>(
               <div key={k.l} style={{ background:C.bg, borderRadius:10, padding:"12px 14px", display:"flex", gap:10, alignItems:"center" }}>
                 {k.icon}
@@ -173,72 +278,52 @@ function AdherentView({ onSwitch, isMobile, studioName = "" }) {
               </div>
             ))}
           </div>
-          <Button sm variant="ghost" onClick={()=>showToast("Profil enregistré !")}>Modifier le profil</Button>
-        </Card>
-        <Card>
-          <SectionHead>Mes prochaines séances</SectionHead>
-          {SESSIONS_INIT.filter(s=>myBookings.includes(s.id)).length===0
-            ? <div style={{ padding:"18px 16px", fontSize:14, color:C.textMuted, textAlign:"center" }}>Aucune réservation à venir</div>
-            : SESSIONS_INIT.filter(s=>myBookings.includes(s.id)).map(s=>(
-              <SessionRow key={s.id} sess={s} isMobile={isMobile}/>
-            ))
-          }
         </Card>
       </div>
     );
   }
 
-  // ── Historique ─────────────────────────────────────────────────────────────
+  // Variable pour AdhAccount — sessions futures réservées
+  const [sessions_for_account] = useState([]);
+
+  // ── Historique ──────────────────────────────────────────────────────────────
   function AdhHistory() {
-    const presents = MY_HISTORY.filter(h=>h.status==="présent").length;
-    const statusHistMap = { présent:[C.ok,C.okBg], absent:[C.warn,C.warnBg] };
+    const presents = history.filter(h=>h.status==="confirmed").length;
+    const absents  = history.filter(h=>h.status==="absent").length;
+    const statusHistMap = { confirmed:[C.ok,C.okBg], absent:[C.warn,C.warnBg], waitlist:[C.info,C.infoBg] };
+
+    if (loading) return <div style={{ padding:p, color:C.textMuted, fontSize:14 }}>Chargement…</div>;
+    if (history.length === 0) return (
+      <div style={{ padding:p }}>
+        <EmptyState icon={<IcoActivity s={40} c={C.textMuted}/>} title="Aucun historique" sub="Vos séances passées apparaîtront ici"/>
+      </div>
+    );
+
     return (
       <div style={{ padding:p, maxWidth:700 }}>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:18 }}>
-          {[{l:"Total séances",v:MY_HISTORY.length},{l:"Présences",v:presents,color:C.ok,bg:C.okBg},{l:"Absences",v:MY_HISTORY.length-presents,color:C.warn,bg:C.warnBg}].map(k=>(
+          {[{l:"Total séances",v:history.length},{l:"Présences",v:presents,color:C.ok,bg:C.okBg},{l:"Absences",v:absents,color:C.warn,bg:C.warnBg}].map(k=>(
             <Card key={k.l} style={{ textAlign:"center", padding:"14px 10px", background:k.bg||C.surface }}>
               <div style={{ fontSize:26, fontWeight:800, color:k.color||C.text }}>{k.v}</div>
               <div style={{ fontSize:12, color:C.textSoft, marginTop:3 }}>{k.l}</div>
             </Card>
           ))}
         </div>
-        <Card style={{ marginBottom:16 }}>
-          <SectionHead>Par discipline</SectionHead>
-          <div style={{ padding:14 }}>
-            {DISCIPLINES.map(d=>{
-              const count = MY_HISTORY.filter(h=>h.disc===d.name).length;
-              if(!count) return null;
-              return (
-                <div key={d.id} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:10 }}>
-                  <span style={{ fontSize:18 }}>{d.icon}</span>
-                  <div style={{ flex:1 }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                      <span style={{ fontSize:14, fontWeight:600, color:C.text }}>{d.name}</span>
-                      <span style={{ fontSize:13, fontWeight:700, color:d.color }}>{count}</span>
-                    </div>
-                    <div style={{ height:4, background:C.bgDeep, borderRadius:2 }}>
-                      <div style={{ width:`${count/MY_HISTORY.length*100}%`, height:"100%", background:d.color, borderRadius:2 }}/>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
         <Card noPad>
           <SectionHead>Détail des séances</SectionHead>
-          {MY_HISTORY.map(h=>{
+          {history.map((h,i)=>{
             const [color,bg] = statusHistMap[h.status]||[C.textMuted,C.bg];
+            const sess = h.sessions;
             return (
-              <div key={h.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 16px", borderBottom:`1px solid ${C.borderSoft}` }}>
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 16px", borderBottom:`1px solid ${C.borderSoft}` }}>
                 <div style={{ width:32, height:32, borderRadius:8, background:bg, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                  {h.status==="présent" ? <IcoCheck s={16} c={color}/> : <IcoX s={16} c={color}/>}
+                  {h.status==="confirmed" ? <IcoCheck s={16} c={color}/> : <IcoX s={16} c={color}/>}
                 </div>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontSize:15, fontWeight:700, color:C.text }}>{h.disc}</div>
-                  <div style={{ fontSize:13, color:C.textSoft }}>{h.teacher} · {new Date(h.date).toLocaleDateString("fr-FR")} · {h.duration} min</div>
+                  <div style={{ fontSize:15, fontWeight:700, color:C.text }}>{sess?.disciplines?.name||"Séance"}</div>
+                  <div style={{ fontSize:13, color:C.textSoft }}>{sess?.teacher} · {sess?.session_date ? new Date(sess.session_date).toLocaleDateString("fr-FR") : ""}</div>
                 </div>
-                <Tag s={h.status}/>
+                <Tag s={h.status==="confirmed"?"présent":"absent"}/>
               </div>
             );
           })}
@@ -247,7 +332,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "" }) {
     );
   }
 
-  // ── Paiement / Abonnement ──────────────────────────────────────────────────
+  // ── Paiement / Abonnement ───────────────────────────────────────────────────
   function AdhPayment() {
     const [step, setStep] = useState("choose");
     const [chosen, setChosen] = useState(null);
@@ -256,10 +341,10 @@ function AdherentView({ onSwitch, isMobile, studioName = "" }) {
     const [cvv, setCvv]         = useState("");
 
     if(step==="done") return (
-      <div style={{ padding:p, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:400 }}>
+      <div style={{ padding:p, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:300 }}>
         <div style={{ fontSize:56, marginBottom:16 }}>🎉</div>
         <div style={{ fontSize:22, fontWeight:800, color:C.ok, marginBottom:8 }}>Paiement réussi !</div>
-        <div style={{ fontSize:14, color:C.textSoft, marginBottom:24, textAlign:"center" }}>Abonnement <strong>{chosen?.name}</strong> activé.</div>
+        <div style={{ fontSize:14, color:C.textSoft, marginBottom:24, textAlign:"center" }}>Abonnement <strong>{chosen?.name}</strong> activé</div>
         <Button sm onClick={()=>{setStep("choose");setChosen(null);}}>Retour</Button>
       </div>
     );
@@ -267,13 +352,13 @@ function AdherentView({ onSwitch, isMobile, studioName = "" }) {
     if(step==="stripe") return (
       <div style={{ padding:p }}>
         <div style={{ maxWidth:440, margin:"0 auto" }}>
-          <button onClick={()=>setStep("choose")} style={{ fontSize:13, color:C.textSoft, background:"none", border:"none", cursor:"pointer", marginBottom:16, display:"flex", alignItems:"center", gap:6 }}>
+          <button onClick={()=>setStep("choose")} style={{ fontSize:13, color:C.textSoft, background:"none", border:"none", cursor:"pointer", marginBottom:16, display:"flex", alignItems:"center", gap:4 }}>
             <IcoChevron s={14} c={C.textSoft}/> Retour
           </button>
           <Card>
-            <div style={{ padding:"12px 16px", background:C.accentLight, borderRadius:10, marginBottom:20, border:`1px solid ${C.border}` }}>
+            <div style={{ padding:"12px 16px", background:C.accentLight, borderRadius:10, marginBottom:20, border:`1px solid ${C.accentBg}` }}>
               <div style={{ fontSize:15, fontWeight:700, color:C.text }}>{chosen?.name}</div>
-              <div style={{ fontSize:24, fontWeight:800, color:C.accent }}>{chosen?.price} € <span style={{ fontSize:14, fontWeight:400, color:C.textSoft }}>/ {chosen?.period}</span></div>
+              <div style={{ fontSize:24, fontWeight:800, color:C.accent }}>{chosen?.price} € <span style={{ fontSize:13, fontWeight:400, color:C.textSoft }}>/ {chosen?.period}</span></div>
             </div>
             <div style={{ display:"flex", flexDirection:"column", gap:14, marginBottom:18 }}>
               <Field label="Numéro de carte" value={cardNum} onChange={v=>setCardNum(v.replace(/\D/g,"").slice(0,16))} placeholder="1234 5678 9012 3456"/>
@@ -283,7 +368,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "" }) {
               </div>
             </div>
             <div style={{ padding:"10px 14px", background:C.infoBg, borderRadius:8, display:"flex", gap:8, alignItems:"center", marginBottom:16 }}>
-              <span>🔒</span><span style={{ fontSize:13, color:C.info }}>Paiement sécurisé par Stripe. Données chiffrées.</span>
+              <span>🔒</span><span style={{ fontSize:13, color:C.info }}>Paiement sécurisé par Stripe</span>
             </div>
             <Button block onClick={()=>{ if(cardNum.length<16){showToast("Numéro de carte invalide",false);return;} setStep("done"); }}>
               Payer {chosen?.price} €
@@ -295,29 +380,30 @@ function AdherentView({ onSwitch, isMobile, studioName = "" }) {
 
     return (
       <div style={{ padding:p }}>
-        <Card style={{ marginBottom:20, borderTop:`3px solid ${C.accent}` }}>
-          <div style={{ fontSize:14, fontWeight:700, color:C.textMid, marginBottom:12 }}>Abonnement actuel</div>
-          <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-            <IcoCreditCard2 s={28} c={C.accent}/>
-            <div>
-              <div style={{ fontSize:15, fontWeight:700, color:C.text }}>{ME.sub}</div>
-              <div style={{ fontSize:13, color:C.textSoft }}>{ME.credits} crédits restants · valable 6 mois</div>
+        {me?.credits > 0 && (
+          <Card style={{ marginBottom:20, borderTop:`3px solid ${C.accent}` }}>
+            <div style={{ fontSize:14, fontWeight:700, color:C.textMid, marginBottom:12 }}>Crédits actuels</div>
+            <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+              <IcoCreditCard2 s={28} c={C.accent}/>
+              <div>
+                <div style={{ fontSize:15, fontWeight:700, color:C.text }}>{me.credits} crédits restants</div>
+                <div style={{ fontSize:13, color:C.textSoft }}>sur {me.credits_total} au total</div>
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        )}
         <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:16 }}>Changer d'abonnement</div>
         <div style={{ display:"grid", gridTemplateColumns:`repeat(${isMobile?1:2},1fr)`, gap:14 }}>
           {SUBSCRIPTIONS_INIT.map(sub=>(
             <div key={sub.id} onClick={()=>{setChosen(sub);setStep("stripe");}}
-              style={{ background:C.surface, borderRadius:12, border:`2px solid ${sub.popular?sub.color:C.border}`, padding:18, cursor:"pointer", position:"relative", transition:"border-color .15s, box-shadow .15s" }}
-              onMouseEnter={e=>{e.currentTarget.style.borderColor=sub.color;e.currentTarget.style.boxShadow=`0 4px 16px ${sub.color}22`;}}
-              onMouseLeave={e=>{e.currentTarget.style.borderColor=sub.popular?sub.color:C.border;e.currentTarget.style.boxShadow="";}}>
-              {sub.popular && <div style={{ position:"absolute", top:-1, right:14, background:sub.color, color:"#fff", fontSize:10, fontWeight:800, padding:"3px 10px", borderRadius:"0 0 8px 8px", textTransform:"uppercase" }}>Populaire</div>}
+              style={{ background:C.surface, borderRadius:12, border:`2px solid ${sub.popular?C.accent:C.border}`, padding:"18px 16px", cursor:"pointer", position:"relative" }}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=C.accent;}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor=sub.popular?C.accent:C.border;}}>
+              {sub.popular && <div style={{ position:"absolute", top:-1, right:14, background:C.accent, color:"white", fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:"0 0 6px 6px" }}>Populaire</div>}
               <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:4 }}>{sub.name}</div>
-              <div style={{ fontSize:26, fontWeight:800, color:sub.color, lineHeight:1, marginBottom:8 }}>
+              <div style={{ fontSize:26, fontWeight:800, color:C.accent, lineHeight:1, marginBottom:8 }}>
                 {sub.price} €<span style={{ fontSize:14, fontWeight:400, color:C.textSoft }}> / {sub.period}</span>
               </div>
-              <div style={{ fontSize:13, color:C.textSoft, marginBottom:14 }}>{sub.description}</div>
               <Button sm>Choisir →</Button>
             </div>
           ))}
@@ -326,9 +412,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "" }) {
     );
   }
 
-  const PAGE_MAP = { planning:<AdhPlanning/>, account:<AdhAccount/>, history:<AdhHistory/>, payment:<AdhPayment/> };
-  const ADH_PAGE_TITLES = { planning:"Planning", account:"Mon compte", history:"Historique", payment:"Paiement" };
-
+  // ── Render principal ────────────────────────────────────────────────────────
   return (
     <div style={{ display:"flex", minHeight:"100vh", background:C.bg }}>
       <style>{`
@@ -342,7 +426,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "" }) {
       `}</style>
 
       {toast && (
-        <div style={{ position:"fixed", top:20, right:20, zIndex:600, display:"flex", alignItems:"center", gap:10, padding:"12px 18px", background:toast.ok?C.ok:C.warn, borderRadius:10, color:"white", fontSize:14, fontWeight:600, boxShadow:"0 8px 24px rgba(0,0,0,.15)" }}>
+        <div style={{ position:"fixed", top:20, right:20, zIndex:600, display:"flex", alignItems:"center", gap:8, padding:"10px 16px", borderRadius:10, background:toast.ok?C.ok:C.warn, color:"white", fontSize:14, fontWeight:600, boxShadow:"0 4px 16px rgba(0,0,0,.15)" }}>
           {toast.ok ? <IcoCheck s={16} c="white"/> : <IcoAlert2 s={16} c="white"/>}{toast.msg}
         </div>
       )}
@@ -351,78 +435,68 @@ function AdherentView({ onSwitch, isMobile, studioName = "" }) {
       {!isMobile && (
         <aside style={{ width:220, background:C.surface, borderRight:`1.5px solid ${C.border}`, minHeight:"100vh", display:"flex", flexDirection:"column", flexShrink:0 }}>
           <div style={{ padding:"24px 20px 18px" }}>
-            <div style={{ fontSize:17, fontWeight:800, color:C.text, letterSpacing:-0.4, lineHeight:1.2 }}>
+            <div style={{ fontSize:17, fontWeight:800, color:C.text, letterSpacing:-0.4, lineHeight:1.2, marginBottom:4 }}>
               {studioName || <span>Fyde<span style={{ color:C.accent }}>lys</span></span>}
             </div>
             <div style={{ fontSize:10, color:C.textMuted, fontWeight:500, marginTop:4 }}>
               Propulsé par <a href="https://fydelys.fr" target="_blank" rel="noopener" style={{ color:C.accent, textDecoration:"none", fontWeight:600 }}>Fydelys.fr</a>
             </div>
           </div>
-          <div style={{ margin:"0 12px 12px", padding:"10px 12px", background:C.accentLight, borderRadius:10, border:`1.5px solid ${C.border}`, display:"flex", alignItems:"center", gap:10 }}>
-            <div style={{ width:34, height:34, borderRadius:"50%", background:C.accentBg, border:`1.5px solid #DFC0A0`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:700, color:C.accent, flexShrink:0 }}>{ME.avatar}</div>
-            <div>
-              <div style={{ fontSize:15, fontWeight:700, color:C.text }}>{ME.fn} {ME.ln}</div>
-              <div style={{ fontSize:12, color:C.ok }}>💳 {ME.credits} crédits</div>
+          {me && (
+            <div style={{ margin:"0 12px 12px", padding:"10px 12px", background:C.accentLight, borderRadius:12, border:`1px solid ${C.accentBg}` }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <div style={{ width:34, height:34, borderRadius:"50%", background:C.accentBg, border:`2px solid ${C.accent}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, color:C.accent, flexShrink:0 }}>
+                  {`${me.first_name?.[0]||""}${me.last_name?.[0]||""}`.toUpperCase()}
+                </div>
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{me.first_name} {me.last_name}</div>
+                  <div style={{ fontSize:11, color:C.textSoft, display:"flex", alignItems:"center", gap:4 }}>
+                    <IcoCreditCard2 s={11} c={C.textSoft}/> {me.credits||0} crédit{(me.credits||0)!==1?"s":""}
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-          <nav style={{ flex:1 }}>
+          )}
+          <nav style={{ flex:1, padding:"4px 10px" }}>
             {ADH_NAV.map(item=>{
               const Ico = item.icon;
               return (
                 <button key={item.key} onClick={()=>setPage(item.key)}
-                  style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"11px 20px", background:page===item.key?C.accentLight:"none", border:"none", cursor:"pointer", color:page===item.key?C.accent:C.textMid, fontSize:15, fontWeight:page===item.key?700:500, borderLeft:`3px solid ${page===item.key?C.accent:"transparent"}`, textAlign:"left", transition:"all .15s" }}
-                  onMouseEnter={e=>{if(page!==item.key){e.currentTarget.style.background=C.bg;e.currentTarget.style.color=C.text;}}}
-                  onMouseLeave={e=>{if(page!==item.key){e.currentTarget.style.background="none";e.currentTarget.style.color=C.textMid;}}}>
+                  style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"11px 20px", borderRadius:10, border:"none", cursor:"pointer", fontSize:14, fontWeight:page===item.key?700:500, background:page===item.key?C.accentBg:"transparent", color:page===item.key?C.accent:C.textMid, marginBottom:2, textAlign:"left" }}>
                   <Ico s={18} c={page===item.key?C.accent:C.textMuted}/>{item.label}
                 </button>
               );
             })}
           </nav>
-          <div style={{ padding:"12px 16px", borderTop:`1px solid ${C.border}` }}>
-            <div style={{ fontSize:12, color:C.textMuted, marginBottom:6 }}>Changer de vue :</div>
-            {[["superadmin","⚡ Super Admin"],["admin","🏠 Vue Studio"]].map(([r,l])=>(
-              <button key={r} onClick={()=>onSwitch(r)} style={{ display:"block", width:"100%", fontSize:12, padding:"5px 10px", borderRadius:7, border:`1px solid ${C.border}`, background:C.surfaceWarm, color:C.textMid, cursor:"pointer", marginBottom:4, textAlign:"left", fontWeight:500 }}>{l}</button>
-            ))}
-          </div>
         </aside>
       )}
 
-      {/* Contenu */}
-      <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, paddingBottom:isMobile?62:0 }}>
-        <div style={{ background:C.surface, borderBottom:`1.5px solid ${C.border}`, padding:`0 ${isMobile?16:28}px`, height:isMobile?48:56, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, position:"sticky", top:0, zIndex:50 }}>
-          <div style={{ fontSize:isMobile?18:20, fontWeight:700, color:C.text, letterSpacing:isMobile?-0.3:0 }}>
-            {isMobile ? (
-              <div>
-                <div style={{ fontSize:14, fontWeight:800, color:C.text, lineHeight:1.1 }}>{studioName || <span>Fyde<span style={{ color:C.accent }}>lys</span></span>}</div>
-                <div style={{ fontSize:9, color:C.textMuted }}>via <span style={{ color:C.accent, fontWeight:600 }}>Fydelys</span></div>
-              </div>
-            ) : ADH_PAGE_TITLES[page]}
-          </div>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            {!isMobile && <Pill color={C.ok} bg={C.okBg}>💳 {ME.credits} crédits</Pill>}
-            <div style={{ width:32, height:32, borderRadius:"50%", background:C.accentBg, border:`1.5px solid #DFC0A0`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, color:C.accent }}>{ME.avatar}</div>
-          </div>
-        </div>
-        {isMobile && (
-          <div style={{ padding:"16px 16px 4px", fontSize:28, fontWeight:800, color:C.text, letterSpacing:-0.6 }}>
-            {ADH_PAGE_TITLES[page]}
+      {/* Contenu principal */}
+      <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, paddingBottom:isMobile?60:0 }}>
+        {!isMobile && (
+          <div style={{ padding:"16px 28px 0", fontSize:26, fontWeight:800, color:C.text, letterSpacing:-0.5 }}>
+            {ADH_NAV.find(n=>n.key===page)?.label||"Planning"}
           </div>
         )}
-        <div style={{ flex:1, overflowY:"auto" }}>{PAGE_MAP[page]}</div>
+        <div style={{ flex:1, overflowY:"auto" }}>
+          {page === "planning" && <AdhPlanning/>}
+          {page === "account"  && <AdhAccount/>}
+          {page === "history"  && <AdhHistory/>}
+          {page === "payment"  && <AdhPayment/>}
+        </div>
       </div>
 
       {/* Bottom nav mobile */}
       {isMobile && (
-        <nav style={{ position:"fixed", bottom:0, left:0, right:0, background:C.surface, borderTop:`1px solid ${C.border}`, display:"flex", zIndex:200, height:62, boxShadow:"0 -2px 16px rgba(42,31,20,.07)" }}>
+        <nav style={{ position:"fixed", bottom:0, left:0, right:0, background:C.surface, borderTop:`1.5px solid ${C.border}`, display:"flex", zIndex:200, height:58 }}>
           {ADH_MOBILE_NAV.map(item=>{
             const isA = page===item.key;
             const Ico = item.icon;
             return (
               <button key={item.key} onClick={()=>setPage(item.key)}
-                style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:2, background:"none", border:"none", cursor:"pointer", color:isA?C.accent:C.textMuted, fontSize:12, fontWeight:isA?700:400, transition:"color .15s", padding:"6px 0 4px", position:"relative" }}>
-                {isA && <div style={{ position:"absolute", top:0, left:"50%", transform:"translateX(-50%)", width:20, height:2, background:C.accent, borderRadius:"0 0 2px 2px" }}/>}
-                <Ico s={22} c={isA?C.accent:C.textMuted}/>
-                <span>{item.label}</span>
+                style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, border:"none", background:"none", cursor:"pointer", color:isA?C.accent:C.textMuted, fontSize:10, fontWeight:isA?700:500, padding:"6px 0" }}>
+                <Ico s={20} c={isA?C.accent:C.textMuted}/>
+                {item.label}
               </button>
             );
           })}
