@@ -7,6 +7,7 @@ import { C } from "./theme";
 import { DISCIPLINES, SUBSCRIPTIONS_INIT, ADH_NAV_KEYS } from "./demoData";
 import { IcoCalendar2, IcoUser2, IcoChevron, IcoCreditCard2, IcoCheck, IcoX, IcoAlert2, IcoTag2, IcoUsers2, IcoBarChart2, IcoActivity, IcoHeart, IcoStar, IcoZap } from "./icons";
 import { Card, SectionHead, Button, Tag, Pill, EmptyState, DateLabel, Field, SessionRow } from "./ui";
+import { OnboardingView } from "./OnboardingView";
 
 function AdherentView({ onSwitch, isMobile, studioName = "" }) {
   const ADH_NAV = ADH_NAV_KEYS.map((n,i) => ({ ...n, icon:[IcoCalendar2,IcoHeart,IcoActivity,IcoCreditCard2][i] }));
@@ -34,7 +35,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "" }) {
 
       // Fiche membre
       const { data: member } = await sb.from("members")
-        .select("id, first_name, last_name, email, status, credits, credits_total, created_at")
+        .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, address, postal_code, city, profile_complete")
         .eq("studio_id", studioId).eq("email", email).maybeSingle();
       if (member) setMe(member);
 
@@ -409,6 +410,26 @@ function AdherentView({ onSwitch, isMobile, studioName = "" }) {
           ))}
         </div>
       </div>
+    );
+  }
+
+  // ── Onboarding gate ─────────────────────────────────────────────────────────
+  // profile_complete === false → onboarding explicitement requis
+  // profile_complete === null/undefined + nom générique → colonne pas encore migrée, forcer onboarding
+  const needsOnboarding = !loading && me && (
+    me.profile_complete === false ||
+    (me.profile_complete == null && (
+      !me.first_name || me.first_name === "Nouveau" ||
+      !me.last_name  || me.last_name  === "Membre"  ||
+      !me.phone
+    ))
+  )
+  if (needsOnboarding) {
+    return (
+      <OnboardingView
+        studioName={studioName}
+        onComplete={() => setMe(m => ({ ...m, profile_complete: true }))}
+      />
     );
   }
 
