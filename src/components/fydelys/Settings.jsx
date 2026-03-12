@@ -142,6 +142,17 @@ function Settings({ isMobile }) {
     }
   }, [userRole]);
   const [tab, setTab] = useState("studio"); // toujours "studio" par défaut — sera "superadmin" si SA
+  // ── Données équipe partagées entre TabTeam et TabUsers ──────────────────────
+  const [teamData, setTeamData] = useState({ coaches:[], invites:[], loaded:false });
+  const loadTeam = React.useCallback(async () => {
+    if (!studioId) return;
+    try {
+      const res = await fetch(`/api/team?studioId=${studioId}`);
+      const data = await res.json();
+      setTeamData({ coaches: data.coaches||[], invites: data.invites||[], loaded:true });
+    } catch(e) { console.error("loadTeam error", e); }
+  }, [studioId]);
+  React.useEffect(() => { loadTeam(); }, [loadTeam]);
   const [users, setUsers] = useState(USERS_DATA);
   const [tenants, setTenants] = useState(TENANTS_DATA);
   const [confirmDelete, setConfirmDelete] = useState(null);
@@ -506,37 +517,16 @@ function Settings({ isMobile }) {
 
   // ── Tab: Users ────────────────────────────────────────────────────────────
   const TabUsers = () => {
-    const [realUsers, setRealUsers] = React.useState([]);
-    const [loadingUsers, setLoadingUsers] = React.useState(true);
-    const [confirmAction, setConfirmAction] = React.useState(null); // {id, action: "suspend"|"delete"}
-
-    React.useEffect(() => {
-      if (!studioId) return;
-      fetch(`/api/team?studioId=${studioId}`)
-        .then(r => r.json())
-        .then(data => {
-          setRealUsers(data.coaches || []);
-          setLoadingUsers(false);
-        })
-        .catch(() => setLoadingUsers(false));
-      // Aussi charger les membres (adhérents)
-      const sb = createClient();
-      sb.from("profiles").select("id, first_name, last_name, role")
-        .eq("studio_id", studioId)
-        .then(({ data }) => {
-          if (data) setRealUsers(data.map(p => ({
-            id: p.id, fn: p.first_name||"", ln: p.last_name||"", role: p.role
-          })));
-          setLoadingUsers(false);
-        });
-    }, [studioId]);
+    const realUsers = teamData.coaches;
+    const loadingUsers = !teamData.loaded;
+    const [confirmAction, setConfirmAction] = React.useState(null);
 
     const handleSuspend = async (userId) => {
       const res = await fetch("/api/team/suspend", {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ userId, studioId })
       });
-      if (res.ok) { showToast("Utilisateur suspendu"); setRealUsers(prev => prev.filter(u=>u.id!==userId)); }
+      if (res.ok) { showToast("Utilisateur suspendu"); await loadTeam(); }
       else showToast("Erreur lors de la suspension", false);
       setConfirmAction(null);
     };
@@ -546,7 +536,7 @@ function Settings({ isMobile }) {
         method:"DELETE", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ userId, studioId })
       });
-      if (res.ok) { showToast("Utilisateur supprimé", false); setRealUsers(prev => prev.filter(u=>u.id!==userId)); }
+      if (res.ok) { showToast("Utilisateur supprimé", false); await loadTeam(); }
       else showToast("Erreur lors de la suppression", false);
       setConfirmAction(null);
     };
@@ -830,20 +820,11 @@ function Settings({ isMobile }) {
     const [pendingInvites, setPendingInvites] = useState([]);
     const [editCoach, setEditCoach]     = useState(null);
 
-    // ── Charger les coachs + invitations en attente via API (service role) ──
-    const loadCoaches = async () => {
-      if (!studioId) return;
-      try {
-        const res = await fetch(`/api/team?studioId=${studioId}`);
-        const data = await res.json();
-        setCoaches(data.coaches || []);
-        setPendingInvites(data.invites || []);
-      } catch(e) {
-        console.error("loadCoaches error", e);
-      }
-    };
-
-    useEffect(() => { loadCoaches(); }, [studioId]);
+    // Utiliser les données partagées depuis Settings
+    useEffect(() => {
+      setCoaches(teamData.coaches || []);
+      setPendingInvites(teamData.invites || []);
+    }, [teamData]);
 
     // ── Sauvegarder disciplines → coach_disciplines ───────────────────────────
     const saveDisciplines = async (coachId, discIds) => {
@@ -857,7 +838,7 @@ function Settings({ isMobile }) {
         });
         if (!res.ok) throw new Error("Erreur API");
         showToast("Disciplines mises à jour ✓");
-        await loadCoaches();
+        await loadTeam();
       } catch(e) {
         console.error("saveDisciplines", e);
         showToast("Erreur lors de la sauvegarde");
@@ -949,7 +930,7 @@ function Settings({ isMobile }) {
               return;
             }
             showToast(`Invitation envoyée à ${emailSent} ✓`);
-            await loadCoaches();
+            await loadTeam();
           } catch(e) {
             console.error("invite error", e);
             showToast("Erreur réseau lors de l'invitation");
