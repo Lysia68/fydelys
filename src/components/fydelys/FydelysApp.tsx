@@ -37,10 +37,12 @@ const PAGE_TITLES = {
   subscriptions:"Abonnements", payments:"Paiements", disciplines:"Disciplines",
   settings:"Paramètres", aide:"Aide"
 };
+  console.log("FYDELYS_APP propStudioId:", propStudioId);
   const [sharedStudioId, setSharedStudioId] = useState(propStudioId || null);
   useEffect(() => {
+    // propStudioId arrive en async depuis layout — on le sync dès qu'il est disponible
     if (propStudioId) { setSharedStudioId(propStudioId); return; }
-    if (sharedStudioId) return;
+    // Fallback : lire depuis Supabase si propStudioId n'arrive jamais
     createClient().auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
       const { data: prof } = await createClient().from("profiles").select("studio_id").eq("id", user.id).single();
