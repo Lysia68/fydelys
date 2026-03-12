@@ -43,6 +43,10 @@ function Members({ isMobile }) {
 
   const add = async () => {
     if (!nM.firstName||!nM.email||!studioId) return;
+    // Vérifier doublon email dans ce studio
+    const { data: existing } = await createClient().from("members")
+      .select("id").eq("studio_id", studioId).eq("email", nM.email.toLowerCase().trim()).single();
+    if (existing) { showToast("Un membre avec cet email existe déjà ✕"); return; }
     const tempId = `tmp-${Date.now()}`;
     setMembers(prev=>[...prev, { id:tempId, ...nM, joined:new Date().toISOString().split("T")[0], status:"nouveau", credits:0, nextPayment:null, subscription:"—", avatar:(nM.firstName[0]||"")+(nM.lastName[0]||"") }]);
     setShowAdd(false);
@@ -50,11 +54,14 @@ function Members({ isMobile }) {
     try {
       const { data, error } = await createClient().from("members").insert({
         studio_id: studioId, first_name: nM.firstName, last_name: nM.lastName,
-        email: nM.email, phone: nM.phone || "", status: "nouveau", credits: 0,
+        email: nM.email.toLowerCase().trim(), phone: nM.phone || "", status: "nouveau", credits: 0,
         joined_at: new Date().toISOString().split("T")[0],
       }).select("id").single();
-      if (error) { console.error("insert member", error); setMembers(prev=>prev.filter(m=>m.id!==tempId)); }
-      else if (data?.id) setMembers(prev=>prev.map(m=>m.id===tempId?{...m,id:data.id}:m));
+      if (error) {
+        console.error("insert member", error);
+        setMembers(prev=>prev.filter(m=>m.id!==tempId));
+        if (error.code === "23505") showToast("Email déjà utilisé dans ce studio ✕");
+      } else if (data?.id) setMembers(prev=>prev.map(m=>m.id===tempId?{...m,id:data.id}:m));
     } catch(e) { console.error("insert member", e); }
   };
 

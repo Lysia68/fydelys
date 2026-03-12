@@ -65,14 +65,13 @@ export async function POST(request: NextRequest) {
   const studioName = studio.name || "Votre studio"
   const studioEmail = studio.email || "noreply@fydelys.fr"
 
-  // Vérifier si l'utilisateur existe, sinon le créer (nouvel adhérent)
-  const { data: existingUsers } = await db.auth.admin.listUsers()
-  const userExists = existingUsers?.users?.some((u: any) => u.email === email)
+  // Vérifier si l'utilisateur existe par email (listUsers paginé)
+  const { data: { users } } = await db.auth.admin.listUsers({ perPage: 1000 })
+  const existingUser = users?.find((u: any) => u.email?.toLowerCase() === email.toLowerCase())
 
-  if (!userExists) {
-    // Créer le compte adhérent avec le studio_id dans les métadonnées
+  if (!existingUser) {
     const { error: createErr } = await db.auth.admin.createUser({
-      email,
+      email: email.toLowerCase(),
       email_confirm: false,
       app_metadata: { studio_id: studio.id, studio_slug: tenantSlug },
       user_metadata: { role: "adherent" },
@@ -80,6 +79,13 @@ export async function POST(request: NextRequest) {
     if (createErr && !createErr.message?.includes("already registered")) {
       console.error("createUser error:", createErr)
       return NextResponse.json({ error: "Impossible de créer le compte" }, { status: 500 })
+    }
+  } else {
+    // Mettre à jour app_metadata si studio_id manquant
+    if (!existingUser.app_metadata?.studio_id) {
+      await db.auth.admin.updateUserById(existingUser.id, {
+        app_metadata: { ...existingUser.app_metadata, studio_id: studio.id, studio_slug: tenantSlug }
+      })
     }
   }
 

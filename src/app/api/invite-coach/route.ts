@@ -66,11 +66,11 @@ export async function POST(request: NextRequest) {
   }, { onConflict: "email,studio_id" })
 
   // Créer le user s'il n'existe pas encore (coach nouvellement invité)
-  const { data: existingUsers } = await db.auth.admin.listUsers()
-  const userExists = existingUsers?.users?.some((u: any) => u.email === email)
-  if (!userExists) {
+  const { data: { users: allUsers } } = await db.auth.admin.listUsers({ perPage: 1000 })
+  const existingCoach = allUsers?.find((u: any) => u.email?.toLowerCase() === email.toLowerCase())
+  if (!existingCoach) {
     const { error: createErr } = await db.auth.admin.createUser({
-      email,
+      email: email.toLowerCase(),
       email_confirm: false,
       app_metadata: { studio_id: studio.id, studio_slug: studioSlug },
       user_metadata: { role: "coach", first_name: firstName || "", last_name: lastName || "" },
