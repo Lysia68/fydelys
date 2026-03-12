@@ -96,7 +96,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         } else if (role === "admin") {
           if (profile?.studio_id) setStudioId(profile.studio_id)
           const { data: studio } = await supabase
-            .from("studios").select("slug").eq("id", profile?.studio_id).single()
+            .from("studios").select("slug").eq("id", profile?.studio_id).maybeSingle()
           if (studio?.slug && !isAppHost) {
             window.location.href = `https://${studio.slug}.fydelys.fr/dashboard`
           } else {
@@ -122,7 +122,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             .from("studios")
             .select("name, billing_status, trial_ends_at, plan_slug")
             .eq("id", profile.studio_id)
-            .single()
+            .maybeSingle()
           if (studioData) {
             setStudioName(studioData.name || "")
             setBillingStatus(studioData.billing_status || "trialing")
