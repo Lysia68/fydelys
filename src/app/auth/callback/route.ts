@@ -22,6 +22,8 @@ export async function GET(request: NextRequest) {
   const tokenHash  = searchParams.get("token_hash")
   const type       = searchParams.get("type")
 
+  console.log("CALLBACK | url:", request.url, "| tenant:", tenantParam, "| tokenHash:", !!tokenHash, "| code:", !!code)
+
   if (!code && !tokenHash) {
     return NextResponse.redirect(new URL("/", request.url))
   }
@@ -214,11 +216,12 @@ export async function GET(request: NextRequest) {
         ? (invite.role as string)
         : (metaRole === "coach" ? "coach" : "adherent")
 
-      await db.from("profiles").insert({
+      const { error: profileErr } = await db.from("profiles").upsert({
         id: userId, role, studio_id: studio.id,
         first_name: data.user.user_metadata?.first_name || "",
         last_name:  data.user.user_metadata?.last_name  || "",
-      })
+      }, { onConflict: "id" })
+      if (profileErr) console.error("profile upsert error:", profileErr)
 
       if (invite) {
         await db.from("invitations").update({ used: true })
