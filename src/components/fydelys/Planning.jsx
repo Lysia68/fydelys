@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase";
 import { AppCtx } from "./context";
 import { C } from "./theme";
 import { DISCIPLINES, SESSIONS_INIT, BOOKINGS_INIT, SESSIONS_DEMO } from "./demoData";
-import { IcoChevron, IcoCalendar2, IcoCheck, IcoX, IcoMail, DISC_ICONS } from "./icons";
+import { IcoChevron, IcoCalendar2, IcoCheck, IcoX, IcoMail, DISC_ICONS , IcoCalendar2, IcoActivity } from "./icons";
 import { Card, SectionHead, Button, Field, DateLabel, Pill, DemoBanner, EmptyState } from "./ui";
 import { DatePicker, TimePicker, DurationPicker, DaySelect } from "./pickers";
 import { PlanningAccordion, stLbl, stStyle } from "./accordion";
@@ -328,11 +328,11 @@ function Planning({ isMobile }) {
           <div style={{ display:"flex", gap:6, marginBottom:18 }}>
             <button onClick={()=>setRecMode(false)}
               style={{ flex:1, padding:"8px", borderRadius:8, border:`1.5px solid ${recMode?C.border:C.accent}`, background:recMode?"none":C.accentLight, color:recMode?C.textMuted:C.accent, fontSize:13, fontWeight:recMode?400:700, cursor:"pointer" }}>
-              📅 Séance unique
+              <span style={{display:"flex",alignItems:"center",gap:6}}><IcoCalendar2 s={14} c="inherit"/> Séance unique</span>
             </button>
             <button onClick={()=>setRecMode(true)}
               style={{ flex:1, padding:"8px", borderRadius:8, border:`1.5px solid ${recMode?C.accent:C.border}`, background:recMode?C.accentLight:"none", color:recMode?C.accent:C.textMuted, fontSize:13, fontWeight:recMode?700:400, cursor:"pointer" }}>
-              🔁 Récurrence
+              <span style={{display:"flex",alignItems:"center",gap:6}}><IcoActivity s={14} c="inherit"/> Récurrence</span>
             </button>
           </div>
 

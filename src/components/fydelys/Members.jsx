@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase";
 import { AppCtx } from "./context";
 import { C } from "./theme";
 import { MEMBERS_DEMO, SUBSCRIPTIONS_DEMO, SESSIONS_DEMO, BOOKINGS_DEMO, SUBSCRIPTIONS_INIT } from "./demoData";
-import { IcoUserPlus2, IcoMail, IcoUser2, IcoCalendar2, IcoX, IcoCheck, IcoTag2 } from "./icons";
+import { IcoUserPlus2, IcoMail, IcoUser2, IcoCalendar2, IcoX, IcoCheck, IcoTag2 , IcoSearch } from "./icons";
 import { Card, SectionHead, Button, Field, FieldLabel, Tag, Pill, MemberRow, DemoBanner, EmptyState, CreditBadge } from "./ui";
 
 function Members({ isMobile }) {
@@ -215,7 +215,9 @@ function Members({ isMobile }) {
       {modal?.type==="history"      && <HistoryModal/>}
 
       <div style={{ display:"flex", gap:10, marginBottom:18, alignItems:"center" }}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  Rechercher…"
+        <div style={{ position:"relative", display:"flex", alignItems:"center" }}>
+          <span style={{ position:"absolute", left:10, pointerEvents:"none", display:"flex" }}><IcoSearch s={15} c={C.textMuted}/></span>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher…" style={{ paddingLeft:32 }}
           style={{ flex:1, padding:isMobile?"9px 12px":"10px 14px", border:`1px solid ${C.border}`, borderRadius:8, fontSize:16, outline:"none", color:C.text, background:C.surfaceWarm }}
           onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
         <Button sm variant="primary" onClick={()=>setShowAdd(!showAdd)}>＋ {!isMobile&&"Adhérent"}</Button>

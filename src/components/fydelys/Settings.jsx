@@ -1019,7 +1019,7 @@ function Settings({ isMobile, onImpersonate }) {
 
         {coaches.length===0 && (
           <div style={{textAlign:"center",padding:"48px 16px",color:C.textMuted}}>
-            <div style={{fontSize:36,marginBottom:12}}>👥</div>
+            <div style={{marginBottom:12,display:"flex",justifyContent:"center"}}><IcoUsers2 s={36} c={C.textMuted}/></div>
             <div style={{fontSize:15,fontWeight:600,color:C.textSoft}}>Aucun coach dans l'équipe</div>
           </div>
         )}

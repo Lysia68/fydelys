@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { C } from "./theme";
 import { Button } from "./ui";
-import { IcoChevron } from "./icons";
+import { IcoChevron , IcoCalendar2 } from "./icons";
 
 function DatePicker({ value, onChange, label, minDate }) {
   const [open, setOpen] = useState(false);
@@ -79,7 +79,7 @@ function DatePicker({ value, onChange, label, minDate }) {
       {label && <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, textTransform:"uppercase", letterSpacing:.8, marginBottom:5 }}>{label}</div>}
       <button ref={triggerRef} onClick={()=>setOpen(o=>!o)}
         style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"9px 12px", border:`1.5px solid ${open?C.accent:C.border}`, borderRadius:9, background:C.surfaceWarm, cursor:"pointer", transition:"border-color .15s", textAlign:"left" }}>
-        <span style={{ fontSize:16, color:C.textMuted }}>📅</span>
+        <IcoCalendar2 s={16} c={C.textMuted}/>
         <span style={{ flex:1, fontSize:13, color:displayValue?C.text:C.textMuted, fontWeight:displayValue?600:400 }}>
           {displayValue || "Choisir une date…"}
         </span>

@@ -69,6 +69,7 @@ const IcoLayers2    = ({s,c}) => <ICG size={s} color={c}><path d="M12 2L2 7l10 5
 const IcoUserPlus2  = ({s,c}) => <ICG size={s} color={c}><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></ICG>;
 const IcoBarChart2  = ({s,c}) => <ICG size={s} color={c}><rect x="3" y="12" width="4" height="9" rx="1"/><rect x="10" y="7" width="4" height="14" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/></ICG>;
 // ── Icônes premium pour nav coach/adhérent ──────────────────────────────────
+const IcoSearch     = ({s,c}) => <ICG size={s} color={c}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></ICG>;
 const IcoBookOpen   = ({s,c}) => <ICG size={s} color={c}><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></ICG>;
 const IcoGraduate   = ({s,c}) => <ICG size={s} color={c}><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></ICG>;
 const IcoStar       = ({s,c}) => <ICG size={s} color={c}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></ICG>;
@@ -97,7 +98,7 @@ export {
   IcoTrend, IcoBarChart, IcoEuro,
   IcoCheck, IcoX, IcoUndo, IcoMail, IcoUserPlus, IcoChevron, IcoAlert,
   IcoYoga, IcoPilates, IcoMeditation, IcoMoon,
-  IcoBookOpen, IcoGraduate, IcoStar, IcoActivity, IcoAward, IcoClipboard, IcoHeart, IcoZap,
+  IcoSearch, IcoBookOpen, IcoGraduate, IcoStar, IcoActivity, IcoAward, IcoClipboard, IcoHeart, IcoZap,
   IcoCalendar2, IcoUsers2, IcoUser2, IcoSettings2, IcoCreditCard2, IcoHome2, IcoEuro2, IcoTrend2, IcoAlert2, IcoTag2, IcoLayers2, IcoUserPlus2, IcoBarChart2,
   IcoHelpCircle, IcoLogOut,
   DISC_ICONS, NAV_ICONS,

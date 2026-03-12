@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase";
 import { AppCtx } from "./context";
 import { C } from "./theme";
 import { SESSIONS_INIT, BOOKINGS_INIT, DISCIPLINES, MY_COACH_NAME, COACH_NAV_KEYS, ADH_NAV_KEYS } from "./demoData";
-import { IcoBookOpen, IcoGraduate, IcoAward, IcoLogOut, IcoActivity, IcoCalendar2, IcoUsers2, IcoBarChart2, IcoCreditCard2, IcoChevron, IcoHeart } from "./icons";
+import { IcoBookOpen, IcoGraduate, IcoAward, IcoLogOut, IcoActivity, IcoCalendar2, IcoUsers2, IcoBarChart2, IcoCreditCard2, IcoChevron, IcoHeart , IcoSearch } from "./icons";
 import { Card, SectionHead, Button, Tag, Pill, EmptyState, DemoBanner } from "./ui";
 import { PlanningAccordion } from "./accordion";
 
@@ -71,7 +71,7 @@ function CoachView({ onSwitch, isMobile, coachName = MY_COACH_NAME, coachDiscipl
           <div style={{ width:38, height:38, borderRadius:"50%", background:`linear-gradient(135deg,${C.accent},${C.accentDark})`, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:14, fontWeight:700, flexShrink:0 }}>{initials}</div>
           <div>
             <div style={{ fontSize:13, fontWeight:700, color:C.text, lineHeight:1.2 }}>{coachName}</div>
-            <div style={{ fontSize:11, color:C.textMuted }}>🎯 Coach</div>
+            <div style={{ fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:3 }}><IcoAward s={11} c={C.textMuted}/> Coach</div>
           </div>
         </div>
         {/* Nav links */}
@@ -143,12 +143,12 @@ function CoachView({ onSwitch, isMobile, coachName = MY_COACH_NAME, coachDiscipl
         {/* KPIs rapides */}
         <div style={{ padding:`0 ${p}px`, display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:20 }}>
           {[
-            { label:"Séances", value:sessions.length, icon:"📅", color:C.accent, bg:C.accentLight },
-            { label:"Inscrits total", value:totalStudents, icon:"👥", color:C.ok, bg:C.okBg },
-            { label:"Prochain cours", value:nextSession ? nextSession.time : "—", icon:"⏰", color:C.info, bg:C.infoBg },
+            { label:"Séances", value:sessions.length, ico:<IcoBookOpen s={18} c={C.accent}/>, color:C.accent, bg:C.accentLight },
+            { label:"Inscrits total", value:totalStudents, ico:<IcoGraduate s={18} c={C.ok}/>, color:C.ok, bg:C.okBg },
+            { label:"Prochain cours", value:nextSession ? nextSession.time : "—", ico:<IcoActivity s={18} c={C.info}/>, color:C.info, bg:C.infoBg },
           ].map(k=>(
             <div key={k.label} style={{ background:k.bg, borderRadius:12, padding:"12px 10px", border:`1px solid ${k.color}22` }}>
-              <div style={{ fontSize:20, marginBottom:4 }}>{k.icon}</div>
+              <div style={{ fontSize:20, marginBottom:4 }}>{k.ico}</div>
               <div style={{ fontSize:isMobile?18:22, fontWeight:800, color:k.color, lineHeight:1 }}>{k.value}</div>
               <div style={{ fontSize:10, color:C.textMuted, marginTop:3 }}>{k.label}</div>
             </div>
@@ -159,7 +159,7 @@ function CoachView({ onSwitch, isMobile, coachName = MY_COACH_NAME, coachDiscipl
         <div style={{ padding:`0 ${p}px ${isMobile?90:p}px` }}>
           {dates.length === 0 && (
             <div style={{ textAlign:"center", padding:"48px 16px", color:C.textMuted }}>
-              <div style={{ fontSize:36, marginBottom:12 }}>📭</div>
+              <div style={{ marginBottom:12, display:"flex", justifyContent:"center" }}><IcoBookOpen s={36} c={C.textMuted}/></div>
               <div style={{ fontSize:16, fontWeight:600, color:C.textSoft }}>Aucun cours planifié</div>
             </div>
           )}
@@ -312,7 +312,7 @@ function CoachView({ onSwitch, isMobile, coachName = MY_COACH_NAME, coachDiscipl
       <>
         <Header title="Mes inscrits" sub={`${unique.length} élève${unique.length>1?"s":""} uniques sur mes cours`}/>
         <div style={{ padding:`0 ${p}px ${isMobile?90:p}px` }}>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Rechercher un élève…"
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher un élève…"
             style={{ width:"100%", padding:"10px 14px", border:`1.5px solid ${C.border}`, borderRadius:10, fontSize:14, outline:"none", color:C.text, background:C.surface, boxSizing:"border-box", marginBottom:16 }}/>
           {filtered.map((b,i)=>{
             const nbSessions = allStudents.filter(x=>`${x.fn}${x.ln}`===`${b.fn}${b.ln}`).length;
@@ -354,20 +354,20 @@ function CoachView({ onSwitch, isMobile, coachName = MY_COACH_NAME, coachDiscipl
             <div style={{ padding:"0 20px 20px", marginTop:-24 }}>
               <div style={{ width:48, height:48, borderRadius:"50%", background:`linear-gradient(135deg,${C.accent},${C.accentDark})`, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:18, fontWeight:800, border:`3px solid ${C.surface}` }}>{initials}</div>
               <div style={{ fontSize:20, fontWeight:800, color:C.text, marginTop:10 }}>{coachName}</div>
-              <div style={{ fontSize:13, color:C.textMuted, marginTop:2 }}>🎯 Coach · Fydelys Studio</div>
+              <div style={{ fontSize:13, color:C.textMuted, marginTop:2, display:"flex", alignItems:"center", gap:4 }}><IcoAward s={13} c={C.textMuted}/> Coach · Fydelys Studio</div>
             </div>
           </div>
 
           {/* Stats */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
             {[
-              { label:"Séances planifiées", value:sessions.length, icon:"📅", color:C.accent, bg:C.accentLight },
-              { label:"Élèves suivis",       value:totalStudents,   icon:"👥", color:C.ok,     bg:C.okBg },
+              { label:"Séances planifiées", value:sessions.length, ico:<IcoBookOpen s={18} c={C.accent}/>, color:C.accent, bg:C.accentLight },
+              { label:"Élèves suivis",       value:totalStudents,   ico:<IcoGraduate s={18} c={C.ok}/>, color:C.ok,     bg:C.okBg },
               { label:"Heures de cours",     value:`${Math.round(totalHours/60)}h`, icon:"⏱", color:C.info, bg:C.infoBg },
-              { label:"Taux remplissage",    value:`${avgFill}%`,   icon:"📊", color:C.accent, bg:C.accentLight },
+              { label:"Taux remplissage",    value:`${avgFill}%`,   ico:<IcoBarChart2 s={18} c={C.accent}/>, color:C.accent, bg:C.accentLight },
             ].map(k=>(
               <div key={k.label} style={{ background:k.bg, borderRadius:12, padding:"14px", border:`1px solid ${k.color}22` }}>
-                <div style={{ fontSize:22, marginBottom:6 }}>{k.icon}</div>
+                <div style={{ fontSize:22, marginBottom:6 }}>{k.ico}</div>
                 <div style={{ fontSize:24, fontWeight:800, color:k.color, lineHeight:1 }}>{k.value}</div>
                 <div style={{ fontSize:11, color:C.textMuted, marginTop:4 }}>{k.label}</div>
               </div>
