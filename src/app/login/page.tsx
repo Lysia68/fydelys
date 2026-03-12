@@ -316,7 +316,7 @@ export default function LoginPage() {
       }
     } else {
       // Sur fydelys.fr : connexion admin standard via Supabase directement
-      const redirectTo = `https://fydelys.fr/auth/callback?next=/dashboard`
+      const redirectTo = `https://fydelys.fr/auth/confirm`
       const {error}=await supabase.auth.signInWithOtp({email,
         options:{emailRedirectTo: redirectTo}})
       if (error) {

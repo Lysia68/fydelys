@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
     type: "magiclink",
     email,
     options: {
-      redirectTo: `https://fydelys.fr/auth/callback?tenant=${studioSlug}&next=/dashboard`,
+      redirectTo: `https://fydelys.fr/auth/confirm?tenant=${studioSlug}`,
     },
   })
 
@@ -109,9 +109,9 @@ export async function POST(request: NextRequest) {
   const token     = actionUrl.searchParams.get("token")
   // Utiliser le lien Supabase natif en remplaçant juste le redirect_to
   const magicLinkUrl = tokenHash
-    ? `https://fydelys.fr/auth/callback?token_hash=${tokenHash}&type=magiclink&tenant=${studioSlug}`
+    ? `https://fydelys.fr/auth/confirm?token_hash=${tokenHash}&type=magiclink&tenant=${studioSlug}`
     : token
-      ? `${actionUrl.origin}${actionUrl.pathname}?token=${token}&type=magiclink&redirect_to=${encodeURIComponent(`https://fydelys.fr/auth/callback?tenant=${studioSlug}&next=/dashboard`)}`
+      ? `${actionUrl.origin}${actionUrl.pathname}?token=${token}&type=magiclink&redirect_to=${encodeURIComponent(`https://fydelys.fr/auth/confirm?tenant=${studioSlug}`)}`
       : linkData.properties.action_link
   console.log("INVITE | magicLinkUrl:", magicLinkUrl)
 
@@ -212,7 +212,7 @@ export async function POST(request: NextRequest) {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
-    const redirectTo = `https://fydelys.fr/auth/callback?tenant=${studioSlug}&next=/dashboard`
+    const redirectTo = `https://fydelys.fr/auth/confirm?tenant=${studioSlug}`
     const { error: otpErr } = await anonClient.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: redirectTo }

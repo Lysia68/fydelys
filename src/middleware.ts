@@ -148,6 +148,20 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // Sur fydelys.fr /dashboard : admin doit être redirigé vers son sous-domaine
+  if (user && pathname === "/dashboard" && isApp) {
+    const { data: profile } = await supabase
+      .from("profiles").select("role, studio_id").eq("id", user.id).single()
+    if (profile?.role === "admin" && profile.studio_id) {
+      const { data: studio } = await supabase
+        .from("studios").select("slug").eq("id", profile.studio_id).single()
+      if (studio?.slug) {
+        return NextResponse.redirect(new URL("https://" + studio.slug + ".fydelys.fr/dashboard"))
+      }
+    }
+    // superadmin reste sur fydelys.fr/dashboard → ok
+  }
+
   setHeaders(supabaseResponse)
   return supabaseResponse
 }
