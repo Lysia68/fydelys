@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase";
 import { AppCtx } from "./context";
 import { C } from "./theme";
 import { PAYMENTS_DEMO } from "./demoData";
-import { IcoCreditCard, IcoMail, IcoAlert, IcoBarChart, IcoCheck } from "./icons";
+import { IcoCreditCard2, IcoMail, IcoAlert2, IcoBarChart2, IcoCheck } from "./icons";
 import { Card, SectionHead, Button, Tag, Pill, DemoBanner, EmptyState } from "./ui";
 
 function Payments({ isMobile }) {
@@ -49,9 +49,9 @@ function Payments({ isMobile }) {
   };
 
   const stats = [
-    {lbl:"Encaissé ce mois", val:`${total} €`,      icon:<IcoCreditCard s={20} c={C.ok}/>,  c:C.ok,   bg:C.okBg},
-    {lbl:"Impayés",          val:`${unpaid} €`,      icon:<IcoAlert s={20} c={C.warn}/>,     c:C.warn, bg:C.warnBg},
-    {lbl:"Transactions",     val:payments.length,    icon:<IcoBarChart s={20} c={C.info}/>,  c:C.info, bg:C.infoBg},
+    {lbl:"Encaissé ce mois", val:`${total} €`,      icon:<IcoCreditCard2 s={20} c={C.ok}/>,  c:C.ok,   bg:C.okBg},
+    {lbl:"Impayés",          val:`${unpaid} €`,      icon:<IcoAlert2 s={20} c={C.warn}/>,     c:C.warn, bg:C.warnBg},
+    {lbl:"Transactions",     val:payments.length,    icon:<IcoBarChart2 s={20} c={C.info}/>,  c:C.info, bg:C.infoBg},
   ];
   return (
     <div>

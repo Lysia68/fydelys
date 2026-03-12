@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase";
 import { AppCtx } from "./context";
 import { C } from "./theme";
 import { MEMBERS_DEMO, SUBSCRIPTIONS_DEMO, SESSIONS_DEMO, BOOKINGS_DEMO, SUBSCRIPTIONS_INIT } from "./demoData";
-import { IcoUserPlus, IcoMail, IcoUser, IcoCalendar, IcoX, IcoCheck, IcoTag } from "./icons";
+import { IcoUserPlus2, IcoMail, IcoUser2, IcoCalendar2, IcoX, IcoCheck, IcoTag2 } from "./icons";
 import { Card, SectionHead, Button, Field, FieldLabel, Tag, Pill, MemberRow, DemoBanner, EmptyState, CreditBadge } from "./ui";
 
 function Members({ isMobile }) {
@@ -266,8 +266,8 @@ function Members({ isMobile }) {
           </div>
           <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
             <Button variant="primary" sm onClick={()=>setModal({type:"email",member:selected})}><span style={{display:"flex",alignItems:"center",gap:5}}><IcoMail s={13} c="white"/>Envoyer un email</span></Button>
-            <Button variant="ghost" sm onClick={()=>setModal({type:"subscription",member:selected})}><span style={{display:"flex",alignItems:"center",gap:5}}><IcoTag s={13} c={C.textMid}/>Modifier l'abonnement</span></Button>
-            <Button variant="ghost" sm onClick={()=>setModal({type:"history",member:selected})}><span style={{display:"flex",alignItems:"center",gap:5}}><IcoCalendar s={13} c={C.textMid}/>Historique séances</span></Button>
+            <Button variant="ghost" sm onClick={()=>setModal({type:"subscription",member:selected})}><span style={{display:"flex",alignItems:"center",gap:5}}><IcoTag2 s={13} c={C.textMid}/>Modifier l'abonnement</span></Button>
+            <Button variant="ghost" sm onClick={()=>setModal({type:"history",member:selected})}><span style={{display:"flex",alignItems:"center",gap:5}}><IcoCalendar2 s={13} c={C.textMid}/>Historique séances</span></Button>
           </div>
         </Card>
       )}

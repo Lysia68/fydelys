@@ -5,10 +5,10 @@ import { createClient } from "@/lib/supabase";
 import { AppCtx } from "./context";
 import { C } from "./theme";
 import { SESSIONS_INIT, MEMBERS_DEMO, DISCIPLINES, SUBSCRIPTIONS_INIT, ADH_NAV_KEYS } from "./demoData";
-import { IcoCalendar, IcoUser, IcoChevron, IcoCreditCard, IcoCheck, IcoX, IcoAlert, IcoTag, IcoUsers, IcoBarChart, IcoActivity, IcoHeart, IcoStar, IcoZap } from "./icons";
+import { IcoCalendar2, IcoUser2, IcoChevron, IcoCreditCard2, IcoCheck, IcoX, IcoAlert2, IcoTag2, IcoUsers2, IcoBarChart2, IcoActivity, IcoHeart, IcoStar, IcoZap } from "./icons";
 import { Card, SectionHead, Button, Tag, Pill, EmptyState, DemoBanner, DateLabel, Field, SessionRow } from "./ui";
 
-const ADH_NAV = ADH_NAV_KEYS.map((n,i) => ({ ...n, icon:[IcoCalendar,IcoHeart,IcoActivity,IcoCreditCard][i] }));
+const ADH_NAV = ADH_NAV_KEYS.map((n,i) => ({ ...n, icon:[IcoCalendar2,IcoHeart,IcoActivity,IcoCreditCard2][i] }));
 const ADH_MOBILE_NAV = ADH_NAV;
 
 function AdherentView({ onSwitch, isMobile, studioName = "" }) {
@@ -76,7 +76,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "" }) {
         {/* Barre crédits */}
         {ME.credits>0 && (
           <div style={{ display:"flex", alignItems:"center", gap:14, padding:"12px 16px", background:C.accentLight, borderRadius:10, marginBottom:16, border:`1px solid ${C.border}` }}>
-            <IcoCreditCard s={20} c={C.accent}/>
+            <IcoCreditCard2 s={20} c={C.accent}/>
             <div style={{ flex:1 }}>
               <div style={{ fontSize:13, fontWeight:600, color:C.text }}>Crédits restants : {ME.credits}/{ME.total}</div>
               <div style={{ height:4, background:C.bgDeep, borderRadius:2, marginTop:5 }}>
@@ -160,9 +160,9 @@ function AdherentView({ onSwitch, isMobile, studioName = "" }) {
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
             {[
-              { l:"Abonnement",        v:ME.sub,                                              icon:<IcoTag s={16} c={C.accent}/>   },
-              { l:"Crédits restants",  v:`${ME.credits} / ${ME.total}`,                       icon:<IcoCreditCard s={16} c={C.ok}/>  },
-              { l:"Membre depuis",     v:new Date(ME.joined).toLocaleDateString("fr-FR"),     icon:<IcoCalendar s={16} c={C.info}/>  },
+              { l:"Abonnement",        v:ME.sub,                                              icon:<IcoTag2 s={16} c={C.accent}/>   },
+              { l:"Crédits restants",  v:`${ME.credits} / ${ME.total}`,                       icon:<IcoCreditCard2 s={16} c={C.ok}/>  },
+              { l:"Membre depuis",     v:new Date(ME.joined).toLocaleDateString("fr-FR"),     icon:<IcoCalendar2 s={16} c={C.info}/>  },
               { l:"Séances effectuées",v:MY_HISTORY.filter(h=>h.status==="présent").length,   icon:<IcoCheck s={16} c={C.ok}/>       },
             ].map(k=>(
               <div key={k.l} style={{ background:C.bg, borderRadius:10, padding:"12px 14px", display:"flex", gap:10, alignItems:"center" }}>
@@ -299,7 +299,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "" }) {
         <Card style={{ marginBottom:20, borderTop:`3px solid ${C.accent}` }}>
           <div style={{ fontSize:14, fontWeight:700, color:C.textMid, marginBottom:12 }}>Abonnement actuel</div>
           <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-            <IcoCreditCard s={28} c={C.accent}/>
+            <IcoCreditCard2 s={28} c={C.accent}/>
             <div>
               <div style={{ fontSize:15, fontWeight:700, color:C.text }}>{ME.sub}</div>
               <div style={{ fontSize:13, color:C.textSoft }}>{ME.credits} crédits restants · valable 6 mois</div>
@@ -344,7 +344,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "" }) {
 
       {toast && (
         <div style={{ position:"fixed", top:20, right:20, zIndex:600, display:"flex", alignItems:"center", gap:10, padding:"12px 18px", background:toast.ok?C.ok:C.warn, borderRadius:10, color:"white", fontSize:14, fontWeight:600, boxShadow:"0 8px 24px rgba(0,0,0,.15)" }}>
-          {toast.ok ? <IcoCheck s={16} c="white"/> : <IcoAlert s={16} c="white"/>}{toast.msg}
+          {toast.ok ? <IcoCheck s={16} c="white"/> : <IcoAlert2 s={16} c="white"/>}{toast.msg}
         </div>
       )}
 

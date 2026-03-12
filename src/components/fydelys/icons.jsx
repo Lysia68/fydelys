@@ -53,6 +53,21 @@ function IcoHelpCircle({s,c}) {
   );
 }
 
+
+// ── Icônes premium remplaçant les basiques ───────────────────────────────────
+const IcoCalendar2  = ({s,c}) => <ICG size={s} color={c}><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 10h18"/><path d="M8 2v4M16 2v4"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></ICG>;
+const IcoUsers2     = ({s,c}) => <ICG size={s} color={c}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></ICG>;
+const IcoUser2      = ({s,c}) => <ICG size={s} color={c}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></ICG>;
+const IcoSettings2  = ({s,c}) => <ICG size={s} color={c}><path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"/><circle cx="12" cy="12" r="3"/></ICG>;
+const IcoCreditCard2= ({s,c}) => <ICG size={s} color={c}><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/><path d="M6 15h2M10 15h4"/></ICG>;
+const IcoHome2      = ({s,c}) => <ICG size={s} color={c}><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></ICG>;
+const IcoEuro2      = ({s,c}) => <ICG size={s} color={c}><circle cx="12" cy="12" r="10"/><path d="M8 12h8M8 9.5A4 4 0 0115.5 9M8 14.5A4 4 0 0015.5 15"/></ICG>;
+const IcoTrend2     = ({s,c}) => <ICG size={s} color={c}><polyline points="22 7 13.5 15.5 8.5 10.5 1 18"/><polyline points="16 7 22 7 22 13"/></ICG>;
+const IcoAlert2     = ({s,c}) => <ICG size={s} color={c}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></ICG>;
+const IcoTag2       = ({s,c}) => <ICG size={s} color={c}><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><circle cx="7" cy="7" r="1.5"/></ICG>;
+const IcoLayers2    = ({s,c}) => <ICG size={s} color={c}><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></ICG>;
+const IcoUserPlus2  = ({s,c}) => <ICG size={s} color={c}><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></ICG>;
+const IcoBarChart2  = ({s,c}) => <ICG size={s} color={c}><rect x="3" y="12" width="4" height="9" rx="1"/><rect x="10" y="7" width="4" height="14" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/></ICG>;
 // ── Icônes premium pour nav coach/adhérent ──────────────────────────────────
 const IcoBookOpen   = ({s,c}) => <ICG size={s} color={c}><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></ICG>;
 const IcoGraduate   = ({s,c}) => <ICG size={s} color={c}><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></ICG>;
@@ -83,6 +98,7 @@ export {
   IcoCheck, IcoX, IcoUndo, IcoMail, IcoUserPlus, IcoChevron, IcoAlert,
   IcoYoga, IcoPilates, IcoMeditation, IcoMoon,
   IcoBookOpen, IcoGraduate, IcoStar, IcoActivity, IcoAward, IcoClipboard, IcoHeart, IcoZap,
+  IcoCalendar2, IcoUsers2, IcoUser2, IcoSettings2, IcoCreditCard2, IcoHome2, IcoEuro2, IcoTrend2, IcoAlert2, IcoTag2, IcoLayers2, IcoUserPlus2, IcoBarChart2,
   IcoHelpCircle, IcoLogOut,
   DISC_ICONS, NAV_ICONS,
 };

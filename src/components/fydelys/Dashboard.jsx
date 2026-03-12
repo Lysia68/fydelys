@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase";
 import { AppCtx } from "./context";
 import { C } from "./theme";
 import { DISCIPLINES, SESSIONS_INIT, BOOKINGS_INIT, MEMBERS, PAYMENTS } from "./demoData";
-import { IcoUsers, IcoCalendar, IcoBarChart, IcoEuro, IcoAlert, IcoChevron } from "./icons";
+import { IcoUsers2, IcoCalendar2, IcoBarChart2, IcoEuro2, IcoAlert2, IcoChevron } from "./icons";
 import { Card, SectionHead, Pill, KpiCard, MemberRow, DemoBanner, creditColor, CreditBadge } from "./ui";
 import { PlanningAccordion } from "./accordion";
 
@@ -160,10 +160,10 @@ function Dashboard({ isMobile }) {
       {isDemo && <DemoBanner/>}
       <div style={{ padding:p }}>
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:isMobile?8:14, marginBottom:isMobile?12:20 }}>
-          <KpiCard icon={<IcoUsers s={isMobile?16:18} c={C.ok}/>}      label="Adhérents actifs" value={activeMembers>0?String(activeMembers):"—"}  delta={null} accentColor={C.ok}     isMobile={isMobile}/>
-          <KpiCard icon={<IcoCalendar s={isMobile?16:18} c="#6B9E7A"/>} label="Séances ce mois"  value={monthSessions>0?String(monthSessions):"—"}   delta={null} accentColor="#6B9E7A"  isMobile={isMobile}/>
-          <KpiCard icon={<IcoBarChart s={isMobile?16:18} c="#6A8FAE"/>} label="Taux remplissage" value={totalCap>0?fillRate+" %":"—"}                 delta={null} accentColor="#6A8FAE"  isMobile={isMobile}/>
-          <KpiCard icon={<IcoEuro s={isMobile?16:18} c={C.accent}/>}   label="CA du mois"        value={monthRevenue>0?monthRevenue.toLocaleString("fr-FR")+" €":"—"} delta={null} accentColor={C.accent} isMobile={isMobile}/>
+          <KpiCard icon={<IcoUsers2 s={isMobile?16:18} c={C.ok}/>}      label="Adhérents actifs" value={activeMembers>0?String(activeMembers):"—"}  delta={null} accentColor={C.ok}     isMobile={isMobile}/>
+          <KpiCard icon={<IcoCalendar2 s={isMobile?16:18} c="#6B9E7A"/>} label="Séances ce mois"  value={monthSessions>0?String(monthSessions):"—"}   delta={null} accentColor="#6B9E7A"  isMobile={isMobile}/>
+          <KpiCard icon={<IcoBarChart2 s={isMobile?16:18} c="#6A8FAE"/>} label="Taux remplissage" value={totalCap>0?fillRate+" %":"—"}                 delta={null} accentColor="#6A8FAE"  isMobile={isMobile}/>
+          <KpiCard icon={<IcoEuro2 s={isMobile?16:18} c={C.accent}/>}   label="CA du mois"        value={monthRevenue>0?monthRevenue.toLocaleString("fr-FR")+" €":"—"} delta={null} accentColor={C.accent} isMobile={isMobile}/>
         </div>
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1.6fr 1fr", gap:16 }}>
           <Card noPad>
@@ -178,7 +178,7 @@ function Dashboard({ isMobile }) {
           </Card>
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <Card noPad>
-              <SectionHead><span style={{display:"flex",alignItems:"center",gap:6}}><IcoAlert s={15} c={C.warn}/>Alertes</span></SectionHead>
+              <SectionHead><span style={{display:"flex",alignItems:"center",gap:6}}><IcoAlert2 s={15} c={C.warn}/>Alertes</span></SectionHead>
               {loading
                 ? <EmptyCard label="Chargement…"/>
                 : alerts.length === 0

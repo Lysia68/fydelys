@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase";
 import { AppCtx } from "./context";
 import { C } from "./theme";
 import { SUBSCRIPTIONS_DEMO } from "./demoData";
-import { IcoTag, IcoX, IcoCheck, IcoSettings } from "./icons";
+import { IcoTag2, IcoX, IcoCheck, IcoSettings2 } from "./icons";
 import { Card, SectionHead, Button, Field, FieldLabel, Tag, Pill, DemoBanner, EmptyState } from "./ui";
 
 function Subscriptions({ isMobile }) {
@@ -120,7 +120,7 @@ function Subscriptions({ isMobile }) {
                 </div>
                 <div style={{ fontSize:15, color:C.textSoft, marginBottom:18, lineHeight:1.6 }}>{sub.description}</div>
                 <div style={{ display:"flex", gap:8 }}>
-                  <Button sm variant="ghost" onClick={()=>startEdit(sub)}><span style={{display:"flex",alignItems:"center",gap:5}}><IcoSettings s={13} c={C.textMid}/>Modifier</span></Button>
+                  <Button sm variant="ghost" onClick={()=>startEdit(sub)}><span style={{display:"flex",alignItems:"center",gap:5}}><IcoSettings2 s={13} c={C.textMid}/>Modifier</span></Button>
                   <Button sm variant="danger" onClick={async ()=>{
                     setSubs(prev=>prev.filter(s=>s.id!==sub.id));
                     if (studioId) {

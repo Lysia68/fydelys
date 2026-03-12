@@ -2,7 +2,7 @@
 
 import React from "react";
 import { C } from "./theme";
-import { IcoCheck, IcoX, IcoUndo, IcoUserPlus, IcoMail } from "./icons";
+import { IcoCheck, IcoX, IcoUndo, IcoUserPlus2, IcoMail } from "./icons";
 import { CreditBadge } from "./ui";
 
 export function stLbl(s) { return s==="confirmed"?"Confirmé":s==="waitlist"?"En attente":"Annulé"; }
@@ -53,7 +53,7 @@ export function PlanningAccordion({ sessId, bookings, onChangeStatus, onAddBooki
         </div>
       ))}
       <div style={{ padding:"8px 13px", display:"flex", gap:7, flexWrap:"wrap" }}>
-        <button onClick={()=>onAddBooking&&onAddBooking(sessId)} style={{ display:"flex",alignItems:"center",gap:6, fontSize:12, padding:"5px 12px", borderRadius:8, fontWeight:600, border:`1px solid #DFC0A0`, color:C.accentDark, background:C.accentBg, cursor:"pointer" }}><IcoUserPlus s={14} c={C.accentDark}/>Inscrire un adhérent</button>
+        <button onClick={()=>onAddBooking&&onAddBooking(sessId)} style={{ display:"flex",alignItems:"center",gap:6, fontSize:12, padding:"5px 12px", borderRadius:8, fontWeight:600, border:`1px solid #DFC0A0`, color:C.accentDark, background:C.accentBg, cursor:"pointer" }}><IcoUserPlus2 s={14} c={C.accentDark}/>Inscrire un adhérent</button>
         <button onClick={()=>onSendReminder&&onSendReminder(sessId)} style={{ display:"flex",alignItems:"center",gap:6, fontSize:12, padding:"5px 12px", borderRadius:8, fontWeight:600, border:`1px solid ${C.border}`, color:C.textSoft, background:C.surfaceWarm, cursor:"pointer" }}><IcoMail s={14} c={C.textSoft}/>Envoyer rappel</button>
       </div>
     </div>

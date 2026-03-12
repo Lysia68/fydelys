@@ -5,13 +5,13 @@ import { createClient } from "@/lib/supabase";
 import { AppCtx } from "./context";
 import { C } from "./theme";
 import { SESSIONS_INIT, BOOKINGS_INIT, DISCIPLINES, MY_COACH_NAME, COACH_NAV_KEYS, ADH_NAV_KEYS } from "./demoData";
-import { IcoBookOpen, IcoGraduate, IcoAward, IcoLogOut, IcoActivity } from "./icons";
+import { IcoBookOpen, IcoGraduate, IcoAward, IcoLogOut, IcoActivity, IcoCalendar2, IcoUsers2, IcoBarChart2, IcoCreditCard2, IcoChevron, IcoHeart } from "./icons";
 import { Card, SectionHead, Button, Tag, Pill, EmptyState, DemoBanner } from "./ui";
 import { PlanningAccordion } from "./accordion";
 
 const MY_SESSIONS = SESSIONS_INIT.filter(s => s.teacher === MY_COACH_NAME);
 const COACH_NAV = COACH_NAV_KEYS.map((n,i) => ({ ...n, icon:[IcoBookOpen,IcoGraduate,IcoAward][i] }));
-const ADH_NAV = ADH_NAV_KEYS.map((n,i) => ({ ...n, icon:[IcoCalendar,IcoUsers,IcoBarChart,IcoCreditCard][i] }));
+const ADH_NAV = ADH_NAV_KEYS.map((n,i) => ({ ...n, icon:[IcoCalendar2,IcoUsers2,IcoBarChart2,IcoCreditCard2][i] }));
 const ADH_MOBILE_NAV = ADH_NAV;
 
 

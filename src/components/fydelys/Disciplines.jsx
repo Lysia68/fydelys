@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase";
 import { AppCtx } from "./context";
 import { C } from "./theme";
 import { DISCIPLINES, ROLES_DEF } from "./demoData";
-import { IcoLayers, IcoX, IcoChevron, DISC_ICONS } from "./icons";
+import { IcoLayers2, IcoX, IcoChevron, DISC_ICONS } from "./icons";
 import { Card, SectionHead, Button, Field, Pill, EmptyState, DemoBanner } from "./ui";
 import { TimePicker, DurationPicker, DaySelect } from "./pickers";
 
@@ -35,7 +35,7 @@ function EmojiPicker({ value, onChange }) {
         {value || "🏃"}
       </button>
       {open && (
-        <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, zIndex:999, background:C.surface, border:`1.5px solid ${C.accent}`, borderRadius:12, boxShadow:"0 8px 32px rgba(42,31,20,.18)", padding:10, width:290 }}>
+        <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, zIndex:999, background:C.surface, border:`1.5px solid ${C.accent}`, borderRadius:12, boxShadow:"0 8px 32px rgba(42,31,20,.18)", padding:12, width:320 }}>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(8,1fr)", gap:4 }}>
             {DISCIPLINE_EMOJIS.map(e => (
               <button key={e} onClick={()=>{ onChange(e); setOpen(false); }}

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase";
 import { AppCtx } from "./context";
 import { C } from "./theme";
 import { DISCIPLINES, SESSIONS_INIT, BOOKINGS_INIT, SESSIONS_DEMO } from "./demoData";
-import { IcoChevron, IcoCalendar, IcoCheck, IcoX, IcoMail, DISC_ICONS } from "./icons";
+import { IcoChevron, IcoCalendar2, IcoCheck, IcoX, IcoMail, DISC_ICONS } from "./icons";
 import { Card, SectionHead, Button, Field, DateLabel, Pill, DemoBanner, EmptyState } from "./ui";
 import { DatePicker, TimePicker, DurationPicker, DaySelect } from "./pickers";
 import { PlanningAccordion, stLbl, stStyle } from "./accordion";
@@ -416,8 +416,25 @@ function Planning({ isMobile }) {
                 {/* ── ÉTAPE 1 : Créneaux ── */}
                 <div style={{ marginBottom:4 }}>
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
-                    <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, textTransform:"uppercase", letterSpacing:.8 }}>
-                      1 · Créneaux à inclure
+                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, textTransform:"uppercase", letterSpacing:.8 }}>
+                        1 · Créneaux à inclure
+                      </div>
+                      {allSlots.length > 0 && (() => {
+                        const allSelected = allSlots.every(s => isSelected(s.key));
+                        return (
+                          <button onClick={()=>{
+                            if (allSelected) {
+                              setRecSlots(prev => prev.filter(s => !allSlots.some(sl => sl.key===s.key)));
+                            } else {
+                              const toAdd = allSlots.filter(s => !isSelected(s.key)).map(s=>({...s, teacher:nS.teacher}));
+                              setRecSlots(prev => [...prev, ...toAdd]);
+                            }
+                          }} style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:8, border:`1.5px solid ${allSelected?C.accent:C.border}`, background:allSelected?C.accentLight:"transparent", color:allSelected?C.accentDark:C.textMid, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
+                            {allSelected ? "✓ Tout désélectionner" : "Tout sélectionner"}
+                          </button>
+                        );
+                      })()}
                     </div>
                     {allSlotsRaw.length > 0 && (
                       <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>

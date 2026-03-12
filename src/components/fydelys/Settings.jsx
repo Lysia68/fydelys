@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase";
 import { AppCtx } from "./context";
 import { C } from "./theme";
 import { FYDELYS_PLANS, DISCIPLINES, ROLES_DEF, TENANTS_INIT, TENANTS_DATA, USERS_DATA } from "./demoData";
-import { IcoUser, IcoUsers, IcoSettings, IcoCheck, IcoX, IcoMail, IcoLogOut, IcoCalendar, IcoAlert, IcoEuro, IcoHome, IcoLayers, IcoTag, IcoUserPlus, IcoYoga } from "./icons";
+import { IcoUser2, IcoUsers2, IcoSettings2, IcoCheck, IcoX, IcoMail, IcoLogOut, IcoCalendar2, IcoAlert2, IcoEuro2, IcoHome2, IcoLayers2, IcoTag2, IcoUserPlus2, IcoYoga } from "./icons";
 import { Card, SectionHead, Button, Field, FieldLabel, Tag, Pill, EmptyState } from "./ui";
 
 function RoleBadge({ role }) {
@@ -369,12 +369,12 @@ function Settings({ isMobile }) {
   };
 
   const tabs = [
-    ...(isSA ? [{ key:"superadmin", label:"Super Admin", icon:<IcoLayers s={14} c="currentColor"/> }] : []),
-    { key:"studio",  label:"Studio",       icon:<IcoSettings s={14} c="currentColor"/> },
-    { key:"team",    label:"Équipe",        icon:<IcoUsers s={14} c="currentColor"/> },
-    { key:"users",   label:"Utilisateurs", icon:<IcoTag s={14} c="currentColor"/> },
-    { key:"roles", label:"Rôles", icon:<IcoTag s={14} c="currentColor"/> },
-    { key:"account", label:"Mon compte",   icon:<IcoHome s={14} c="currentColor"/> },
+    ...(isSA ? [{ key:"superadmin", label:"Super Admin", icon:<IcoLayers2 s={14} c="currentColor"/> }] : []),
+    { key:"studio",  label:"Studio",       icon:<IcoSettings2 s={14} c="currentColor"/> },
+    { key:"team",    label:"Équipe",        icon:<IcoUsers2 s={14} c="currentColor"/> },
+    { key:"users",   label:"Utilisateurs", icon:<IcoTag2 s={14} c="currentColor"/> },
+    { key:"roles", label:"Rôles", icon:<IcoTag2 s={14} c="currentColor"/> },
+    { key:"account", label:"Mon compte",   icon:<IcoHome2 s={14} c="currentColor"/> },
   ].filter(Boolean);
 
   // ── Preview role switcher (superadmin seulement) ────────────────────────
@@ -398,10 +398,10 @@ function Settings({ isMobile }) {
     <div>
       <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:10, marginBottom:20 }}>
         {[
-          { lbl:"Tenants actifs",    val:tenants.filter(t=>t.status==="actif").length,  icon:<IcoLayers s={16} c="#7C3AED"/>, c:"#7C3AED", bg:"#F3EEFF" },
-          { lbl:"Total membres",     val:tenants.reduce((s,t)=>s+t.members,0),          icon:<IcoUsers s={16} c={C.ok}/>,     c:C.ok,      bg:C.okBg },
-          { lbl:"CA plateforme",     val:"18 330 €",                                    icon:<IcoEuro s={16} c={C.accent}/>,  c:C.accent,  bg:C.accentBg },
-          { lbl:"Tenants suspendus", val:tenants.filter(t=>t.status==="suspendu").length,icon:<IcoAlert s={16} c={C.warn}/>,  c:C.warn,    bg:C.warnBg },
+          { lbl:"Tenants actifs",    val:tenants.filter(t=>t.status==="actif").length,  icon:<IcoLayers2 s={16} c="#7C3AED"/>, c:"#7C3AED", bg:"#F3EEFF" },
+          { lbl:"Total membres",     val:tenants.reduce((s,t)=>s+t.members,0),          icon:<IcoUsers2 s={16} c={C.ok}/>,     c:C.ok,      bg:C.okBg },
+          { lbl:"CA plateforme",     val:"18 330 €",                                    icon:<IcoEuro2 s={16} c={C.accent}/>,  c:C.accent,  bg:C.accentBg },
+          { lbl:"Tenants suspendus", val:tenants.filter(t=>t.status==="suspendu").length,icon:<IcoAlert2 s={16} c={C.warn}/>,  c:C.warn,    bg:C.warnBg },
         ].map(s=>(
           <Card key={s.lbl} style={{ padding:"12px 14px" }}>
             <div style={{ width:28, height:28, borderRadius:7, background:s.bg, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:6 }}>{s.icon}</div>
@@ -411,7 +411,7 @@ function Settings({ isMobile }) {
         ))}
       </div>
       <Card noPad>
-        <SectionHead action={<Button sm variant="primary" onClick={()=>setModal({type:"newTenant"})}><span style={{display:"flex",alignItems:"center",gap:5}}><IcoUserPlus s={13} c="white"/>Nouveau tenant</span></Button>}>
+        <SectionHead action={<Button sm variant="primary" onClick={()=>setModal({type:"newTenant"})}><span style={{display:"flex",alignItems:"center",gap:5}}><IcoUserPlus2 s={13} c="white"/>Nouveau tenant</span></Button>}>
           Tous les tenants
         </SectionHead>
         {tenants.map(t=>(
@@ -614,8 +614,8 @@ function Settings({ isMobile }) {
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12, marginBottom:10 }}>
             <div style={{ display:"flex", alignItems:"center", gap:10 }}>
               <div style={{ width:36, height:36, borderRadius:9, background:r.bg, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                {key==="superadmin"&&<IcoLayers s={18} c={r.color}/>}{key==="admin"&&<IcoSettings s={18} c={r.color}/>}
-                {key==="staff"&&<IcoCalendar s={18} c={r.color}/>}{key==="adherent"&&<IcoUsers s={18} c={r.color}/>}
+                {key==="superadmin"&&<IcoLayers2 s={18} c={r.color}/>}{key==="admin"&&<IcoSettings2 s={18} c={r.color}/>}
+                {key==="staff"&&<IcoCalendar2 s={18} c={r.color}/>}{key==="adherent"&&<IcoUsers2 s={18} c={r.color}/>}
               </div>
               <div>
                 <div style={{ fontSize:15, fontWeight:700, color:C.text }}>{r.label}</div>
@@ -1023,7 +1023,7 @@ function Settings({ isMobile }) {
       {/* Toast */}
       {toast && (
         <div style={{ position:"fixed", top:20, right:20, zIndex:600, display:"flex", alignItems:"center", gap:10, padding:"12px 18px", background:toast.ok!==false?C.ok:C.warn, borderRadius:10, color:"white", fontSize:14, fontWeight:600, boxShadow:"0 8px 24px rgba(0,0,0,.15)" }}>
-          {toast.ok!==false ? <IcoCheck s={16} c="white"/> : <IcoAlert s={16} c="white"/>}{toast.msg}
+          {toast.ok!==false ? <IcoCheck s={16} c="white"/> : <IcoAlert2 s={16} c="white"/>}{toast.msg}
         </div>
       )}
       {/* Modals */}
