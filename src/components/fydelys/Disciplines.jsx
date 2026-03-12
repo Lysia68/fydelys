@@ -9,6 +9,50 @@ import { IcoLayers, IcoX, IcoChevron, DISC_ICONS } from "./icons";
 import { Card, SectionHead, Button, Field, Pill, EmptyState, DemoBanner } from "./ui";
 import { TimePicker, DurationPicker, DaySelect } from "./pickers";
 
+const DISCIPLINE_EMOJIS = [
+  "🧘","🧘‍♀️","🧘‍♂️","🤸","🤸‍♀️","🏃","🏋️","🏋️‍♀️","💃","🕺",
+  "🥊","🤼","🏊","🚴","🧗","🤺","⛹️","🏌️","🎯","🎽",
+  "🌿","🌸","🌺","🌻","☀️","🌙","⭐","✨","🔥","💧",
+  "🫧","🍃","🌱","🪷","🦋","🕊️","🐚","🪨","🎋","🎍",
+  "💪","🙏","❤️","🫀","🧠","👁️","🦵","🤲","👐","🫶",
+];
+
+
+function EmojiPicker({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+  return (
+    <div ref={ref} style={{ position:"relative" }}>
+      <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, textTransform:"uppercase", letterSpacing:.8, marginBottom:5 }}>Icône</div>
+      <button onClick={()=>setOpen(o=>!o)}
+        style={{ width:52, height:42, borderRadius:9, border:`1.5px solid ${open?C.accent:C.border}`, background:C.surfaceWarm, fontSize:22, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", transition:"border-color .15s" }}>
+        {value || "🏃"}
+      </button>
+      {open && (
+        <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, zIndex:999, background:C.surface, border:`1.5px solid ${C.accent}`, borderRadius:12, boxShadow:"0 8px 32px rgba(42,31,20,.18)", padding:10, width:290 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(8,1fr)", gap:4 }}>
+            {DISCIPLINE_EMOJIS.map(e => (
+              <button key={e} onClick={()=>{ onChange(e); setOpen(false); }}
+                style={{ width:32, height:32, border:"none", borderRadius:8, background:e===value?C.accentLight:"transparent", fontSize:22, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", transition:"background .1s", padding:0 }}
+                onMouseEnter={ev=>{ if(e!==value) ev.currentTarget.style.background=C.accentLight; }}
+                onMouseLeave={ev=>{ ev.currentTarget.style.background=e===value?C.accentLight:"transparent"; }}>
+                {e}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function DisciplinesPage({ isMobile }) {
   const { discs, setDiscs, studioId: ctxStudioId } = useContext(AppCtx);
   const [nD, setND]         = useState({ name:"", icon:"🏃", color:C.accent });
@@ -183,7 +227,7 @@ function DisciplinesPage({ isMobile }) {
             <div style={{background:C.surface,borderRadius:16,width:"100%",maxWidth:360,padding:24,boxShadow:"0 24px 60px rgba(0,0,0,.18)"}}>
               <div style={{fontSize:15,fontWeight:800,color:C.text,marginBottom:16}}>Modifier la discipline</div>
               <div style={{display:"grid",gridTemplateColumns:"56px 1fr",gap:10,marginBottom:16}}>
-                <Field label="Icône" value={editName.icon} onChange={v=>setEditName(e=>({...e,icon:v}))}/>
+                <EmojiPicker value={editName.icon} onChange={v=>setEditName(e=>({...e,icon:v}))}/>
                 <Field label="Nom" value={editName.name} onChange={v=>setEditName(e=>({...e,name:v}))} placeholder="Nom de la discipline"/>
               </div>
               <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
@@ -242,7 +286,7 @@ function DisciplinesPage({ isMobile }) {
       <Card style={{ maxWidth:480 }}>
         <div style={{ fontSize:14, fontWeight:700, color:C.accent, textTransform:"uppercase", marginBottom:16 }}>Ajouter une discipline</div>
         <div style={{ display:"grid", gridTemplateColumns:"56px 1fr auto", gap:10, alignItems:"end" }}>
-          <Field label="Icône" value={nD.icon} onChange={v=>setND({...nD,icon:v})}/>
+          <EmojiPicker value={nD.icon} onChange={v=>setND({...nD,icon:v})}/>
           <Field label="Nom" value={nD.name} onChange={v=>setND({...nD,name:v})} placeholder="Ex: Hot Yoga"/>
           <div style={{ paddingTop:22 }}>
             <Button variant="primary" onClick={async ()=>{
