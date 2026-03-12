@@ -37,6 +37,17 @@ const PAGE_TITLES = {
   subscriptions:"Abonnements", payments:"Paiements", disciplines:"Disciplines",
   settings:"Paramètres", aide:"Aide"
 };
+  const [sharedStudioId, setSharedStudioId] = useState(propStudioId || null);
+  useEffect(() => {
+    if (propStudioId) { setSharedStudioId(propStudioId); return; }
+    if (sharedStudioId) return;
+    createClient().auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return;
+      const { data: prof } = await createClient().from("profiles").select("studio_id").eq("id", user.id).single();
+      if (prof?.studio_id) setSharedStudioId(prof.studio_id);
+    });
+  }, [propStudioId]);
+
   const [role, setRole] = useState(initialRole);
   const [impersonating, setImpersonating] = useState(null);
   const [impersonatedCoach, setImpersonatedCoach] = useState({ name:"", disciplines:[] });
@@ -107,16 +118,6 @@ const PAGE_TITLES = {
   const isMobile = width < 768;
 
   // ── ALL HOOKS MUST BE BEFORE CONDITIONAL RETURNS ──────────────────────────
-  const [sharedStudioId, setSharedStudioId] = useState(propStudioId || null);
-  useEffect(() => {
-    if (propStudioId) { setSharedStudioId(propStudioId); return; }
-    if (sharedStudioId) return;
-    createClient().auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return;
-      const { data: prof } = await createClient().from("profiles").select("studio_id").eq("id", user.id).single();
-      if (prof?.studio_id) setSharedStudioId(prof.studio_id);
-    });
-  }, [propStudioId]);
 
   const trialDaysLeft = trialEndsAt
     ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / 86400000))
