@@ -52,11 +52,11 @@ export async function POST(request: NextRequest) {
   const studioEmail = studio.email || "noreply@fydelys.fr"
 
   // Insérer l'invitation en base (le callback en tiendra compte pour le rôle)
-  // Vérifier si l'email est déjà utilisé par un autre user auth
+  // Un seul appel listUsers — réutilisé pour vérif doublon ET création
   const { data: { users: allUsers } } = await db.auth.admin.listUsers({ perPage: 1000 })
   const existingAuthUser = allUsers?.find((u: any) => u.email?.toLowerCase() === email.toLowerCase())
-  
-  // Si l'user existe déjà et a déjà un profil dans CE studio → erreur
+
+  // Si l'user existe déjà avec un profil dans CE studio → erreur doublon
   if (existingAuthUser) {
     const { data: existingProfile } = await db.from("profiles")
       .select("id, role").eq("id", existingAuthUser.id).eq("studio_id", studio.id).single()
@@ -75,10 +75,8 @@ export async function POST(request: NextRequest) {
   })
   if (inviteErr) console.error("invitations insert error:", inviteErr)
 
-  // Créer le user s'il n'existe pas encore (coach nouvellement invité)
-  const { data: { users: allUsers } } = await db.auth.admin.listUsers({ perPage: 1000 })
-  const existingCoach = allUsers?.find((u: any) => u.email?.toLowerCase() === email.toLowerCase())
-  if (!existingCoach) {
+  // Créer le user s'il n'existe pas encore
+  if (!existingAuthUser) {
     const { error: createErr } = await db.auth.admin.createUser({
       email: email.toLowerCase(),
       email_confirm: false,
