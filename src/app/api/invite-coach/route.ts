@@ -123,14 +123,15 @@ export async function POST(request: NextRequest) {
     <tr><td align="center">
       <table width="100%" style="max-width:520px;background:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid #DDD5C8;box-shadow:0 4px 24px rgba(42,31,20,.08);">
 
-        <!-- Header studio -->
+                <!-- Header studio -->
         <tr>
-          <td style="background:linear-gradient(135deg,#2A1F14,#3D2E1E);padding:28px 32px;text-align:center;">
-            <div style="font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;line-height:1;">
+          <td style="background:#2A1F14;padding:28px 32px;text-align:center;">
+            <img src="https://fydelys.fr/logo-email.png" alt="Fydelys" width="40" height="40" style="display:block;margin:0 auto 10px;border-radius:10px;" onerror="this.style.display='none'"/>
+            <div style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">
               ${studioName}
             </div>
-            <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:6px;text-transform:uppercase;letter-spacing:1.5px;">
-              Invitation Coach
+            <div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:6px;text-transform:uppercase;letter-spacing:1.5px;">
+              Connexion sécurisée
             </div>
           </td>
         </tr>
@@ -146,13 +147,13 @@ export async function POST(request: NextRequest) {
               Cliquez sur le bouton ci-dessous pour accéder à votre espace — aucun mot de passe n'est nécessaire.
             </p>
 
-            <!-- CTA -->
+                        <!-- CTA -->
             <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;">
               <tr>
-                <td align="center">
+                <td align="center" bgcolor="#9A6030" style="border-radius:12px;">
                   <a href="${magicLinkUrl}"
-                    style="display:inline-block;padding:14px 32px;background:linear-gradient(145deg,#B88050,#9A6030);color:#ffffff;text-decoration:none;border-radius:12px;font-size:15px;font-weight:700;letter-spacing:-0.2px;">
-                    Rejoindre ${studioName} ✦
+                    style="display:inline-block;padding:14px 32px;background-color:#9A6030;color:#ffffff;text-decoration:none;border-radius:12px;font-size:15px;font-weight:700;letter-spacing:-0.2px;font-family:Arial,sans-serif;">
+                    Accéder à mon espace &rarr;
                   </a>
                 </td>
               </tr>

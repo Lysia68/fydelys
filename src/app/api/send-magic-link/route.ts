@@ -13,8 +13,40 @@ export async function POST(request: NextRequest) {
   }
 
   const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY
+
+  // ── Fallback : si SendGrid non configuré, on utilise Supabase OTP directement ──
   if (!SENDGRID_API_KEY) {
-    return NextResponse.json({ error: "Config email manquante" }, { status: 500 })
+    const db = createServiceSupabase()
+    const { data: studio } = await db.from("studios").select("id").eq("slug", tenantSlug).single()
+    const redirectTo = `https://fydelys.fr/auth/callback?tenant=${tenantSlug}&next=/dashboard`
+    // Créer le compte si besoin
+    if (studio) {
+      const { data: existingUsers } = await db.auth.admin.listUsers()
+      const userExists = existingUsers?.users?.some((u: any) => u.email === email)
+      if (!userExists) {
+        await db.auth.admin.createUser({
+          email,
+          email_confirm: false,
+          app_metadata: { studio_id: studio.id, studio_slug: tenantSlug },
+          user_metadata: { role: "adherent" },
+        })
+      }
+    }
+    // Supabase envoie son propre magic link
+    const { createClient } = await import("@supabase/supabase-js")
+    const anonClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    const { error: otpErr } = await anonClient.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: redirectTo }
+    })
+    if (otpErr) {
+      console.error("OTP fallback error:", otpErr)
+      return NextResponse.json({ error: "Erreur envoi email" }, { status: 500 })
+    }
+    return NextResponse.json({ ok: true, fallback: true })
   }
 
   const db = createServiceSupabase()
@@ -90,10 +122,11 @@ export async function POST(request: NextRequest) {
     <tr><td align="center">
       <table width="100%" style="max-width:520px;background:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid #DDD5C8;box-shadow:0 4px 24px rgba(42,31,20,.08);">
 
-        <!-- Header -->
+                <!-- Header studio -->
         <tr>
-          <td style="background:linear-gradient(135deg,#2A1F14,#3D2E1E);padding:28px 32px;text-align:center;">
-            <div style="font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">
+          <td style="background:#2A1F14;padding:28px 32px;text-align:center;">
+            <img src="https://fydelys.fr/logo-email.png" alt="Fydelys" width="40" height="40" style="display:block;margin:0 auto 10px;border-radius:10px;" onerror="this.style.display='none'"/>
+            <div style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">
               ${studioName}
             </div>
             <div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:6px;text-transform:uppercase;letter-spacing:1.5px;">
@@ -113,13 +146,13 @@ export async function POST(request: NextRequest) {
               Cliquez sur le bouton ci-dessous — aucun mot de passe n'est nécessaire.
             </p>
 
-            <!-- CTA -->
-            <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                        <!-- CTA -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;">
               <tr>
-                <td align="center">
+                <td align="center" bgcolor="#9A6030" style="border-radius:12px;">
                   <a href="${magicLinkUrl}"
-                    style="display:inline-block;padding:14px 32px;background:linear-gradient(145deg,#B88050,#9A6030);color:#ffffff;text-decoration:none;border-radius:12px;font-size:15px;font-weight:700;letter-spacing:-0.2px;">
-                    Accéder à mon espace ✦
+                    style="display:inline-block;padding:14px 32px;background-color:#9A6030;color:#ffffff;text-decoration:none;border-radius:12px;font-size:15px;font-weight:700;letter-spacing:-0.2px;font-family:Arial,sans-serif;">
+                    Accéder à mon espace &rarr;
                   </a>
                 </td>
               </tr>
