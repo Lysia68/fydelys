@@ -37,57 +37,28 @@ export default function AuthConfirmPage() {
         const user = data.user
         const tenantSlug = tenant || user.app_metadata?.studio_slug
 
-        // Vérifier si profil existe
-        const { data: profile } = await supabase
-          .from("profiles").select("role, studio_id").eq("id", user.id).single()
-
-        if (!profile && tenantSlug) {
-          // Créer le profil coach/adhérent
-          const { data: studio } = await supabase
-            .from("studios").select("id").eq("slug", tenantSlug).single()
-
-          if (studio) {
-            const { data: invite } = await supabase
-              .from("invitations").select("role")
-              .eq("email", user.email!).eq("studio_id", studio.id)
-              .eq("used", false).single()
-
-            const role = invite?.role || user.user_metadata?.role || "adherent"
-
-            await supabase.from("profiles").insert({
-              id: user.id, role, studio_id: studio.id,
-              first_name: user.user_metadata?.first_name || "",
-              last_name:  user.user_metadata?.last_name  || "",
-            })
-
-            if (invite) {
-              await supabase.from("invitations").update({ used: true })
-                .eq("email", user.email!).eq("studio_id", studio.id)
-            }
-
-            if (role === "adherent") {
-              await supabase.from("members").upsert({
-                studio_id: studio.id, auth_user_id: user.id,
-                first_name: user.user_metadata?.first_name || "Nouveau",
-                last_name:  user.user_metadata?.last_name  || "Membre",
-                email: user.email, status: "nouveau", credits: 0, credits_total: 0,
-              }, { onConflict: "studio_id,email" })
-            }
-          }
-        }
-
-        // Rediriger vers le bon studio
-        const slug = tenantSlug || profile?.studio_id && await supabase
-          .from("studios").select("slug").eq("id", profile.studio_id).single()
-          .then(r => r.data?.slug)
-
-        if (slug) {
-          window.location.href = `https://${slug}.fydelys.fr/dashboard`
-        } else if (profile?.role === "admin" || profile?.role === "superadmin") {
+        if (!tenantSlug) {
+          // Admin ou superadmin — laisser le layout gérer
           window.location.href = "https://fydelys.fr/dashboard"
-        } else {
-          window.location.href = "/login?error=studio_introuvable"
+          return
         }
+
+        // Appeler la route API server-side pour créer le profil (service role)
+        const res = await fetch("/api/create-profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: user.id,
+            userEmail: user.email,
+            userMetadata: user.user_metadata,
+            tenantSlug,
+          }),
+        })
+
+        const result = await res.json()
+        const slug = result.slug || tenantSlug
+
+        window.location.href = `https://${slug}.fydelys.fr/dashboard`
       })
   }, [])
 
