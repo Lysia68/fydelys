@@ -113,11 +113,19 @@ function Dashboard({ isMobile }) {
         let bkMap = {};
         if (sessionIds.length > 0) {
           const { data: bkData } = await sb.from("bookings")
-            .select("session_id, status")
+            .select("session_id, status, attended, member_id, members(first_name, last_name, email, phone)")
             .in("session_id", sessionIds);
           (bkData || []).forEach(b => {
             if (!bkMap[b.session_id]) bkMap[b.session_id] = [];
-            bkMap[b.session_id].push({ st: b.status });
+            bkMap[b.session_id].push({
+              id: b.member_id,
+              st: b.status,
+              attended: b.attended,
+              fn: b.members?.first_name || "",
+              ln: b.members?.last_name  || "",
+              email: b.members?.email   || "",
+              phone: b.members?.phone   || "",
+            });
           });
         }
 
