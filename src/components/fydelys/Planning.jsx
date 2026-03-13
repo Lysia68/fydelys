@@ -118,7 +118,7 @@ function DiscSelect({ label, value, onChange, options }) {
 }
 
 // ── Session card ─────────────────────────────────────────────────────────────
-function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onChangeStatus, onDelete, onCancel, onRestore, onAddBooking, onSendReminder, closures = [], isMobile = false, onConfirm }) {
+function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onChangeStatus, onDelete, onCancel, onRestore, onAddBooking, onSendReminder, closures = [], isMobile = false, onConfirm, roomsList = [] }) {
   const allDiscs = discs?.length ? discs : DISCIPLINES;
   const disc = allDiscs.find(d => String(d.id) === String(sess.disciplineId)) || allDiscs[0] || { name: "Cours", color: C.accent, icon: "🧘" };
   const bl     = bookings[sess.id] || [];
@@ -1148,7 +1148,7 @@ function Planning({ isMobile }) {
           <div key={item.date} style={{ marginBottom: 22 }}>
             <DateLabel date={item.date} />
             {filtered.filter(s => s.date === item.date).map(s => (
-              <PlanningSessionCard key={s.id} sess={s} expandedId={expandedId} bookings={bookings} discs={effectiveDiscs} closures={closures} isMobile={isMobile} onConfirm={openConfirm}
+              <PlanningSessionCard key={s.id} sess={s} expandedId={expandedId} bookings={bookings} discs={effectiveDiscs} closures={closures} isMobile={isMobile} onConfirm={openConfirm} roomsList={roomsList}
                 onToggle={id => setExpandedId(prev => prev === id ? null : id)}
                 onChangeStatus={handleChangeStatus}
                 onAddBooking={id => setBookingModal(id)}
