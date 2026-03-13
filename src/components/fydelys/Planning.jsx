@@ -150,12 +150,12 @@ function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onCh
   return (
     <div style={{ border: `1.5px solid ${isExp ? C.accent : C.borderSoft}`, borderRadius: 14, overflow: "hidden", marginBottom: 8, boxShadow: isExp ? `0 2px 12px rgba(176,120,72,.13)` : "0 1px 3px rgba(0,0,0,.05)", transition: "all .2s" }}>
       <div onClick={() => onToggle(sess.id)}
-        style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", cursor: "pointer", background: isExp ? C.accentBg : C.surface, transition: "background .15s" }}
+        style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", cursor: "pointer", background: isExp ? C.accentBg : C.surface, transition: "background .15s", flexWrap: (isExp && isMobile) ? "wrap" : "nowrap" }}
         onMouseEnter={e => { if (!isExp) e.currentTarget.style.background = C.surfaceWarm; }}
         onMouseLeave={e => { if (!isExp) e.currentTarget.style.background = C.surface; }}>
         <div style={{ width: 4, height: 42, borderRadius: 3, background: disc.color, flexShrink: 0 }} />
         <div style={{ fontSize: 13, fontWeight: 800, color: C.accent, width: 40, flexShrink: 0 }}>{sess.time}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, width: (isExp && isMobile) ? "calc(100% - 60px)" : "auto" }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 7 }}>
             <span style={{ fontSize: 16 }}>{disc.icon}</span>{disc.name}
           </div>
@@ -174,17 +174,16 @@ function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onCh
         )}
         {/* Boutons actions inline (séance expanded) */}
         {isExp && (
-          <div onClick={e => e.stopPropagation()} style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+          <div onClick={e => e.stopPropagation()} style={{ display: "flex", gap: 4, flexShrink: 0, ...(isMobile ? { width:"100%", paddingTop:6, borderTop:`1px solid ${C.borderSoft}`, marginTop:2 } : {}) }}>
             <button onClick={() => onSendReminder && onSendReminder(sess.id)}
               title="Envoyer un rappel"
               style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, padding: "5px 9px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.surfaceWarm, color: C.textSoft, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
-              <IcoMail s={13} c={C.textSoft} />
-              {!isMobile && <span>Rappel</span>}
+              <IcoMail s={13} c={C.textSoft} /> Rappel
             </button>
             {sess.status !== "cancelled" && onCancel && (
               <button onClick={() => onCancel(sess.id)} title="Annuler cette séance"
                 style={{ display:"flex", alignItems:"center", gap:4, fontSize: 12, padding: "5px 9px", borderRadius: 8, border: `1px solid #EFC8BC`, background: "#FFF5F5", color: C.warn, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
-                ⚠ <span style={{ display: isMobile ? "none" : "inline" }}>Annuler</span>
+                ⚠ Annuler
               </button>
             )}
             {sess.status === "cancelled" && onCancel && (
@@ -193,7 +192,7 @@ function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onCh
                 : onRestore && onRestore(sess.id)
               } title="Rétablir la séance"
                 style={{ display:"flex", alignItems:"center", gap:4, fontSize: 12, padding: "5px 9px", borderRadius: 8, border: `1px solid #B8DFC4`, background: C.okBg, color: C.ok, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
-                ↩ <span style={{ display: isMobile ? "none" : "inline" }}>Rétablir</span>
+                ↩ Rétablir
               </button>
             )}
             {onDelete && (
@@ -551,6 +550,44 @@ function Planning({ isMobile }) {
     ? sessions.filter(s => filterDiscs.includes(String(s.disciplineId)))
     : sessions;
   const dates = [...new Set(filtered.map(s => s.date))].sort();
+
+  // Construire la timeline enrichie : jours séances + plages fermetures intercalées
+  const timeline = (() => {
+    if (!closures.length) return dates.map(d => ({ type:"day", date:d }));
+    // Bornes de la fenêtre : premier/dernier jour de séance ± une marge
+    const allDates = dates.length ? dates : [];
+    const minDate = allDates[0] || null;
+    const maxDate = allDates[allDates.length - 1] || null;
+    if (!minDate) return [];
+    // Collect closure blocks visible in window
+    const closureBlocks = closures.filter(c => c.date_end >= minDate && c.date_start <= maxDate);
+    // Build a set of all "items" sorted by date
+    const items = [];
+    const sessionDaySet = new Set(dates);
+    // Add all session days
+    dates.forEach(d => items.push({ type:"day", date:d }));
+    // Add closure blocks (avoid duplicating if session exists same day)
+    closureBlocks.forEach(c => {
+      // Insert closure banner before the first session day AFTER the closure start
+      const insertDate = c.date_start;
+      items.push({ type:"closure", date:insertDate, closure:c });
+    });
+    // Sort: closures appear before sessions of same date
+    items.sort((a,b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      if (a.type === "closure" && b.type === "day") return -1;
+      return 1;
+    });
+    // Deduplicate consecutive closures with same id
+    const seen = new Set();
+    return items.filter(item => {
+      if (item.type !== "closure") return true;
+      const key = item.closure.id;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  })();
 
   // Actions sessions
   const addSession = async () => {
@@ -1093,10 +1130,23 @@ function Planning({ isMobile }) {
           <div style={{ textAlign: "center", padding: "40px 0", color: C.textMuted, fontSize: 15 }}>⏳ Chargement…</div>
         ) : dates.length === 0 ? (
           <EmptyState icon="📅" title="Aucune séance" sub={filterDiscs.length ? "Aucune séance pour cette discipline" : "Commencez par créer une séance !"} />
-        ) : dates.map(date => (
-          <div key={date} style={{ marginBottom: 22 }}>
-            <DateLabel date={date} />
-            {filtered.filter(s => s.date === date).map(s => (
+        ) : timeline.map((item, idx) => item.type === "closure" ? (
+          <div key={"cl-"+item.closure.id} style={{ display:"flex", alignItems:"center", gap:10, margin:"4px 0 12px", padding:"10px 16px", background:"#FFFBEB", borderRadius:12, border:"1.5px solid #FDE68A" }}>
+            <span style={{ fontSize:18 }}>🔒</span>
+            <div>
+              <div style={{ fontSize:13, fontWeight:800, color:"#92400E" }}>{item.closure.label || "Fermeture studio"}</div>
+              <div style={{ fontSize:12, color:"#B45309", marginTop:1 }}>
+                {item.closure.date_start === item.closure.date_end
+                  ? new Date(item.closure.date_start + "T12:00:00").toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long" })
+                  : `Du ${new Date(item.closure.date_start + "T12:00:00").toLocaleDateString("fr-FR", { day:"numeric", month:"long" })} au ${new Date(item.closure.date_end + "T12:00:00").toLocaleDateString("fr-FR", { day:"numeric", month:"long" })}`
+                }
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div key={item.date} style={{ marginBottom: 22 }}>
+            <DateLabel date={item.date} />
+            {filtered.filter(s => s.date === item.date).map(s => (
               <PlanningSessionCard key={s.id} sess={s} expandedId={expandedId} bookings={bookings} discs={effectiveDiscs} closures={closures} isMobile={isMobile} onConfirm={openConfirm}
                 onToggle={id => setExpandedId(prev => prev === id ? null : id)}
                 onChangeStatus={handleChangeStatus}
