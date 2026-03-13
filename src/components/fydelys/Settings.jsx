@@ -87,7 +87,7 @@ function Settings({ isMobile, onImpersonate }) {
   const realRole = userRole || "admin";
   const [currentRole, setCurrentRole] = useState(realRole);
   // ── Données studio depuis Supabase
-  const [studioForm, setStudioForm] = useState({ name:"", address:"", phone:"", email:"", website:"", cancel_delay_hours:12, booking_days_ahead:7, waitlist_max:10 });
+  const [studioForm, setStudioForm] = useState({ name:"", address:"", city:"", phone:"", email:"", website:"", cancel_delay_hours:12, booking_days_ahead:7, waitlist_max:10, timezone:"Europe/Paris", reminder_hours_default:24 });
   const [studioSaving, setStudioSaving] = useState(false);
   const [studioToast, setStudioToast] = useState(null);
   const showStudioToast = (msg, ok=true) => { setStudioToast({msg,ok}); setTimeout(()=>setStudioToast(null),3000); };
@@ -95,7 +95,7 @@ function Settings({ isMobile, onImpersonate }) {
   React.useEffect(() => {
     if (!studioId) return;
     createClient().from("studios")
-      .select("name, address, city, phone, email, website, cancel_delay_hours, booking_days_ahead, waitlist_max")
+      .select("name, address, city, phone, email, website, cancel_delay_hours, booking_days_ahead, waitlist_max, timezone, reminder_hours_default")
       .eq("id", studioId).single()
       .then(({ data }) => {
         if (data) setStudioForm({
@@ -108,6 +108,8 @@ function Settings({ isMobile, onImpersonate }) {
           cancel_delay_hours: data.cancel_delay_hours ?? 12,
           booking_days_ahead: data.booking_days_ahead ?? 7,
           waitlist_max: data.waitlist_max ?? 10,
+          timezone: data.timezone || "Europe/Paris",
+          reminder_hours_default: data.reminder_hours_default ?? 24,
         });
       });
   }, [studioId]);
@@ -125,6 +127,8 @@ function Settings({ isMobile, onImpersonate }) {
       cancel_delay_hours: parseInt(studioForm.cancel_delay_hours) || 12,
       booking_days_ahead: parseInt(studioForm.booking_days_ahead) || 7,
       waitlist_max: parseInt(studioForm.waitlist_max) || 10,
+      timezone: studioForm.timezone || "Europe/Paris",
+      reminder_hours_default: parseInt(studioForm.reminder_hours_default) || 24,
     }).eq("id", studioId);
     setStudioSaving(false);
     if (error) showStudioToast("Erreur : " + error.message, false);
@@ -494,6 +498,32 @@ function Settings({ isMobile, onImpersonate }) {
             <SI label="Délai annulation (h)" fkey="cancel_delay_hours" type="number"/>
             <SI label="Ouverture résa (j avant)" fkey="booking_days_ahead" type="number"/>
             <SI label="Liste d'attente max" fkey="waitlist_max" type="number"/>
+          </div>
+          <div style={{ padding:"0 18px 16px", borderTop:`1px solid ${C.borderSoft}`, paddingTop:16 }}>
+            <div style={{ fontSize:11, fontWeight:800, color:C.accent, textTransform:"uppercase", letterSpacing:.6, marginBottom:12 }}>🔔 Notifications</div>
+            <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:12, marginBottom:10 }}>
+              <div>
+                <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, textTransform:"uppercase", letterSpacing:.8, marginBottom:5 }}>Fuseau horaire (UTC)</div>
+                <select value={studioForm.timezone} disabled={!isAdmin}
+                  onChange={e=>setStudioForm(f=>({...f,timezone:e.target.value}))}
+                  style={{ width:"100%", padding:"9px 12px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:13, color:C.text, background:C.surfaceWarm, outline:"none", cursor:isAdmin?"pointer":"default", opacity:isAdmin?1:.6 }}>
+                  {["Europe/Paris","Europe/London","Europe/Brussels","Europe/Zurich","Europe/Madrid","Europe/Rome","Europe/Berlin","Europe/Amsterdam","Europe/Lisbon","America/New_York","America/Chicago","America/Los_Angeles","America/Montreal","America/Sao_Paulo","Asia/Dubai","Asia/Singapore","Asia/Tokyo","Pacific/Auckland","Australia/Melbourne","Africa/Casablanca","UTC"].map(tz=>(
+                    <option key={tz} value={tz}>{tz.replace(/_/g," ")}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, textTransform:"uppercase", letterSpacing:.8, marginBottom:5 }}>Rappel cours (heures avant)</div>
+                <select value={studioForm.reminder_hours_default} disabled={!isAdmin}
+                  onChange={e=>setStudioForm(f=>({...f,reminder_hours_default:parseInt(e.target.value)}))}
+                  style={{ width:"100%", padding:"9px 12px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:13, color:C.text, background:C.surfaceWarm, outline:"none", cursor:isAdmin?"pointer":"default", opacity:isAdmin?1:.6 }}>
+                  {[1,2,3,6,12,24,48].map(h=><option key={h} value={h}>{h}h avant la séance</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{ fontSize:12, color:C.textMuted, background:C.bg, padding:"8px 12px", borderRadius:8, border:`1px solid ${C.borderSoft}` }}>
+              ℹ Un email de rappel sera envoyé <strong>{studioForm.reminder_hours_default}h</strong> avant chaque séance, et un email d'anniversaire le jour J, selon le fuseau <strong>{studioForm.timezone}</strong>.
+            </div>
           </div>
           {isAdmin && (
             <div style={{ padding:"0 18px 16px" }}>

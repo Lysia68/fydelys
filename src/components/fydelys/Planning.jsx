@@ -461,13 +461,19 @@ function Planning({ isMobile }) {
       sb.from("disciplines").select("id,name,icon,color,slots").eq("studio_id", studioId).order("created_at")
         .then(({ data }) => { if (data?.length) setLocalDiscs(data.map(d => ({ ...d, slots: d.slots || [] }))); });
     }
-    // Coachs — toujours recharger pour avoir la liste à jour
-    sb.from("profiles").select("id, first_name, last_name, role, is_coach").eq("studio_id", studioId)
-      .then(({ data }) => {
-        if (data?.length) setCoachesList(
-          data.filter(c => c.role === "coach" || c.role === "admin" || c.is_coach === true).map(c => ({ id: c.id, name: `${c.first_name || ""} ${c.last_name || ""}`.trim() })).filter(c => c.name)
-        );
-      });
+    // Coachs — via /api/team (service role) pour contourner RLS profiles
+    fetch(`/api/team?studioId=${studioId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(json => {
+        if (json?.coaches?.length) {
+          setCoachesList(
+            json.coaches
+              .map(c => ({ id: c.id, name: `${c.fn || ""} ${c.ln || ""}`.trim() }))
+              .filter(c => c.name)
+          );
+        }
+      })
+      .catch(e => console.error("load coaches", e));
     // Salles
     sb.from("rooms").select("id, name, capacity, color").eq("studio_id", studioId).order("name")
       .then(({ data }) => { if (data?.length) setRoomsList(data); });
