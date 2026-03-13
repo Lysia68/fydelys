@@ -5,43 +5,226 @@ import { C } from "./theme";
 import { Button } from "./ui";
 import { IcoChevron , IcoCalendar2 } from "./icons";
 
+// ── CALENDAR DROPDOWN — partagé par DatePicker et BirthDatePicker ────────────
+function CalendarDropdown({ value, onChange, minDate, maxDate, onClose, showYear=false }) {
+  const today = new Date();
+  const initial = value ? new Date(value + "T12:00:00") : today;
+  const [view, setView] = React.useState({ year: initial.getFullYear(), month: initial.getMonth() });
+  const [pickingYear, setPickingYear] = React.useState(false);
+
+  const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+  const DAYS_FR   = ["Lu","Ma","Me","Je","Ve","Sa","Di"];
+
+  const toISO = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  const minD = minDate ? new Date(minDate+"T00:00:00") : null;
+  const maxD = maxDate ? new Date(maxDate+"T23:59:59") : null;
+  const selD = value ? new Date(value+"T12:00:00") : null;
+
+  // Days grid
+  const firstDay = new Date(view.year, view.month, 1);
+  const startOffset = (firstDay.getDay() + 6) % 7; // Mon=0
+  const daysInMonth = new Date(view.year, view.month+1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < startOffset; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  const isDisabled = (d) => {
+    const dd = new Date(view.year, view.month, d);
+    if (minD && dd < minD) return true;
+    if (maxD && dd > maxD) return true;
+    return false;
+  };
+  const isSelected = (d) => selD && selD.getFullYear()===view.year && selD.getMonth()===view.month && selD.getDate()===d;
+  const isToday = (d) => today.getFullYear()===view.year && today.getMonth()===view.month && today.getDate()===d;
+
+  const prevMonth = () => setView(v => v.month===0 ? {year:v.year-1,month:11} : {year:v.year,month:v.month-1});
+  const nextMonth = () => setView(v => v.month===11 ? {year:v.year+1,month:0} : {year:v.year,month:v.month+1});
+
+  const yearRange = [];
+  const minYear = minD ? minD.getFullYear() : (showYear ? 1930 : today.getFullYear()-3);
+  const maxYear = maxD ? maxD.getFullYear() : (showYear ? today.getFullYear() : today.getFullYear()+2);
+  for (let y = maxYear; y >= minYear; y--) yearRange.push(y);
+
+  const S = {
+    wrap: { background:C.surface, border:`1.5px solid ${C.accent}40`, borderRadius:12,
+      boxShadow:"0 8px 32px rgba(42,31,20,.18)", padding:14, width:252, userSelect:"none" },
+    nav: { display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 },
+    navBtn: { background:"none", border:`1px solid ${C.border}`, borderRadius:7, width:28, height:28,
+      display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:C.textMuted, fontSize:13 },
+    monthLabel: { fontSize:13, fontWeight:800, color:C.text, cursor:"pointer", padding:"2px 6px",
+      borderRadius:6, transition:"background .12s" },
+    grid: { display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:2 },
+    dayHead: { textAlign:"center", fontSize:10, fontWeight:700, color:C.textMuted, padding:"4px 0", textTransform:"uppercase" },
+    day: (d, disabled, selected, tod) => ({
+      textAlign:"center", fontSize:12, fontWeight: selected?700 : tod?600:400,
+      padding:"5px 2px", borderRadius:7, cursor: disabled?"not-allowed":"pointer",
+      background: selected ? C.accent : "transparent",
+      color: disabled ? C.textMuted : selected ? "#fff" : tod ? C.accent : C.text,
+      border: tod && !selected ? `1px solid ${C.accent}50` : "1px solid transparent",
+      opacity: disabled ? .4 : 1, transition:"background .1s",
+    }),
+    footer: { display:"flex", justifyContent:"space-between", marginTop:10, paddingTop:8, borderTop:`1px solid ${C.border}` },
+    link: { fontSize:11, fontWeight:600, color:C.accent, background:"none", border:"none", cursor:"pointer", padding:"2px 4px" },
+    yearGrid: { display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:4, maxHeight:180, overflowY:"auto",
+      scrollbarWidth:"thin", scrollbarColor:`${C.accent}40 transparent` },
+    yearBtn: (y) => ({ padding:"6px 4px", borderRadius:7, border:"none", cursor:"pointer", fontSize:12, fontWeight:view.year===y?800:400,
+      background: view.year===y ? C.accent : "transparent", color: view.year===y ? "#fff" : C.text }),
+  };
+
+  if (pickingYear) return (
+    <div style={S.wrap}>
+      <div style={S.nav}>
+        <span style={{ fontSize:12, fontWeight:700, color:C.text }}>Choisir une année</span>
+        <button style={S.navBtn} onClick={()=>setPickingYear(false)}>✕</button>
+      </div>
+      <div style={S.yearGrid}>
+        {yearRange.map(y => (
+          <button key={y} style={S.yearBtn(y)} onClick={()=>{ setView(v=>({...v,year:y})); setPickingYear(false); }}>
+            {y}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={S.wrap}>
+      <div style={S.nav}>
+        <button style={S.navBtn} onClick={prevMonth}>‹</button>
+        <span style={S.monthLabel} onClick={()=>setPickingYear(true)}>
+          {MONTHS_FR[view.month]} {view.year} ▾
+        </span>
+        <button style={S.navBtn} onClick={nextMonth}>›</button>
+      </div>
+      <div style={S.grid}>
+        {DAYS_FR.map(d => <div key={d} style={S.dayHead}>{d}</div>)}
+        {cells.map((d, i) => d === null
+          ? <div key={`e${i}`}/>
+          : <div key={d} style={S.day(d, isDisabled(d), isSelected(d), isToday(d))}
+              onClick={()=>{ if(!isDisabled(d)) { onChange(toISO(new Date(view.year,view.month,d))); onClose?.(); } }}>
+              {d}
+            </div>
+        )}
+      </div>
+      <div style={S.footer}>
+        <button style={S.link} onClick={()=>{ onChange(""); onClose?.(); }}>Effacer</button>
+        <button style={S.link} onClick={()=>{
+          const t = toISO(today);
+          if (!isDisabled(today.getDate()) || (!minD && !maxD)) {
+            setView({ year:today.getFullYear(), month:today.getMonth() });
+            onChange(t); onClose?.();
+          }
+        }}>Aujourd'hui</button>
+      </div>
+    </div>
+  );
+}
+
 function DatePicker({ value, onChange, label, minDate, maxDate }) {
-  const inputRef = React.useRef(null);
+  const [open, setOpen] = React.useState(false);
+  const [dropPos, setDropPos] = React.useState({});
+  const ref = React.useRef(null);
+  const triggerRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+
+  const openDrop = () => {
+    if (triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect();
+      const above = window.innerHeight - r.bottom < 300 && r.top > 300;
+      setDropPos({ left:r.left, width:r.width, top:above?undefined:r.bottom+4, bottom:above?window.innerHeight-r.top+4:undefined });
+    }
+    setOpen(o => !o);
+  };
+
   const parsed = value ? new Date(value + "T12:00:00") : null;
   const displayValue = parsed
     ? parsed.toLocaleDateString("fr-FR", { weekday:"short", day:"numeric", month:"long", year:"numeric" })
     : "";
 
   return (
-    <div style={{ position:"relative" }}>
+    <div ref={ref} style={{ position:"relative" }}>
       {label && (
         <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, textTransform:"uppercase", letterSpacing:.8, marginBottom:5 }}>
           {label}
         </div>
       )}
-      <button type="button" onClick={() => inputRef.current?.showPicker?.() || inputRef.current?.click()}
+      <button ref={triggerRef} type="button" onClick={openDrop}
         style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"9px 12px",
-          border:`1.5px solid ${C.border}`, borderRadius:9, background:C.surfaceWarm,
-          cursor:"pointer", textAlign:"left", boxSizing:"border-box" }}>
-        <IcoCalendar2 s={16} c={C.textMuted}/>
+          border:`1.5px solid ${open?C.accent:C.border}`, borderRadius:9, background:C.surfaceWarm,
+          cursor:"pointer", textAlign:"left", boxSizing:"border-box", transition:"border-color .15s" }}>
+        <IcoCalendar2 s={16} c={open?C.accent:C.textMuted}/>
         <span style={{ flex:1, fontSize:13, color:displayValue?C.text:C.textMuted, fontWeight:displayValue?600:400 }}>
-          {displayValue || "Choisir une date\u2026"}
+          {displayValue || "Choisir une date…"}
         </span>
-        {value && (
-          <span onClick={e=>{ e.stopPropagation(); onChange(""); }}
-            style={{ fontSize:12, color:C.textMuted, lineHeight:1, padding:"0 2px", cursor:"pointer" }}>\u2715</span>
-        )}
+        {value
+          ? <span onClick={e=>{ e.stopPropagation(); onChange(""); setOpen(false); }}
+              style={{ fontSize:12, color:C.textMuted, lineHeight:1, padding:"0 2px", cursor:"pointer" }}>✕</span>
+          : <span style={{ fontSize:10, color:C.textMuted }}>▾</span>
+        }
       </button>
-      <input
-        ref={inputRef}
-        type="date"
-        value={value || ""}
-        min={minDate || ""}
-        max={maxDate || ""}
-        onChange={e => onChange(e.target.value)}
-        style={{ position:"absolute", top:0, left:0, width:"100%", height:"100%",
-          opacity:0, pointerEvents:"none" }}
-      />
+      {open && (
+        <div style={{ position:"fixed", left:dropPos.left, top:dropPos.top, bottom:dropPos.bottom, zIndex:9999 }}>
+          <CalendarDropdown value={value} onChange={v=>{onChange(v);setOpen(false);}} minDate={minDate} maxDate={maxDate} onClose={()=>setOpen(false)}/>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── BIRTH DATE PICKER — même calendrier, sélecteur d'année étendu ────────────
+function BirthDatePicker({ value, onChange, error }) {
+  const [open, setOpen] = React.useState(false);
+  const [dropPos, setDropPos] = React.useState({});
+  const ref = React.useRef(null);
+  const triggerRef = React.useRef(null);
+  const today = new Date().toISOString().split("T")[0];
+
+  React.useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+
+  const openDrop = () => {
+    if (triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect();
+      const above = window.innerHeight - r.bottom < 300 && r.top > 300;
+      setDropPos({ left:r.left, width: Math.max(r.width, 252), top:above?undefined:r.bottom+4, bottom:above?window.innerHeight-r.top+4:undefined });
+    }
+    setOpen(o => !o);
+  };
+
+  const parsed = value ? new Date(value + "T12:00:00") : null;
+  const display = parsed ? parsed.toLocaleDateString("fr-FR", { day:"numeric", month:"long", year:"numeric" }) : "";
+
+  return (
+    <div ref={ref} style={{ position:"relative" }}>
+      <button ref={triggerRef} type="button" onClick={openDrop}
+        style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"9px 12px",
+          border:`1.5px solid ${error?"#C43A3A":open?C.accent:C.border}`, borderRadius:8,
+          background:C.surfaceWarm, cursor:"pointer", textAlign:"left", boxSizing:"border-box", transition:"border-color .15s" }}>
+        <span style={{ fontSize:15 }}>🎂</span>
+        <span style={{ flex:1, fontSize:13, color:display?C.text:C.textMuted, fontWeight:display?600:400 }}>
+          {display || "jj/mm/aaaa"}
+        </span>
+        {value
+          ? <span onClick={e=>{ e.stopPropagation(); onChange(""); setOpen(false); }}
+              style={{ fontSize:12, color:C.textMuted, cursor:"pointer", padding:"0 2px" }}>✕</span>
+          : <span style={{ fontSize:10, color:C.textMuted }}>▾</span>
+        }
+      </button>
+      {open && (
+        <div style={{ position:"fixed", left:dropPos.left, top:dropPos.top, bottom:dropPos.bottom, zIndex:9999 }}>
+          <CalendarDropdown value={value} onChange={v=>{onChange(v);setOpen(false);}} maxDate={today} onClose={()=>setOpen(false)} showYear={true}/>
+        </div>
+      )}
     </div>
   );
 }
@@ -228,4 +411,4 @@ function DaySelect({ value, onChange }) {
 const DAYS_FR = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
 
 
-export { DatePicker, TimePicker, DurationPicker, DaySelect };
+export { DatePicker, BirthDatePicker, TimePicker, DurationPicker, DaySelect };

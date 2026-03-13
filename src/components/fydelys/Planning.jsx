@@ -726,17 +726,11 @@ function Planning({ isMobile }) {
                   </label>
                 </div>
                 <div>
-                  <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, marginBottom:4, textTransform:"uppercase" }}>{closureForm.single?"Date":"Du"}</div>
-                  <input type="date" value={closureForm.date_start} onChange={e=>setClosureForm(f=>({...f,date_start:e.target.value}))}
-                    style={{ width:"100%", padding:"8px 11px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box", color:C.text, background:C.surfaceWarm }}
-                    onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+                  <DatePicker label={closureForm.single?"Date":"Du"} value={closureForm.date_start} onChange={v=>setClosureForm(f=>({...f,date_start:v}))}/>
                 </div>
                 {!closureForm.single && (
                   <div>
-                    <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, marginBottom:4, textTransform:"uppercase" }}>Au</div>
-                    <input type="date" value={closureForm.date_end} min={closureForm.date_start} onChange={e=>setClosureForm(f=>({...f,date_end:e.target.value}))}
-                      style={{ width:"100%", padding:"8px 11px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box", color:C.text, background:C.surfaceWarm }}
-                      onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+                    <DatePicker label="Au" value={closureForm.date_end} minDate={closureForm.date_start} onChange={v=>setClosureForm(f=>({...f,date_end:v}))}/>
                   </div>
                 )}
               </div>
@@ -861,7 +855,7 @@ function Planning({ isMobile }) {
             {!recMode && (
               <>
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.accent, textTransform: "uppercase", letterSpacing: .6, marginBottom: 14 }}>Nouvelle séance</div>
-                <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`, gap: 14 }}>
+                <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`, gap: 14, alignItems: "flex-end" }}>
                   <DiscSelect label="Discipline" value={nS.disciplineId}
                     options={allDiscOptions}
                     onChange={v => {
@@ -1030,7 +1024,7 @@ function Planning({ isMobile }) {
 
                   {/* Étape 2 — Paramètres */}
                   <div style={{ fontSize: 11, fontWeight: 800, color: C.textMuted, textTransform: "uppercase", letterSpacing: .8, marginBottom: 10 }}>2 · Paramètres</div>
-                  <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`, gap: 12, marginBottom: 20 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`, gap: 12, marginBottom: 20, alignItems: "flex-end" }}>
                     <div style={{ gridColumn: "span 2" }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: .8, marginBottom: 5 }}>Coach par défaut</div>
                       <select value={nS.teacher} onChange={e => { const t = e.target.value; setNS(s => ({ ...s, teacher: t })); setRecSlots(prev => prev.map(s => !s.teacher ? { ...s, teacher: t } : s)); }}
@@ -1065,7 +1059,7 @@ function Planning({ isMobile }) {
 
                   {/* Étape 3 — Période */}
                   <div style={{ fontSize: 11, fontWeight: 800, color: C.textMuted, textTransform: "uppercase", letterSpacing: .8, marginBottom: 10 }}>3 · Période <span style={{ fontSize: 10, fontWeight: 600, color: C.warn, marginLeft: 6 }}>max 3 mois</span></div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20, alignItems: "flex-end" }}>
                     <DatePicker label="Du" value={recFrom} onChange={v => setRecFrom(v)} />
                     <DatePicker label="Au" value={recTo} onChange={v => {
                       if (recFrom) {

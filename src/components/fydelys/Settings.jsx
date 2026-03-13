@@ -117,7 +117,8 @@ function Settings({ isMobile, onImpersonate }) {
   const saveStudio = async () => {
     if (!studioId) return;
     setStudioSaving(true);
-    const { error } = await createClient().from("studios").update({
+    // Payload de base (colonnes existantes)
+    const basePayload = {
       name: studioForm.name,
       address: studioForm.address,
       city: studioForm.city,
@@ -127,9 +128,18 @@ function Settings({ isMobile, onImpersonate }) {
       cancel_delay_hours: parseInt(studioForm.cancel_delay_hours) || 12,
       booking_days_ahead: parseInt(studioForm.booking_days_ahead) || 7,
       waitlist_max: parseInt(studioForm.waitlist_max) || 10,
+    };
+    // Colonnes ajoutées par migration — incluses seulement si disponibles
+    const extPayload = {
+      ...basePayload,
       timezone: studioForm.timezone || "Europe/Paris",
       reminder_hours_default: parseInt(studioForm.reminder_hours_default) || 24,
-    }).eq("id", studioId);
+    };
+    let { error } = await createClient().from("studios").update(extPayload).eq("id", studioId);
+    // Fallback si colonnes timezone/reminder absentes en base
+    if (error?.message?.includes("timezone") || error?.message?.includes("reminder")) {
+      ({ error } = await createClient().from("studios").update(basePayload).eq("id", studioId));
+    }
     setStudioSaving(false);
     if (error) showStudioToast("Erreur : " + error.message, false);
     else showStudioToast("Paramètres enregistrés ✓");
@@ -501,7 +511,7 @@ function Settings({ isMobile, onImpersonate }) {
           </div>
           <div style={{ padding:"0 18px 16px", borderTop:`1px solid ${C.borderSoft}`, paddingTop:16 }}>
             <div style={{ fontSize:11, fontWeight:800, color:C.accent, textTransform:"uppercase", letterSpacing:.6, marginBottom:12 }}>🔔 Notifications</div>
-            <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:12, marginBottom:10 }}>
+            <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:12, marginBottom:10, alignItems:"flex-end" }}>
               <div>
                 <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, textTransform:"uppercase", letterSpacing:.8, marginBottom:5 }}>Fuseau horaire (UTC)</div>
                 <select value={studioForm.timezone} disabled={!isAdmin}

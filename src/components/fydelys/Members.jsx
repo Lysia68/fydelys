@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useContext } from "react";
+import { BirthDatePicker } from "./pickers";
 import { createClient } from "@/lib/supabase";
 import { AppCtx } from "./context";
 import { C } from "./theme";
@@ -8,36 +9,6 @@ import { MEMBERS_DEMO, SUBSCRIPTIONS_DEMO, SESSIONS_DEMO, BOOKINGS_DEMO, SUBSCRI
 import { IcoUserPlus2, IcoMail, IcoUser2, IcoCalendar2, IcoX, IcoCheck, IcoTag2, IcoSearch } from "./icons";
 import { Card, SectionHead, Button, Field, FieldLabel, Tag, Pill, MemberRow, DemoBanner, EmptyState, CreditBadge } from "./ui";
 
-
-function BirthDateInput({ value, onChange, error }) {
-  const ref = React.useRef(null);
-  const parsed = value ? new Date(value + "T12:00:00") : null;
-  const display = parsed
-    ? parsed.toLocaleDateString("fr-FR", { day:"numeric", month:"long", year:"numeric" })
-    : "";
-  return (
-    <div style={{ position:"relative" }}>
-      <button type="button" onClick={() => ref.current?.showPicker?.() || ref.current?.click()}
-        style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"9px 12px",
-          border:`1.5px solid ${error ? "#C43A3A" : C.border}`, borderRadius:8,
-          background:C.surfaceWarm, cursor:"pointer", textAlign:"left", boxSizing:"border-box" }}>
-        <span style={{ fontSize:15 }}>🎂</span>
-        <span style={{ flex:1, fontSize:13, color:display?C.text:C.textMuted, fontWeight:display?600:400 }}>
-          {display || "jj/mm/aaaa"}
-        </span>
-        {value && (
-          <span onClick={e=>{ e.stopPropagation(); onChange(""); }}
-            style={{ fontSize:12, color:C.textMuted, cursor:"pointer", padding:"0 2px" }}>✕</span>
-        )}
-      </button>
-      <input ref={ref} type="date" value={value || "1980-01-01"}
-        max={new Date().toISOString().split("T")[0]}
-        onChange={e => onChange(e.target.value)}
-        style={{ position:"absolute", top:0, left:0, width:"100%", height:"100%", opacity:0, pointerEvents:"none" }}
-      />
-    </div>
-  );
-}
 
 const EMPTY_FORM = {
   firstName:"", lastName:"", email:"", phone:"",
@@ -68,7 +39,7 @@ function MemberForm({ value, onChange, errors={}, isMobile }) {
         <div style={cols(3)}>
           <div>{lbl("Prénom",true)}<input value={value.firstName} onChange={e=>onChange({...value,firstName:e.target.value})} placeholder="Prénom" style={inp(errors.firstName)}/>{err("firstName")}</div>
           <div>{lbl("Nom",true)}<input value={value.lastName} onChange={e=>onChange({...value,lastName:e.target.value})} placeholder="Nom" style={inp(errors.lastName)}/>{err("lastName")}</div>
-          <div>{lbl("Date de naissance",true)}<BirthDateInput value={value.birthDate} onChange={v=>onChange({...value,birthDate:v})} error={errors.birthDate}/>{err("birthDate")}</div>
+          <div>{lbl("Date de naissance",true)}<BirthDatePicker value={value.birthDate} onChange={v=>onChange({...value,birthDate:v})} error={errors.birthDate}/>{err("birthDate")}</div>
         </div>
       </div>
       <div>
