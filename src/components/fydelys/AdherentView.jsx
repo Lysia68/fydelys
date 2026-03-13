@@ -9,7 +9,7 @@ import { IcoCalendar2, IcoUser2, IcoChevron, IcoCreditCard2, IcoCheck, IcoX, Ico
 import { Card, SectionHead, Button, Tag, Pill, EmptyState, DateLabel, Field, SessionRow } from "./ui";
 import { OnboardingView } from "./OnboardingView";
 
-function AdherentView({ onSwitch, isMobile, studioName = "" }) {
+function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId = null }) {
   const ADH_NAV = ADH_NAV_KEYS.map((n,i) => ({ ...n, icon:[IcoCalendar2,IcoHeart,IcoActivity,IcoCreditCard2][i] }));
   const ADH_MOBILE_NAV = ADH_NAV;
   const [page, setPage] = useState("planning");
@@ -32,12 +32,24 @@ function AdherentView({ onSwitch, isMobile, studioName = "" }) {
     sb.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
 
-      // Recherche uniquement par auth_user_id — c'est la vraie clé de liaison
+      // En mode impersonate admin, utiliser l'userId ciblé ; sinon l'user connecté
+      const targetUid = impersonateUserId || user.id;
       let member = null;
       const { data: byUid } = await sb.from("members")
         .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, address, postal_code, city, profile_complete")
-        .eq("studio_id", studioId).eq("auth_user_id", user.id).maybeSingle();
+        .eq("studio_id", studioId).eq("auth_user_id", targetUid).maybeSingle();
       member = byUid;
+
+      // Fallback email uniquement pour l'user réel (pas l'impersonate)
+      if (!member && !impersonateUserId && user.email) {
+        const { data: byEmail } = await sb.from("members")
+          .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, address, postal_code, city, profile_complete")
+          .eq("studio_id", studioId).eq("email", user.email).maybeSingle();
+        member = byEmail;
+        if (member) {
+          await sb.from("members").update({ auth_user_id: user.id }).eq("id", member.id);
+        }
+      }
 
       if (member) setMe(member);
 
@@ -543,9 +555,34 @@ function AdherentView({ onSwitch, isMobile, studioName = "" }) {
 
       {/* Contenu principal */}
       <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, paddingBottom:isMobile?60:0 }}>
+        {/* Header desktop — titre page + nom membre */}
         {!isMobile && (
-          <div style={{ padding:"16px 28px 0", fontSize:26, fontWeight:800, color:C.text, letterSpacing:-0.5 }}>
-            {ADH_NAV.find(n=>n.key===page)?.label||"Planning"}
+          <div style={{ padding:"16px 28px 0", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div style={{ fontSize:26, fontWeight:800, color:C.text, letterSpacing:-0.5 }}>
+              {ADH_NAV.find(n=>n.key===page)?.label||"Planning"}
+            </div>
+            {me && (
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <div style={{ width:30, height:30, borderRadius:"50%", background:C.accentBg, border:`1.5px solid ${C.accent}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:C.accent, flexShrink:0 }}>
+                  {`${me.first_name?.[0]||\"\"}${me.last_name?.[0]||\"\"}`.toUpperCase()||"?"}
+                </div>
+                <div style={{ fontSize:13, fontWeight:600, color:C.text }}>{me.first_name} {me.last_name}</div>
+              </div>
+            )}
+          </div>
+        )}
+        {/* Header mobile — studio + nom membre */}
+        {isMobile && (
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px 4px", borderBottom:`1px solid ${C.borderSoft}` }}>
+            <div style={{ fontSize:15, fontWeight:800, color:C.text, letterSpacing:-0.3 }}>{studioName || "Fydelys"}</div>
+            {me && (
+              <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+                <div style={{ fontSize:13, fontWeight:600, color:C.textSoft }}>{me.first_name} {me.last_name}</div>
+                <div style={{ width:28, height:28, borderRadius:"50%", background:C.accentBg, border:`1.5px solid ${C.accent}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:C.accent }}>
+                  {`${me.first_name?.[0]||\"\"}${me.last_name?.[0]||\"\"}`.toUpperCase()||"?"}
+                </div>
+              </div>
+            )}
           </div>
         )}
         <div style={{ flex:1, overflowY:"auto" }}>

@@ -37,7 +37,6 @@ const PAGE_TITLES = {
   subscriptions:"Abonnements", payments:"Paiements", disciplines:"Disciplines",
   settings:"Paramètres", aide:"Aide"
 };
-  console.log("FYDELYS_APP propStudioId:", propStudioId);
   const [sharedStudioId, setSharedStudioId] = useState(propStudioId || null);
   useEffect(() => {
     // propStudioId arrive en async depuis layout — on le sync dès qu'il est disponible
@@ -177,7 +176,7 @@ const PAGE_TITLES = {
         </div>
       )}
       <div style={{ marginTop: impersonating ? 38 : 0 }}>
-        <AdherentView onSwitch={setRole} isMobile={isMobile} studioName={studioName}/>
+        <AdherentView onSwitch={setRole} isMobile={isMobile} studioName={studioName} impersonateUserId={impersonating?.userId || null}/>
       </div>
     </AppCtx.Provider>
   );
