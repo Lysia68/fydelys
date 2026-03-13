@@ -69,6 +69,7 @@ function Members({ isMobile }) {
   const [members, setMembers]       = useState([]);
   const [dbLoading, setDbLoading]   = useState(true);
   const [isDemoData, setIsDemoData] = useState(false);
+  const [subscriptionsList, setSubscriptionsList] = useState([]);
   const [search, setSearch]         = useState("");
   const [selected, setSelected]     = useState(null);
   const [showAdd, setShowAdd]       = useState(false);
@@ -84,6 +85,13 @@ function Members({ isMobile }) {
   const filtered = members.filter(m =>
     `${m.firstName} ${m.lastName} ${m.email}`.toLowerCase().includes(search.toLowerCase())
   );
+
+  useEffect(() => {
+    if (!studioId) return;
+    // Charger les abonnements du studio
+    createClient().from("subscriptions").select("id,name").eq("studio_id",studioId).eq("active",true).order("name")
+      .then(({data})=>{ if(data?.length) setSubscriptionsList(data); });
+  }, [studioId]);
 
   useEffect(() => {
     if (!studioId) return;
@@ -222,16 +230,48 @@ function Members({ isMobile }) {
   };
 
   const SubscriptionModal = () => {
-    const [sub,setSub]=useState(modal.member.subscription); const [saved,setSaved]=useState(false);
+    const [subId, setSubId] = useState(modal.member.subscriptionId || "");
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const subName = subscriptionsList.find(s=>s.id===subId)?.name || subId || "—";
+
+    const save = async () => {
+      setSaving(true);
+      const res = await fetch("/api/members", { method:"PATCH", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ id: modal.member.id, subscription_id: subId || null }) });
+      setSaving(false);
+      if (res.ok) {
+        setMembers(prev=>prev.map(m=>m.id===modal.member.id
+          ? {...m, subscriptionId:subId||null, subscription:subscriptionsList.find(s=>s.id===subId)?.name||"—"}
+          : m));
+        setSaved(true);
+        setTimeout(()=>setModal(null), 1200);
+      } else { showToast("Erreur lors de la sauvegarde",false); }
+    };
+
     return <Modal>
       <ModalHeader title={`Abonnement — ${modal.member.firstName} ${modal.member.lastName}`} onClose={()=>setModal(null)}/>
       <div style={{marginBottom:16}}>
         <div style={{fontSize:12,color:C.textMuted,fontWeight:600,marginBottom:8,textTransform:"uppercase"}}>Abonnement actuel</div>
-        <div style={{padding:"10px 14px",background:C.accentBg,borderRadius:8,fontSize:15,fontWeight:700,color:C.accentDark}}>{modal.member.subscription}</div>
+        <div style={{padding:"10px 14px",background:C.accentBg,borderRadius:8,fontSize:15,fontWeight:700,color:C.accentDark}}>
+          {modal.member.subscription||"—"}
+        </div>
       </div>
-      <div style={{marginBottom:18}}><FieldLabel>Nouvel abonnement</FieldLabel><Field value={sub} onChange={setSub} opts={SUBSCRIPTIONS_INIT.map(s=>({v:s.name,l:s.name}))}/></div>
-      {saved ? <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:C.okBg,borderRadius:8,color:C.ok,fontWeight:600,fontSize:14}}><IcoCheck s={16} c={C.ok}/>Abonnement mis à jour !</div>
-        : <div style={{display:"flex",gap:10}}><Button variant="primary" onClick={()=>{setMembers(prev=>prev.map(m=>m.id===modal.member.id?{...m,subscription:sub}:m));setSaved(true);}}>Enregistrer</Button><Button variant="ghost" onClick={()=>setModal(null)}>Annuler</Button></div>}
+      <div style={{marginBottom:18}}>
+        <FieldLabel>Nouvel abonnement</FieldLabel>
+        <select value={subId} onChange={e=>setSubId(e.target.value)}
+          style={{width:"100%",padding:"9px 12px",border:`1.5px solid ${C.border}`,borderRadius:8,fontSize:13,color:C.text,background:C.surfaceWarm,outline:"none"}}>
+          <option value="">— Aucun abonnement —</option>
+          {subscriptionsList.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+      </div>
+      {saved
+        ? <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:C.okBg,borderRadius:8,color:C.ok,fontWeight:600,fontSize:14}}><IcoCheck s={16} c={C.ok}/>Abonnement mis à jour !</div>
+        : <div style={{display:"flex",gap:10}}>
+            <Button variant="primary" onClick={save} disabled={saving}>{saving?"Enregistrement…":"Enregistrer"}</Button>
+            <Button variant="ghost" onClick={()=>setModal(null)}>Annuler</Button>
+          </div>
+      }
     </Modal>;
   };
 
@@ -324,7 +364,10 @@ function Members({ isMobile }) {
             <div style={{width:48,height:48,borderRadius:"50%",background:C.accentBg,border:`1.5px solid #DFC0A0`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,fontWeight:700,color:C.accent}}>{m.avatar}</div>
             <div>
               <div style={{fontSize:19,fontWeight:800,color:C.text}}>{m.firstName} {m.lastName}</div>
-              <div style={{fontSize:13,color:C.textSoft,marginTop:1}}>{m.email}{m.phone?` · ${m.phone}`:""}</div>
+              <div style={{fontSize:13,color:C.textSoft,marginTop:3,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                <span style={{display:"flex",alignItems:"center",gap:4}}><IcoMail s={13} c={C.textMuted}/>{m.email}</span>
+                {m.phone&&<span style={{display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:13}}>📞</span>{m.phone}</span>}
+              </div>
               {m.profileComplete===false&&<div style={{fontSize:11,color:C.warn,fontWeight:600,marginTop:3}}>⚠ Profil non complété</div>}
             </div>
           </div>
