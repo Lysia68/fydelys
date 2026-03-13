@@ -302,6 +302,7 @@ function Members({ isMobile }) {
               disc: s?.disciplines?.name || "—",
               icon: s?.disciplines?.icon || "🏃",
               teacher: s?.teacher || "—",
+              room: s?.room || "",
               status: statut,
             };
           }).filter(b => b.date));
@@ -344,6 +345,7 @@ function Members({ isMobile }) {
             <div style={{flex:1}}>
               <div style={{fontSize:14,fontWeight:700,color:C.text}}>{s.icon} {s.disc}</div>
               <div style={{fontSize:12,color:C.textSoft}}>{s.teacher} · {s.date ? new Date(s.date+"T12:00:00").toLocaleDateString("fr-FR") : ""}</div>
+              {s.room && <div style={{fontSize:11,color:C.textMuted,marginTop:1}}>📍 {s.room}</div>}
             </div>
             <span style={{fontSize:12,fontWeight:600,
               color:s.status==="présent"?C.ok:s.status==="absent"?C.warn:C.accent}}>

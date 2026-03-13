@@ -162,6 +162,19 @@ function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onCh
           <div style={{ fontSize: 12, color: C.textSoft, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {sess.teacher && <><span style={{ fontWeight: 600 }}>{sess.teacher}</span> · </>}{sess.room} · {sess.duration}min
           </div>
+          {(() => {
+            const rd = roomsList.find(r => r.name === sess.room);
+            if (!rd?.location && !rd?.address) return null;
+            const loc = rd.location || rd.address;
+            return (
+              <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {rd.maps_url
+                  ? <a href={rd.maps_url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{ color:C.accent, textDecoration:"none", fontWeight:600 }}>📍 {loc}</a>
+                  : <>📍 {loc}</>
+                }
+              </div>
+            );
+          })()}
         </div>
         {(!isExp || !isMobile) && (
           <div style={{ flexShrink: 0, textAlign: "right", marginRight: 4 }}>
@@ -475,7 +488,7 @@ function Planning({ isMobile }) {
       })
       .catch(e => console.error("load coaches", e));
     // Salles
-    sb.from("rooms").select("id, name, capacity, color").eq("studio_id", studioId).order("name")
+    sb.from("rooms").select("id, name, capacity, color, location, address, maps_url").eq("studio_id", studioId).order("name")
       .then(({ data }) => { if (data?.length) setRoomsList(data); });
     // Fermetures
     sb.from("studio_closures").select("*").eq("studio_id", studioId).order("date_start")
