@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   const [{ data: profiles }, { data: links }, { data: invites }, { data: members }] = await Promise.all([
     db.from("profiles").select("id, first_name, last_name, role, is_coach")
       .eq("studio_id", studioId)
-      .or("role.in.(coach,admin,superadmin),is_coach.eq.true"),
+      .neq("role", "adherent"),
     db.from("coach_disciplines").select("profile_id, discipline_id").eq("studio_id", studioId),
     db.from("invitations").select("id, email, created_at")
       .eq("studio_id", studioId).eq("role", "coach").eq("used", false),

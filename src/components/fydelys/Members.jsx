@@ -117,15 +117,15 @@ function Members({ isMobile }) {
   useEffect(() => {
     if (!studioId) return;
     setDbLoading(true);
-    createClient().from("members")
-      .select("id,first_name,last_name,email,phone,address,postal_code,city,birth_date,status,credits,credits_total,joined_at,next_payment,notes,subscription_id,profile_complete,subscriptions(name)")
-      .eq("studio_id", studioId).order("last_name")
-      .then(({ data, error }) => {
+    fetch(`/api/members?studioId=${studioId}`)
+      .then(r => r.json())
+      .then(({ members, error }) => {
         if (error) { console.error("load members", error); setDbLoading(false); return; }
-        if (!data || data.length === 0) { setMembers(MEMBERS_DEMO); setIsDemoData(true); setDbLoading(false); return; }
-        setMembers(data.map(mapRow));
+        if (!members || members.length === 0) { setMembers(MEMBERS_DEMO); setIsDemoData(true); setDbLoading(false); return; }
+        setMembers(members.map(mapRow));
         setDbLoading(false);
-      });
+      })
+      .catch(e => { console.error("load members", e); setDbLoading(false); });
   }, [studioId]);
 
   function mapRow(m) {
@@ -163,15 +163,16 @@ function Members({ isMobile }) {
   const add = async () => {
     const errs = validate(nM); setNMErrors(errs);
     if (Object.keys(errs).length || !studioId) return;
-    const { data:existing } = await createClient().from("members")
-      .select("id").eq("studio_id",studioId).eq("email",nM.email.toLowerCase().trim()).single();
-    if (existing) { showToast("Email déjà utilisé dans ce studio ✕",false); return; }
     const tempId=`tmp-${Date.now()}`;
     setMembers(prev=>[...prev,{id:tempId,...nM,joined:new Date().toISOString().split("T")[0],status:"nouveau",credits:0,subscription:"—",avatar:(nM.firstName[0]||"")+(nM.lastName[0]||"")}]);
     setShowAdd(false); setNM(EMPTY_FORM); setNMErrors({});
-    const {data,error}=await createClient().from("members").insert({studio_id:studioId,...dbPayload(nM),status:"nouveau",credits:0,joined_at:new Date().toISOString().split("T")[0]}).select("id").single();
-    if (error) { setMembers(prev=>prev.filter(m=>m.id!==tempId)); showToast("Erreur : "+(error.message||"impossible de créer"),false); }
-    else if (data?.id) { setMembers(prev=>prev.map(m=>m.id===tempId?{...m,id:data.id}:m)); showToast("Adhérent créé ✓"); }
+    const res = await fetch("/api/members", { method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ studioId, ...dbPayload(nM), status:"nouveau", credits:0, joined_at:new Date().toISOString().split("T")[0] }) });
+    const json = await res.json();
+    if (!res.ok) {
+      setMembers(prev=>prev.filter(m=>m.id!==tempId));
+      showToast(json.error==="EMAIL_EXISTS" ? "Email déjà utilisé dans ce studio ✕" : "Erreur : "+(json.error||"impossible de créer"), false);
+    } else if (json.id) { setMembers(prev=>prev.map(m=>m.id===tempId?{...m,id:json.id}:m)); showToast("Adhérent créé ✓"); }
   };
 
   const startEdit = (m) => {
@@ -185,13 +186,15 @@ function Members({ isMobile }) {
     const id=selected.id;
     const updated={...selected,...editForm,postalCode:editForm.postalCode,avatar:(editForm.firstName[0]||"")+(editForm.lastName[0]||"")};
     setMembers(prev=>prev.map(m=>m.id===id?updated:m)); setSelected(updated); setEditMode(false);
-    const {error}=await createClient().from("members").update(dbPayload(editForm)).eq("id",id);
-    if (error) showToast("Erreur : "+error.message,false); else showToast("Profil mis à jour ✓");
+    const res = await fetch("/api/members", { method:"PATCH", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ id, ...dbPayload(editForm) }) });
+    const json = await res.json();
+    if (!res.ok) showToast("Erreur : "+(json.error||"sauvegarde impossible"), false); else showToast("Profil mis à jour ✓");
   };
 
   const deleteMember = async (id) => {
     setMembers(prev=>prev.filter(m=>m.id!==id)); setSelected(null);
-    await createClient().from("members").delete().eq("id",id);
+    await fetch(`/api/members?id=${id}`, { method:"DELETE" });
     showToast("Adhérent supprimé");
   };
 

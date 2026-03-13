@@ -864,7 +864,8 @@ function Settings({ isMobile, onImpersonate }) {
 
     // Utiliser les données partagées depuis Settings
     useEffect(() => {
-      setCoaches(teamData.coaches || []);
+      // Équipe = coachs uniquement (role coach ou is_coach=true), pas les admins purs
+      setCoaches((teamData.coaches || []).filter(c => c.role === "coach" || c.is_coach === true));
       setPendingInvites(teamData.invites || []);
     }, [teamData]);
 
