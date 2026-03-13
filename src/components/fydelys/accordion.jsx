@@ -33,24 +33,34 @@ function AttendanceRow({ b, onMark }) {
       {isPresent && <span style={{ fontSize:12, fontWeight:700, padding:"2px 9px", borderRadius:20, color:C.ok,      background:C.okBg,    whiteSpace:"nowrap" }}>✓ Présent</span>}
       {isAbsent  && <span style={{ fontSize:12, fontWeight:700, padding:"2px 9px", borderRadius:20, color:C.warn,    background:C.warnBg,  whiteSpace:"nowrap" }}>✗ Absent</span>}
       {isPending && <span style={{ fontSize:12, fontWeight:600, padding:"2px 9px", borderRadius:20, color:C.textMuted, background:"#EDE9E3", whiteSpace:"nowrap" }}>⏳ En attente</span>}
-      <div style={{ display:"flex", gap:5, flexShrink:0 }}>
-        {!isPresent && (
-          <button onClick={()=>mark(true)} disabled={loading}
-            style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, padding:"4px 10px", borderRadius:7, fontWeight:600, border:`1px solid #B8DFC4`, color:C.ok, background:C.okBg, cursor:"pointer", whiteSpace:"nowrap" }}>
-            <IcoCheck s={12} c={C.ok}/> Présent
+      <div style={{ display:"flex", gap:5, flexShrink:0, flexWrap:"wrap", justifyContent:"flex-end", maxWidth:160 }}>
+        {isPresent ? (
+          <button onClick={()=>mark(null)} disabled={loading} title="Annuler présence"
+            style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, padding:"4px 10px", borderRadius:7, fontWeight:600, border:`1px solid ${C.border}`, color:C.textSoft, background:C.surface, cursor:"pointer", whiteSpace:"nowrap" }}>
+            <IcoUndo s={12} c={C.textSoft}/> Corriger
           </button>
-        )}
-        {!isPresent && (
-          <button onClick={()=>mark(false)} disabled={loading}
-            style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, padding:"4px 10px", borderRadius:7, fontWeight:600, border:`1px solid #EFC8BC`, color:C.warn, background:C.warnBg, cursor:"pointer", whiteSpace:"nowrap" }}>
-            <IcoX s={12} c={C.warn}/> Absent
-          </button>
-        )}
-        {(isPresent || isAbsent) && (
-          <button onClick={()=>mark(null)} disabled={loading} title="Annuler"
-            style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, padding:"4px 8px", borderRadius:7, fontWeight:600, border:`1px solid ${C.border}`, color:C.textSoft, background:C.surface, cursor:"pointer" }}>
-            <IcoUndo s={12} c={C.textSoft}/>
-          </button>
+        ) : isAbsent ? (
+          <>
+            <button onClick={()=>mark(true)} disabled={loading}
+              style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, padding:"4px 10px", borderRadius:7, fontWeight:600, border:`1px solid #B8DFC4`, color:C.ok, background:C.okBg, cursor:"pointer", whiteSpace:"nowrap" }}>
+              <IcoCheck s={12} c={C.ok}/> Présent
+            </button>
+            <button onClick={()=>mark(null)} disabled={loading} title="Réinitialiser"
+              style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, padding:"4px 8px", borderRadius:7, fontWeight:600, border:`1px solid ${C.border}`, color:C.textSoft, background:C.surface, cursor:"pointer" }}>
+              <IcoUndo s={12} c={C.textSoft}/>
+            </button>
+          </>
+        ) : (
+          <>
+            <button onClick={()=>mark(true)} disabled={loading}
+              style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, padding:"4px 10px", borderRadius:7, fontWeight:600, border:`1px solid #B8DFC4`, color:C.ok, background:C.okBg, cursor:"pointer", whiteSpace:"nowrap" }}>
+              <IcoCheck s={12} c={C.ok}/> Présent
+            </button>
+            <button onClick={()=>mark(false)} disabled={loading}
+              style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, padding:"4px 10px", borderRadius:7, fontWeight:600, border:`1px solid #EFC8BC`, color:C.warn, background:C.warnBg, cursor:"pointer", whiteSpace:"nowrap" }}>
+              <IcoX s={12} c={C.warn}/> Absent
+            </button>
+          </>
         )}
       </div>
     </div>
@@ -160,8 +170,14 @@ export function PlanningAccordion({ sess, sessId, bookings, onChangeStatus, onAd
               </div>
             </div>
           ))}
-          <div style={{ padding:"8px 13px 10px", display:"flex", gap:7, flexWrap:"wrap" }}>
+          <div style={{ padding:"8px 13px 10px", display:"flex", gap:7, flexWrap:"wrap", alignItems:"center", justifyContent:"space-between" }}>
             <button onClick={()=>onAddBooking&&onAddBooking(sessId)} style={{ display:"flex",alignItems:"center",gap:6, fontSize:12, padding:"5px 12px", borderRadius:8, fontWeight:600, border:`1px solid #DFC0A0`, color:C.accentDark, background:C.accentBg, cursor:"pointer" }}><IcoUserPlus2 s={14} c={C.accentDark}/>Inscrire un adhérent</button>
+            {isPast && pendingCount>0 && (
+              <button onClick={handleValidateAll}
+                style={{ display:"flex", alignItems:"center", gap:5, fontSize:12, padding:"5px 12px", borderRadius:8, fontWeight:600, border:`1px solid #B8DFC4`, color:C.ok, background:C.okBg, cursor:"pointer" }}>
+                <IcoCheck s={12} c={C.ok}/> Tous présents
+              </button>
+            )}
           </div>
         </>
       )}
@@ -173,12 +189,7 @@ export function PlanningAccordion({ sess, sessId, bookings, onChangeStatus, onAd
             {absentCount>0 && <span style={{ fontSize:12, fontWeight:700, padding:"2px 9px", borderRadius:20, color:C.warn, background:C.warnBg }}>{absentCount} absent{absentCount>1?"s":""}</span>}
             {pendingCount>0 && <span style={{ fontSize:12, fontWeight:700, padding:"2px 9px", borderRadius:20, color:C.textMuted, background:"#EDE9E3" }}>{pendingCount} en attente</span>}
             <div style={{ flex:1 }}/>
-            {pendingCount>0 && (
-              <button onClick={handleValidateAll}
-                style={{ display:"flex", alignItems:"center", gap:5, fontSize:12, padding:"4px 12px", borderRadius:7, fontWeight:600, border:`1px solid #B8DFC4`, color:C.ok, background:C.okBg, cursor:"pointer" }}>
-                <IcoCheck s={12} c={C.ok}/> Tous présents
-              </button>
-            )}
+
           </div>
           {conf.length===0
             ? <div style={{ padding:"20px", textAlign:"center", color:C.textMuted, fontSize:14 }}>Aucun membre confirmé</div>

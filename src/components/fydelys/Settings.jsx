@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase";
 import { AppCtx } from "./context";
 import { C } from "./theme";
 import { FYDELYS_PLANS, DISCIPLINES, ROLES_DEF, TENANTS_INIT, TENANTS_DATA, USERS_DATA } from "./demoData";
-import { IcoUser2, IcoUsers2, IcoSettings2, IcoCheck, IcoX, IcoMail, IcoLogOut, IcoCalendar2, IcoAlert2, IcoEuro2, IcoHome2, IcoLayers2, IcoTag2, IcoUserPlus2, IcoYoga } from "./icons";
+import { IcoUser2, IcoUsers2, IcoSettings2, IcoCheck, IcoX, IcoMail, IcoLogOut, IcoCalendar2, IcoAlert2, IcoEuro2, IcoHome2, IcoLayers2, IcoTag2, IcoUserPlus2, IcoYoga, IcoDoor } from "./icons";
 import { Card, SectionHead, Button, Field, FieldLabel, Tag, Pill, EmptyState } from "./ui";
 
 function RoleBadge({ role }) {
@@ -373,7 +373,8 @@ function Settings({ isMobile, onImpersonate }) {
     { key:"studio",  label:"Studio",       icon:<IcoSettings2 s={14} c="currentColor"/> },
     { key:"team",    label:"Équipe",        icon:<IcoUsers2 s={14} c="currentColor"/> },
     { key:"users",   label:"Utilisateurs", icon:<IcoTag2 s={14} c="currentColor"/> },
-    { key:"roles", label:"Rôles", icon:<IcoTag2 s={14} c="currentColor"/> },
+    { key:"roles",  label:"Rôles",        icon:<IcoTag2 s={14} c="currentColor"/> },
+    { key:"rooms",   label:"Salles",        icon:<IcoDoor s={14} c="currentColor"/> },
     { key:"account", label:"Mon compte",   icon:<IcoHome2 s={14} c="currentColor"/> },
   ].filter(Boolean);
 
@@ -1027,7 +1028,180 @@ function Settings({ isMobile, onImpersonate }) {
     );
   };
 
-  const TAB_CONTENT = { superadmin:<TabSuperAdmin/>, studio:<TabStudio/>, team:<TabTeam/>, users:<TabUsers/>, roles:<TabRoles/>, account:<TabAccount/> };
+  // ── Tab Salles ────────────────────────────────────────────────────────────
+  const TabRooms = () => {
+    const sb = createClient();
+    const COLORS = ["#C8906A","#7C9E8A","#8A7CC8","#C87C7C","#7CB8C8","#C8C07C","#B07CA0","#7C9EC8"];
+    const emptyRoom = { name:"", capacity:10, location:"", color:COLORS[0], notes:"" };
+    const [rooms, setRooms]         = React.useState([]);
+    const [loading, setLoading]     = React.useState(true);
+    const [modal, setModal]         = React.useState(null); // null | "add" | room obj
+    const [form, setForm]           = React.useState(emptyRoom);
+    const [saving, setSaving]       = React.useState(false);
+    const [confirmDel, setConfirmDel] = React.useState(null);
+
+    React.useEffect(() => {
+      if (!studioId) return;
+      sb.from("rooms").select("*").eq("studio_id", studioId).order("name")
+        .then(({ data }) => { setRooms(data || []); setLoading(false); });
+    }, [studioId]);
+
+    function openAdd() { setForm(emptyRoom); setModal("add"); }
+    function openEdit(r) { setForm({ name:r.name, capacity:r.capacity, location:r.location||"", color:r.color||COLORS[0], notes:r.notes||"" }); setModal(r); }
+
+    async function save() {
+      if (!form.name.trim()) return;
+      setSaving(true);
+      if (modal === "add") {
+        const { data } = await sb.from("rooms").insert({ ...form, studio_id: studioId }).select().single();
+        if (data) setRooms(prev => [...prev, data].sort((a,b) => a.name.localeCompare(b.name)));
+        showToast(`Salle "${form.name}" créée`);
+      } else {
+        const { data } = await sb.from("rooms").update(form).eq("id", modal.id).select().single();
+        if (data) setRooms(prev => prev.map(r => r.id === data.id ? data : r));
+        showToast(`Salle "${form.name}" mise à jour`);
+      }
+      setSaving(false); setModal(null);
+    }
+
+    async function deleteRoom(id) {
+      await sb.from("rooms").delete().eq("id", id);
+      setRooms(prev => prev.filter(r => r.id !== id));
+      setConfirmDel(null);
+      showToast("Salle supprimée", false);
+    }
+
+    const inp = { width:"100%", padding:"9px 12px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:14, outline:"none", boxSizing:"border-box", color:C.text, background:C.surfaceWarm };
+
+    return (
+      <div>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+          <div>
+            <div style={{ fontSize:16, fontWeight:700, color:C.text }}>Salles</div>
+            <div style={{ fontSize:13, color:C.textMuted, marginTop:2 }}>{rooms.length} salle{rooms.length!==1?"s":""} configurée{rooms.length!==1?"s":""}</div>
+          </div>
+          <button onClick={openAdd}
+            style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 16px", borderRadius:8, border:"none", background:C.accent, color:"white", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+            + Ajouter une salle
+          </button>
+        </div>
+
+        {loading && <div style={{ color:C.textMuted, fontSize:13 }}>Chargement…</div>}
+
+        {!loading && rooms.length === 0 && (
+          <Card>
+            <div style={{ textAlign:"center", padding:"32px 0", color:C.textMuted }}>
+              <IcoDoor s={32} c={C.border}/>
+              <div style={{ marginTop:12, fontSize:15, fontWeight:600, color:C.text }}>Aucune salle configurée</div>
+              <div style={{ fontSize:13, marginTop:4 }}>Créez vos salles pour les assigner aux séances.</div>
+              <button onClick={openAdd} style={{ marginTop:16, padding:"8px 20px", borderRadius:8, border:"none", background:C.accent, color:"white", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+                + Créer la première salle
+              </button>
+            </div>
+          </Card>
+        )}
+
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(280px,1fr))", gap:12 }}>
+          {rooms.map(r => (
+            <Card key={r.id} style={{ borderLeft:`4px solid ${r.color||C.accent}`, cursor:"default" }}>
+              <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{ width:38, height:38, borderRadius:10, background:`${r.color||C.accent}22`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                    <IcoDoor s={18} c={r.color||C.accent}/>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:15, fontWeight:700, color:C.text }}>{r.name}</div>
+                    {r.location && <div style={{ fontSize:12, color:C.textMuted, marginTop:1 }}>📍 {r.location}</div>}
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:5, flexShrink:0 }}>
+                  <button onClick={()=>openEdit(r)}
+                    style={{ fontSize:11, padding:"4px 10px", borderRadius:6, border:`1px solid ${C.border}`, background:C.bg, color:C.textMid, cursor:"pointer", fontWeight:600 }}>
+                    Modifier
+                  </button>
+                  {confirmDel === r.id ? (
+                    <button onClick={()=>deleteRoom(r.id)}
+                      style={{ fontSize:11, padding:"4px 10px", borderRadius:6, border:"1px solid #EFC8BC", background:C.warnBg, color:C.warn, cursor:"pointer", fontWeight:700 }}>
+                      Confirmer
+                    </button>
+                  ) : (
+                    <button onClick={()=>setConfirmDel(r.id)}
+                      style={{ fontSize:11, padding:"4px 10px", borderRadius:6, border:`1px solid ${C.border}`, background:C.bg, color:C.textMuted, cursor:"pointer", fontWeight:600 }}>
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:8, marginTop:12, flexWrap:"wrap" }}>
+                <span style={{ fontSize:12, fontWeight:600, padding:"3px 10px", borderRadius:20, background:`${r.color||C.accent}18`, color:r.color||C.accent }}>
+                  👥 {r.capacity} places
+                </span>
+                {r.notes && <span style={{ fontSize:12, color:C.textMuted, fontStyle:"italic" }}>{r.notes}</span>}
+              </div>
+            </Card>
+          ))}
+        </div>
+
+        {/* Modal ajout/édition */}
+        {modal !== null && (
+          <div style={{ position:"fixed", inset:0, background:"rgba(42,31,20,.45)", zIndex:500, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}
+            onClick={e=>{ if(e.target===e.currentTarget) setModal(null); }}>
+            <div style={{ background:C.surface, borderRadius:16, padding:24, width:"100%", maxWidth:480, boxShadow:"0 24px 60px rgba(0,0,0,.18)" }}>
+              <div style={{ fontSize:16, fontWeight:700, color:C.text, marginBottom:18 }}>
+                {modal === "add" ? "Nouvelle salle" : `Modifier — ${modal.name}`}
+              </div>
+
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+                <div style={{ gridColumn:"1/-1" }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, marginBottom:4, textTransform:"uppercase", letterSpacing:.5 }}>Nom *</div>
+                  <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Ex : Studio A" style={inp}
+                    onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+                </div>
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, marginBottom:4, textTransform:"uppercase", letterSpacing:.5 }}>Capacité</div>
+                  <input type="number" min={1} max={500} value={form.capacity} onChange={e=>setForm(f=>({...f,capacity:parseInt(e.target.value)||1}))} style={inp}
+                    onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+                </div>
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, marginBottom:4, textTransform:"uppercase", letterSpacing:.5 }}>Localisation</div>
+                  <input value={form.location} onChange={e=>setForm(f=>({...f,location:e.target.value}))} placeholder="Ex : 1er étage" style={inp}
+                    onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+                </div>
+                <div style={{ gridColumn:"1/-1" }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, marginBottom:4, textTransform:"uppercase", letterSpacing:.5 }}>Couleur</div>
+                  <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                    {COLORS.map(col => (
+                      <button key={col} onClick={()=>setForm(f=>({...f,color:col}))}
+                        style={{ width:28, height:28, borderRadius:"50%", background:col, border:form.color===col?`3px solid ${C.text}`:"3px solid transparent", cursor:"pointer", flexShrink:0 }}/>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ gridColumn:"1/-1" }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, marginBottom:4, textTransform:"uppercase", letterSpacing:.5 }}>Notes</div>
+                  <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder="Équipements, accès…" rows={2}
+                    style={{ ...inp, resize:"vertical", fontFamily:"inherit" }}
+                    onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+                </div>
+              </div>
+
+              <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+                <button onClick={()=>setModal(null)}
+                  style={{ padding:"8px 16px", borderRadius:8, border:`1.5px solid ${C.border}`, background:C.bg, color:C.textMid, fontSize:13, fontWeight:600, cursor:"pointer" }}>
+                  Annuler
+                </button>
+                <button onClick={save} disabled={saving || !form.name.trim()}
+                  style={{ padding:"8px 20px", borderRadius:8, border:"none", background:form.name.trim()?C.accent:"#ccc", color:"white", fontSize:13, fontWeight:700, cursor:form.name.trim()?"pointer":"not-allowed" }}>
+                  {saving ? "Enregistrement…" : modal==="add" ? "Créer la salle" : "Enregistrer"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const TAB_CONTENT = { superadmin:<TabSuperAdmin/>, studio:<TabStudio/>, team:<TabTeam/>, users:<TabUsers/>, roles:<TabRoles/>, rooms:<TabRooms/>, account:<TabAccount/> };
 
   return (
     <div style={{ padding:p, maxWidth:isSA?"none":720 }}>

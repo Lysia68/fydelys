@@ -118,7 +118,7 @@ function DiscSelect({ label, value, onChange, options }) {
 }
 
 // ── Session card ─────────────────────────────────────────────────────────────
-function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onChangeStatus, onDelete, onCancel, onRestore, onAddBooking, onSendReminder }) {
+function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onChangeStatus, onDelete, onCancel, onRestore, onAddBooking, onSendReminder, closures = [] }) {
   const allDiscs = discs?.length ? discs : DISCIPLINES;
   const disc = allDiscs.find(d => String(d.id) === String(sess.disciplineId)) || allDiscs[0] || { name: "Cours", color: C.accent, icon: "🧘" };
   const bl     = bookings[sess.id] || [];
@@ -127,6 +127,25 @@ function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onCh
   const pct    = booked / sess.spots;
   const isExp  = expandedId === sess.id;
   const isFull = booked >= sess.spots;
+
+  // Calcul statut temporel
+  const now = new Date();
+  const sessStart = new Date(`${sess.date}T${sess.time}`);
+  const sessEnd   = new Date(sessStart.getTime() + (sess.duration||60) * 60000);
+  const isClosed = closures.some(c => sess.date >= c.date_start && sess.date <= c.date_end);
+  const sessionStatus = sess.status === "cancelled" ? "cancelled"
+    : isClosed ? "closed"
+    : now < sessStart ? "upcoming"
+    : now <= sessEnd  ? "ongoing"
+    : "past";
+  const statusLabel = { upcoming:"À venir", ongoing:"En cours", past:"Terminée", cancelled:"Annulée", closed:"Fermé — congés" };
+  const statusStyle = {
+    upcoming: { color:"#7C9EC8", bg:"#EEF4FA" },
+    ongoing:  { color:C.ok,     bg:C.okBg    },
+    past:     { color:C.textMuted, bg:"#EDE9E3" },
+    cancelled:{ color:C.warn,   bg:"#FFF5F5"  },
+    closed:   { color:"#856404", bg:"#FFF3CD"  },
+  }[sessionStatus];
 
   return (
     <div style={{ border: `1.5px solid ${isExp ? C.accent : C.borderSoft}`, borderRadius: 14, overflow: "hidden", marginBottom: 8, boxShadow: isExp ? `0 2px 12px rgba(176,120,72,.13)` : "0 1px 3px rgba(0,0,0,.05)", transition: "all .2s" }}>
@@ -188,9 +207,13 @@ function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onCh
         )}
         <span style={{ flexShrink: 0, display: "inline-flex", transition: "transform .2s", transform: isExp ? "rotate(180deg)" : "none" }}><IcoChevron s={16} c={C.textMuted} /></span>
       </div>
-      {sess.status === "cancelled" && (
-        <div style={{ background: "#FFF5F5", padding: "4px 14px", fontSize: 12, color: C.warn, fontWeight: 600 }}>⚠ Séance annulée</div>
-      )}
+      <div style={{ padding:"3px 14px 4px", display:"flex", alignItems:"center", gap:5, background:statusStyle.bg, borderTop:`1px solid ${statusStyle.color}22` }}>
+        {sessionStatus === "ongoing"   && <span style={{ width:7, height:7, borderRadius:"50%", background:C.ok, display:"inline-block", animation:"pulse 1.2s ease-in-out infinite" }}/>}
+        {sessionStatus === "cancelled" && <span style={{ fontSize:12 }}>⚠</span>}
+        {sessionStatus === "closed"    && <span style={{ fontSize:12 }}>🔒</span>}
+        <span style={{ fontSize:11, fontWeight:700, color:statusStyle.color, letterSpacing:.3, textTransform:"uppercase" }}>{statusLabel[sessionStatus]}</span>
+      </div>
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }`}</style>
       {isExp && (
         <PlanningAccordion sess={sess} sessId={sess.id} bookings={bookings}
           onChangeStatus={onChangeStatus} onAddBooking={onAddBooking} onSendReminder={onSendReminder} />
@@ -314,28 +337,71 @@ function Planning({ isMobile }) {
   const [recFilterDisc, setRecFilterDisc] = useState(null);
   const [isDemoData, setIsDemoData]   = useState(false);
   const [bookingModal, setBookingModal] = useState(null);
+  const [closures, setClosures]       = useState([]);
+  const [showClosures, setShowClosures] = useState(false);
+  const [closureForm, setClosureForm] = useState({ label:"Fermeture", date_start:"", date_end:"", single:true });
+  const [closureEdit, setClosureEdit] = useState(null); // null | closure obj
   const [localDiscs, setLocalDiscs]   = useState([]);
   const p = isMobile ? 12 : 28;
+
+  // ── Helpers fermetures ──────────────────────────────────────────────────────
+  function isDateClosed(dateStr) {
+    return closures.some(c => dateStr >= c.date_start && dateStr <= c.date_end);
+  }
+  function getClosureForDate(dateStr) {
+    return closures.find(c => dateStr >= c.date_start && dateStr <= c.date_end);
+  }
+  async function saveClosure(form, editId) {
+    const sb = createClient();
+    const payload = {
+      studio_id: studioId,
+      label: form.label || "Fermeture",
+      date_start: form.date_start,
+      date_end: form.single ? form.date_start : form.date_end,
+    };
+    if (editId) {
+      const { data } = await sb.from("studio_closures").update(payload).eq("id", editId).select().single();
+      if (data) setClosures(prev => prev.map(c => c.id === editId ? data : c).sort((a,b) => a.date_start.localeCompare(b.date_start)));
+    } else {
+      const { data } = await sb.from("studio_closures").insert(payload).select().single();
+      if (data) setClosures(prev => [...prev, data].sort((a,b) => a.date_start.localeCompare(b.date_start)));
+    }
+  }
+  async function deleteClosure(id) {
+    await createClient().from("studio_closures").delete().eq("id", id);
+    setClosures(prev => prev.filter(c => c.id !== id));
+  }
 
   const DAY_NUM = { Lun: 1, Mar: 2, Mer: 3, Jeu: 4, Ven: 5, Sam: 6, Dim: 0 };
   const effectiveDiscs = discs?.length ? discs : localDiscs;
   const allDiscOptions = (effectiveDiscs.length ? effectiveDiscs : DISCIPLINES).map(d => ({ id: String(d.id), name: d.name, icon: d.icon, color: d.color }));
 
-  // Charger disciplines si context vide
+  // Si le context discs arrive après le mount (cas fréquent), vider localDiscs pour laisser place aux discs du context
   useEffect(() => {
-    if (!studioId || discs?.length) return;
-    createClient().from("disciplines").select("id,name,icon,color,slots").eq("studio_id", studioId).order("created_at")
-      .then(({ data }) => { if (data?.length) setLocalDiscs(data.map(d => ({ ...d, slots: d.slots || [] }))); });
-  }, [studioId, discs?.length]);
+    if (discs?.length && localDiscs.length) setLocalDiscs([]);
+  }, [discs?.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Charger coachs
+  // Charger disciplines + coachs en parallèle dès que studioId est dispo
+  // Inclut les discs du context si déjà chargées, sinon fetch direct
   useEffect(() => {
     if (!studioId) return;
-    createClient().from("profiles").select("id, first_name, last_name").eq("studio_id", studioId).in("role", ["coach", "admin"])
+    const sb = createClient();
+    // Disciplines (seulement si context vide)
+    if (!discs?.length) {
+      sb.from("disciplines").select("id,name,icon,color,slots").eq("studio_id", studioId).order("created_at")
+        .then(({ data }) => { if (data?.length) setLocalDiscs(data.map(d => ({ ...d, slots: d.slots || [] }))); });
+    }
+    // Coachs — toujours recharger pour avoir la liste à jour
+    sb.from("profiles").select("id, first_name, last_name").eq("studio_id", studioId).in("role", ["coach", "admin"])
       .then(({ data }) => {
-        if (data?.length) setCoachesList(data.map(c => ({ id: c.id, name: `${c.first_name || ""} ${c.last_name || ""}`.trim() })).filter(c => c.name));
+        if (data?.length) setCoachesList(
+          data.map(c => ({ id: c.id, name: `${c.first_name || ""} ${c.last_name || ""}`.trim() })).filter(c => c.name)
+        );
       });
-  }, [studioId]);
+    // Fermetures
+    sb.from("studio_closures").select("*").eq("studio_id", studioId).order("date_start")
+      .then(({ data }) => { if (data) setClosures(data); });
+  }, [studioId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Charger sessions + bookings
   useEffect(() => {
@@ -500,6 +566,113 @@ function Planning({ isMobile }) {
       {isDemoData && <DemoBanner />}
 
       {/* Modale booking */}
+      {/* ── Modal Fermetures ── */}
+      {showClosures && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(42,31,20,.5)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}
+          onClick={e=>{ if(e.target===e.currentTarget){ setShowClosures(false); setClosureEdit(null); setClosureForm({label:"Fermeture",date_start:"",date_end:"",single:true}); }}}>
+          <div style={{ background:C.surface, borderRadius:16, padding:24, width:"100%", maxWidth:500, maxHeight:"85vh", overflowY:"auto", boxShadow:"0 24px 60px rgba(0,0,0,.2)" }}>
+            <div style={{ fontSize:16, fontWeight:800, color:C.text, marginBottom:4 }}>🔒 Jours de fermeture</div>
+            <div style={{ fontSize:13, color:C.textMuted, marginBottom:18 }}>Configurez les jours isolés ou plages de congés.</div>
+
+            {/* Formulaire ajout / édition */}
+            <div style={{ background:C.bg, borderRadius:10, padding:14, marginBottom:16 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:C.accent, marginBottom:10, textTransform:"uppercase", letterSpacing:.5 }}>
+                {closureEdit ? "Modifier la fermeture" : "Ajouter une fermeture"}
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div style={{ gridColumn:"1/-1" }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, marginBottom:4, textTransform:"uppercase" }}>Label</div>
+                  <input value={closureForm.label} onChange={e=>setClosureForm(f=>({...f,label:e.target.value}))}
+                    placeholder="Ex: Vacances d'été"
+                    style={{ width:"100%", padding:"8px 11px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box", color:C.text, background:C.surfaceWarm, fontFamily:"inherit" }}
+                    onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+                </div>
+                <div style={{ gridColumn:"1/-1", display:"flex", gap:8, alignItems:"center" }}>
+                  <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:13, color:C.textMid, cursor:"pointer" }}>
+                    <input type="radio" checked={closureForm.single} onChange={()=>setClosureForm(f=>({...f,single:true}))} style={{ accentColor:C.accent }}/>
+                    Jour isolé
+                  </label>
+                  <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:13, color:C.textMid, cursor:"pointer" }}>
+                    <input type="radio" checked={!closureForm.single} onChange={()=>setClosureForm(f=>({...f,single:false}))} style={{ accentColor:C.accent }}/>
+                    Plage de dates
+                  </label>
+                </div>
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, marginBottom:4, textTransform:"uppercase" }}>{closureForm.single?"Date":"Du"}</div>
+                  <input type="date" value={closureForm.date_start} onChange={e=>setClosureForm(f=>({...f,date_start:e.target.value}))}
+                    style={{ width:"100%", padding:"8px 11px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box", color:C.text, background:C.surfaceWarm }}
+                    onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+                </div>
+                {!closureForm.single && (
+                  <div>
+                    <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, marginBottom:4, textTransform:"uppercase" }}>Au</div>
+                    <input type="date" value={closureForm.date_end} min={closureForm.date_start} onChange={e=>setClosureForm(f=>({...f,date_end:e.target.value}))}
+                      style={{ width:"100%", padding:"8px 11px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box", color:C.text, background:C.surfaceWarm }}
+                      onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+                  </div>
+                )}
+              </div>
+              <div style={{ display:"flex", gap:8, marginTop:12, justifyContent:"flex-end" }}>
+                {closureEdit && (
+                  <button onClick={()=>{ setClosureEdit(null); setClosureForm({label:"Fermeture",date_start:"",date_end:"",single:true}); }}
+                    style={{ padding:"7px 14px", borderRadius:8, border:`1px solid ${C.border}`, background:C.bg, color:C.textMid, fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                    Annuler
+                  </button>
+                )}
+                <button
+                  disabled={!closureForm.date_start || (!closureForm.single && !closureForm.date_end)}
+                  onClick={async()=>{
+                    await saveClosure(closureForm, closureEdit?.id||null);
+                    setClosureEdit(null);
+                    setClosureForm({label:"Fermeture",date_start:"",date_end:"",single:true});
+                  }}
+                  style={{ padding:"7px 16px", borderRadius:8, border:"none", background:closureForm.date_start?C.accent:"#ccc", color:"white", fontSize:12, fontWeight:700, cursor:closureForm.date_start?"pointer":"not-allowed" }}>
+                  {closureEdit ? "Enregistrer" : "Ajouter"}
+                </button>
+              </div>
+            </div>
+
+            {/* Liste des fermetures */}
+            {closures.length === 0 ? (
+              <div style={{ textAlign:"center", padding:"20px 0", color:C.textMuted, fontSize:13 }}>Aucune fermeture configurée</div>
+            ) : (
+              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                {closures.map(c => {
+                  const isSingle = c.date_start === c.date_end;
+                  const fmt = d => new Date(d+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"});
+                  return (
+                    <div key={c.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:9, background:C.bg, border:`1px solid ${C.borderSoft}` }}>
+                      <span style={{ fontSize:16 }}>🔒</span>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13, fontWeight:700, color:C.text }}>{c.label}</div>
+                        <div style={{ fontSize:12, color:C.textMuted, marginTop:1 }}>
+                          {isSingle ? fmt(c.date_start) : `${fmt(c.date_start)} → ${fmt(c.date_end)}`}
+                        </div>
+                      </div>
+                      <button onClick={()=>{ setClosureEdit(c); setClosureForm({label:c.label,date_start:c.date_start,date_end:c.date_end,single:c.date_start===c.date_end}); }}
+                        style={{ fontSize:11, padding:"4px 10px", borderRadius:6, border:`1px solid ${C.border}`, background:C.surface, color:C.textMid, cursor:"pointer", fontWeight:600 }}>
+                        Modifier
+                      </button>
+                      <button onClick={()=>deleteClosure(c.id)}
+                        style={{ fontSize:11, padding:"4px 8px", borderRadius:6, border:"1px solid #EFC8BC", background:C.warnBg, color:C.warn, cursor:"pointer", fontWeight:600 }}>
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div style={{ marginTop:16, textAlign:"right" }}>
+              <button onClick={()=>{ setShowClosures(false); setClosureEdit(null); setClosureForm({label:"Fermeture",date_start:"",date_end:"",single:true}); }}
+                style={{ padding:"8px 20px", borderRadius:8, border:"none", background:C.accent, color:"white", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {bookingModal && (
         <BookingModal
           sessId={bookingModal}
@@ -530,7 +703,11 @@ function Planning({ isMobile }) {
               ✕ Réinitialiser
             </button>
           )}
-          <div style={{ marginLeft: "auto", flexShrink: 0 }}>
+          <div style={{ marginLeft: "auto", display:"flex", gap:8, flexShrink: 0, alignItems:"center" }}>
+            <button onClick={() => setShowClosures(true)}
+              style={{ display:"flex", alignItems:"center", gap:5, fontSize:12, padding:"7px 13px", borderRadius:8, border:`1.5px solid ${C.border}`, background:closures.length>0?C.warnBg:C.surface, color:closures.length>0?C.warn:C.textMid, cursor:"pointer", fontWeight:600, whiteSpace:"nowrap" }}>
+              🔒 Fermetures{closures.length>0?` (${closures.length})`:""}
+            </button>
             <Button sm variant="primary" onClick={() => {
               const allD = effectiveDiscs.length ? effectiveDiscs : DISCIPLINES;
               if (!showAdd && allD.length > 0 && !nS.disciplineId) setNS(prev => ({ ...prev, disciplineId: String(allD[0].id) }));
@@ -573,6 +750,11 @@ function Planning({ isMobile }) {
                     </select>
                   </div>
                   <DatePicker label="Date" value={nS.date} onChange={v => setNS({ ...nS, date: v })} />
+                  {nS.date && isDateClosed(nS.date) && (
+                    <div style={{ gridColumn:"1/-1", display:"flex", alignItems:"center", gap:8, padding:"8px 12px", borderRadius:8, background:"#FFF3CD", border:"1px solid #F0C030", color:"#856404", fontSize:12, fontWeight:600 }}>
+                      🔒 Ce jour est marqué comme fermé ({getClosureForDate(nS.date)?.label || "Fermeture"}) — vous pouvez quand même créer la séance.
+                    </div>
+                  )}
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: .8, marginBottom: 5 }}>Heure</div>
                     <TimePicker value={nS.time} onChange={v => setNS({ ...nS, time: v })} />
@@ -773,7 +955,7 @@ function Planning({ isMobile }) {
           <div key={date} style={{ marginBottom: 22 }}>
             <DateLabel date={date} />
             {filtered.filter(s => s.date === date).map(s => (
-              <PlanningSessionCard key={s.id} sess={s} expandedId={expandedId} bookings={bookings} discs={effectiveDiscs}
+              <PlanningSessionCard key={s.id} sess={s} expandedId={expandedId} bookings={bookings} discs={effectiveDiscs} closures={closures}
                 onToggle={id => setExpandedId(prev => prev === id ? null : id)}
                 onChangeStatus={handleChangeStatus}
                 onAddBooking={id => setBookingModal(id)}
