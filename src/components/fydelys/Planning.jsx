@@ -553,24 +553,12 @@ function Planning({ isMobile }) {
 
   // Construire la timeline enrichie : jours séances + plages fermetures intercalées
   const timeline = (() => {
-    if (!closures.length) return dates.map(d => ({ type:"day", date:d }));
-    // Bornes de la fenêtre : premier/dernier jour de séance ± une marge
-    const allDates = dates.length ? dates : [];
-    const minDate = allDates[0] || null;
-    const maxDate = allDates[allDates.length - 1] || null;
-    if (!minDate) return [];
-    // Collect closure blocks visible in window
-    const closureBlocks = closures.filter(c => c.date_end >= minDate && c.date_start <= maxDate);
-    // Build a set of all "items" sorted by date
     const items = [];
-    const sessionDaySet = new Set(dates);
     // Add all session days
     dates.forEach(d => items.push({ type:"day", date:d }));
-    // Add closure blocks (avoid duplicating if session exists same day)
-    closureBlocks.forEach(c => {
-      // Insert closure banner before the first session day AFTER the closure start
-      const insertDate = c.date_start;
-      items.push({ type:"closure", date:insertDate, closure:c });
+    // Add ALL closures (not filtered by session window — affiche même sans séances)
+    closures.forEach(c => {
+      items.push({ type:"closure", date:c.date_start, closure:c });
     });
     // Sort: closures appear before sessions of same date
     items.sort((a,b) => {
@@ -578,7 +566,7 @@ function Planning({ isMobile }) {
       if (a.type === "closure" && b.type === "day") return -1;
       return 1;
     });
-    // Deduplicate consecutive closures with same id
+    // Deduplicate closures with same id (cas plages multi-jours)
     const seen = new Set();
     return items.filter(item => {
       if (item.type !== "closure") return true;
@@ -1128,7 +1116,7 @@ function Planning({ isMobile }) {
         {/* ── Liste séances ── */}
         {dbLoading ? (
           <div style={{ textAlign: "center", padding: "40px 0", color: C.textMuted, fontSize: 15 }}>⏳ Chargement…</div>
-        ) : dates.length === 0 ? (
+        ) : timeline.length === 0 ? (
           <EmptyState icon="📅" title="Aucune séance" sub={filterDiscs.length ? "Aucune séance pour cette discipline" : "Commencez par créer une séance !"} />
         ) : timeline.map((item, idx) => item.type === "closure" ? (
           <div key={"cl-"+item.closure.id} style={{ display:"flex", alignItems:"center", gap:10, margin:"4px 0 12px", padding:"10px 16px", background:"#FFFBEB", borderRadius:12, border:"1.5px solid #FDE68A" }}>
