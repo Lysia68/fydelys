@@ -678,7 +678,7 @@ function Settings({ isMobile, onImpersonate }) {
           <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:6 }}>
             {(isSA
               ? [["Planning",["superadmin","admin","staff"]],["Membres",["superadmin","admin","staff"]],["Paiements",["superadmin","admin"]],["Paramètres",["superadmin","admin"]],["Tous les tenants",["superadmin"]],["Config plateforme",["superadmin"]]]
-              : [["Planning",["admin","staff"]],["Membres",["admin","staff"]],["Paiements",["admin"]],["Paramètres",["admin"]],["Disciplines",["admin"]],["Équipe",["admin"]]]
+              : [["Planning",["admin","staff","adherent"]],["Membres",["admin","staff"]],["Paiements",["admin"]],["Paramètres",["admin"]],["Disciplines",["admin"]],["Équipe",["admin"]]]
             ).map(([perm,roles])=>{
               const has = roles.includes(key);
               return (
