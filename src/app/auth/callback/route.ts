@@ -177,7 +177,10 @@ export async function GET(request: NextRequest) {
           first_name: r.firstName || "", last_name: r.lastName || "",
           is_coach: r.isCoach || false,
         })
-        await db.rpc("seed_new_tenant", { p_studio_id: studio.id, p_type: r.type || "Multi" })
+        await db.rpc("seed_new_tenant", {
+          p_studio_id: studio.id,
+          p_type:      r.type || "Multi",
+        })
         await db.from("pending_registrations").delete().eq("email", userEmail)
         response.headers.set("Location", `https://${studio.slug}.fydelys.fr/dashboard`)
         return response

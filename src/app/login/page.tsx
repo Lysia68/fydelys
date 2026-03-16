@@ -50,16 +50,16 @@ function DisciplinesModal({ studioType, onClose, onSave }: {
   studioType: string; onClose: ()=>void; onSave: (d: DisciplineConfig[])=>void
 }) {
   const init = DISC_OPTS.filter(d=>(DEFAULTS[studioType]||DEFAULTS.Multi).includes(d.name))
-    .map(d=>({...d, slots:[{day:"Lun",time:"09:00"}]}))
+    .map((d,i)=>({...d, slots:[{day:["Lun","Mar","Mer","Jeu","Ven"][i%5], time:"19:00"}]}))
   const [discs, setDiscs] = useState<DisciplineConfig[]>(init)
   const [active, setActive] = useState(0)
 
   const toggle = (d: {name:string;icon:string}) => {
     const i = discs.findIndex(x=>x.name===d.name)
     if(i>=0){ setDiscs(p=>p.filter((_,j)=>j!==i)); setActive(0) }
-    else { setDiscs(p=>[...p,{...d,slots:[{day:"Lun",time:"09:00"}]}]); setActive(discs.length) }
+    else { setDiscs(p=>[...p,{...d,slots:[{day:"Lun",time:"19:00"}]}]); setActive(discs.length) }
   }
-  const addSlot = (di:number) => setDiscs(p=>p.map((d,i)=>i===di?{...d,slots:[...d.slots,{day:"Lun",time:"10:00"}]}:d))
+  const addSlot = (di:number) => setDiscs(p=>p.map((d,i)=>i===di?{...d,slots:[...d.slots,{day:"Lun",time:"19:00"}]}:d))
   const rmSlot  = (di:number,si:number) => setDiscs(p=>p.map((d,i)=>i===di?{...d,slots:d.slots.filter((_,j)=>j!==si)}:d))
   const upSlot  = (di:number,si:number,f:"day"|"time",v:string) =>
     setDiscs(p=>p.map((d,i)=>i===di?{...d,slots:d.slots.map((s,j)=>j===si?{...s,[f]:v}:s)}:d))
@@ -206,12 +206,11 @@ export default function LoginPage() {
   const [reg, setReg] = useState({
     studioName:"", slug:"", city:"", zip:"", address:"",
     type:"Yoga", firstName:"", lastName:"", email:"", phone:"",
-    isCoach:false, disciplines:[] as DisciplineConfig[],
+    isCoach:false,
   })
   const [regErrors, setRegErrors] = useState<Record<string,string>>({})
   const [regStep, setRegStep]     = useState(1)
   const [regSent, setRegSent]     = useState(false)
-  const [discModal, setDiscModal] = useState(false)
   const [slugStatus, setSlugStatus]   = useState<"idle"|"checking"|"ok"|"taken">("idle")
   const [emailStatus, setEmailStatus] = useState<"idle"|"checking"|"ok"|"taken">("idle")
 
@@ -349,7 +348,7 @@ export default function LoginPage() {
       email:reg.email,
       data:{studioName:reg.studioName,slug:reg.slug,city:reg.city,zip:reg.zip||null,address:reg.address||null,
             type:reg.type,firstName:reg.firstName,lastName:reg.lastName,phone:reg.phone,
-            isCoach:reg.isCoach,disciplines:reg.disciplines},
+            isCoach:reg.isCoach},
       expires_at:new Date(Date.now()+24*3600*1000).toISOString(),
     },{onConflict:"email"})
     if(se){ setError("Erreur lors de l'enregistrement."); setLoading(false); return }
@@ -367,6 +366,7 @@ export default function LoginPage() {
     const e:Record<string,string>={}
     if(!reg.studioName.trim()) e.studioName="Obligatoire"
     if(!reg.city.trim())       e.city="Obligatoire"
+    if(!reg.address.trim())    e.address="Obligatoire"
     if(!reg.slug.trim())       e.slug="Obligatoire"
     else if(!validSlug(reg.slug)) e.slug="Lettres minuscules et chiffres uniquement, sans tirets"
     return e
@@ -404,7 +404,6 @@ export default function LoginPage() {
 
 
 
-  const totalSlots = reg.disciplines.reduce((n,d)=>n+d.slots.length,0)
 
   if (!hydrated) return (
     <div style={{minHeight:"100vh",background:"#F4EFE8",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -543,7 +542,7 @@ export default function LoginPage() {
                     <FR label="Ville" k="city" placeholder="Paris" required value={reg.city} onChange={updReg} error={regErrors.city}/>
                     <FR label="Code postal" k="zip" placeholder="75001" value={reg.zip} onChange={updReg}/>
                   </div>
-                  <FR label="Adresse" k="address" placeholder="12 rue de la Paix" value={reg.address} onChange={updReg}/>
+                  <FR label="Adresse" k="address" placeholder="12 rue de la Paix" required value={reg.address} onChange={updReg} error={regErrors.address}/>
                   <SR label="Type de pratique" k="type" value={reg.type} onChange={updReg} opts={[
                     {v:"Yoga",l:"🧘 Yoga"},{v:"Pilates",l:"⚡ Pilates"},{v:"Danse",l:"💃 Danse"},
                     {v:"Fitness",l:"🏋 Fitness"},{v:"Méditation",l:"☯ Méditation"},{v:"Multi",l:"🌀 Multi"}
@@ -626,6 +625,7 @@ export default function LoginPage() {
                       ["Ville",       reg.city],
                       ["Code postal",  reg.zip],
                       ["Type",        reg.type],
+
                       ["Plan",        "À choisir après l'activation (9 · 29 · 69 €/mois)"],
                       ["Gérant",      `${reg.firstName} ${reg.lastName}`],
                       ["Email",       reg.email],
@@ -639,7 +639,7 @@ export default function LoginPage() {
                     ))}
                   </div>
                   <div style={{padding:"10px 14px",background:"#FBF6EE",borderRadius:9,border:"1px solid rgba(160,104,56,.2)",fontSize:12,color:C.sub,lineHeight:1.6}}>
-                    🌱 Abonnements de base et une séance de démo seront créés automatiquement.
+                    🌱 Vos disciplines, créneaux et abonnements de base seront configurés automatiquement.
                   </div>
                   {error&&<div style={{background:"#FDF0EC",border:"1px solid #EFC8BC",borderRadius:9,padding:"9px 13px",fontSize:13,color:"#A85030"}}>⚠ {error}</div>}
                   <div style={{display:"flex",gap:10}}>
