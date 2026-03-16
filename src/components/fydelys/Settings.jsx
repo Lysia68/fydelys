@@ -610,7 +610,7 @@ function Settings({ isMobile, onImpersonate }) {
         </Card>
 
         <Card noPad style={{ marginBottom:14 }}>
-          <SectionHead>Site vitrine</SectionHead>
+          <SectionHead>Site vitrine <span style={{fontSize:11,fontWeight:500,color:C.textMuted,marginLeft:6}}>— si vous n'avez pas de site web</span></SectionHead>
           <div style={{ padding:"16px 18px", display:"flex", flexDirection:"column", gap:14 }}>
             {/* Toggle activation */}
             {(() => {
@@ -618,11 +618,13 @@ function Settings({ isMobile, onImpersonate }) {
               return (
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", background:studioForm.public_page_enabled?C.okBg:C.bg, borderRadius:10, border:`1.5px solid ${studioForm.public_page_enabled?C.ok:C.border}`, transition:"all .2s" }}>
                   <div>
-                    <div style={{ fontSize:13, fontWeight:700, color:C.text }}>Site vitrine</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:C.text }}>Site vitrine gratuit</div>
                     <div style={{ fontSize:12, color:C.textSoft, marginTop:2 }}>
                       {studioForm.public_page_enabled
-                        ? "Activé — visible sur votre sous-domaine"
-                        : canEnable ? "Désactivé — redirige vers la connexion" : "Ajoutez une photo et une description pour activer"}
+                        ? "Activé — votre studio est visible en ligne"
+                        : canEnable
+                          ? "À activer si vous n'avez pas de site web"
+                          : "Ajoutez une photo et une description pour activer"}
                     </div>
                   </div>
                   <button disabled={!isAdmin || (!studioForm.public_page_enabled && !canEnable)}

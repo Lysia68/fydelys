@@ -227,12 +227,15 @@ function Dashboard({ isMobile }) {
                   : alerts.map(a=>(
                     a.label === "page_publique"
                       ? <div key="page_publique" style={{ padding:"12px 16px", borderBottom:`1px solid ${C.borderSoft}` }}>
-                          <div style={{ fontSize:13, color:C.text, fontWeight:600, marginBottom:4 }}>
-                            Votre page publique n'est pas encore active
+                          <div style={{ fontSize:13, color:C.text, fontWeight:600, marginBottom:2 }}>
+                            🌐 Site vitrine non activé
+                          </div>
+                          <div style={{ fontSize:12, color:C.textSoft, marginBottom:8, lineHeight:1.5 }}>
+                            Vous n'avez pas de site web ? Activez votre page vitrine gratuite pour présenter votre studio et afficher votre planning en ligne.
                           </div>
                           <button onClick={()=>{ window.dispatchEvent(new CustomEvent("fydelys:nav", { detail:"settings" })); }}
                             style={{ fontSize:12, fontWeight:700, color:C.accent, background:C.accentBg, border:`1px solid ${C.accent}40`, borderRadius:7, padding:"4px 12px", cursor:"pointer" }}>
-                            Activer maintenant →
+                            Configurer mon site vitrine →
                           </button>
                         </div>
                       : <div key={a.label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 16px", borderBottom:`1px solid ${C.borderSoft}` }}>
