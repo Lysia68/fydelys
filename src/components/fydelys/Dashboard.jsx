@@ -69,6 +69,7 @@ function Dashboard({ isMobile }) {
   const [payments, setPayments] = useState([]);
   const [isDemo, setIsDemo] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [publicPageEnabled, setPublicPageEnabled] = useState(null); // null=loading
 
   const handleToggle = (id) => setExpandedId(prev => prev===id ? null : id);
   const handleChangeStatus = (bid, sid, ns) => {
@@ -80,6 +81,10 @@ function Dashboard({ isMobile }) {
     const sb = createClient();
     const today = new Date().toISOString().slice(0,10);
     const monthStart = today.slice(0,7);
+
+    // Charger le flag page publique
+    sb.from("studios").select("public_page_enabled, slug").eq("id", studioId).single()
+      .then(({ data }) => setPublicPageEnabled(data?.public_page_enabled === true ? { enabled:true, slug:data.slug } : { enabled:false, slug:data?.slug||"" }));
 
     Promise.all([
       sb.from("sessions").select("id,discipline_id,teacher,room,duration_min,spots,session_date,session_time,status").eq("studio_id", studioId),
@@ -175,6 +180,7 @@ function Dashboard({ isMobile }) {
   const alerts = [
     unpaidAmount > 0 && { label:"Impayés en cours", value:`${unpaidAmount.toLocaleString("fr-FR")} €`, c:C.warn, bg:C.warnBg },
     waitlistCount > 0 && { label:"Liste d'attente", value:`${waitlistCount} membre${waitlistCount>1?"s":""}`, c:C.info, bg:C.infoBg },
+    publicPageEnabled !== null && !publicPageEnabled.enabled && { label:"page_publique", c:C.accent, bg:C.accentBg, slug:publicPageEnabled.slug },
   ].filter(Boolean);
 
   // Membres récents triés par date d'inscription
@@ -219,10 +225,20 @@ function Dashboard({ isMobile }) {
                 : alerts.length === 0
                   ? <EmptyCard label="Aucune alerte pour le moment"/>
                   : alerts.map(a=>(
-                    <div key={a.label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 16px", borderBottom:`1.5px solid ${C.borderSoft}` }}>
-                      <span style={{ fontSize:15, color:C.textMid }}>{a.label}</span>
-                      <span style={{ fontSize:15, fontWeight:700, color:a.c, background:a.bg, padding:"3px 12px", borderRadius:12 }}>{a.value}</span>
-                    </div>
+                    a.label === "page_publique"
+                      ? <div key="page_publique" style={{ padding:"12px 16px", borderBottom:`1px solid ${C.borderSoft}` }}>
+                          <div style={{ fontSize:13, color:C.text, fontWeight:600, marginBottom:4 }}>
+                            Votre page publique n'est pas encore active
+                          </div>
+                          <button onClick={()=>{ window.dispatchEvent(new CustomEvent("fydelys:nav", { detail:"settings" })); }}
+                            style={{ fontSize:12, fontWeight:700, color:C.accent, background:C.accentBg, border:`1px solid ${C.accent}40`, borderRadius:7, padding:"4px 12px", cursor:"pointer" }}>
+                            Activer maintenant →
+                          </button>
+                        </div>
+                      : <div key={a.label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 16px", borderBottom:`1px solid ${C.borderSoft}` }}>
+                          <span style={{ fontSize:14, color:C.textMid }}>{a.label}</span>
+                          <span style={{ fontSize:13, fontWeight:700, color:a.c, background:a.bg, padding:"3px 12px", borderRadius:12 }}>{a.value}</span>
+                        </div>
                   ))
               }
             </Card>

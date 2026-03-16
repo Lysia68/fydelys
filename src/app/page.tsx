@@ -159,10 +159,140 @@ function useVisible(ref: React.RefObject<HTMLElement | null>, threshold = 0.2) {
   return visible
 }
 
+// ── Page vitrine studio (sous-domaine) ────────────────────────────────────
+function StudioPage({ slug }: { slug: string }) {
+  const [studio, setStudio] = useState<any>(null)
+  const [sessions, setSessions] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch(`/api/studio-public?slug=${slug}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.redirect_login) { window.location.replace("/login"); return; }
+        if (d.studio) { setStudio(d.studio); setSessions(d.sessions || []) }
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [slug])
+
+  if (loading) return (
+    <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#F4EFE8", fontFamily:"'Helvetica Neue',Arial,sans-serif" }}>
+      <div style={{ fontSize:14, color:"#8C7B6C" }}>Chargement…</div>
+    </div>
+  )
+
+  if (!studio) return (
+    <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", background:"#F4EFE8", fontFamily:"'Helvetica Neue',Arial,sans-serif", gap:12 }}>
+      <div style={{ fontSize:40 }}>🔍</div>
+      <div style={{ fontSize:18, fontWeight:700, color:"#2A1F14" }}>Studio introuvable</div>
+      <div style={{ fontSize:14, color:"#8C7B6C" }}>Ce lien ne correspond à aucun studio actif.</div>
+    </div>
+  )
+
+  const accent = studio.accent_color || "#B07848"
+  const accentBg = accent + "18"
+  const today = new Date().toISOString().slice(0, 10)
+  const upcomingSessions = sessions.filter((s: any) => s.session_date >= today).slice(0, 8)
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#F4EFE8", fontFamily:"'Helvetica Neue',Arial,sans-serif", color:"#2A1F14" }}>
+      {/* Header */}
+      <div style={{ background: studio.cover_photo_url ? "none" : "#2A1F14", position:"relative", overflow:"hidden" }}>
+        {studio.cover_photo_url && (
+          <img src={studio.cover_photo_url} alt={studio.name}
+            style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover", filter:"brightness(.45)" }}/>
+        )}
+        <div style={{ position:"relative", padding:"40px 24px 36px", maxWidth:720, margin:"0 auto", textAlign:"center" }}>
+          <div style={{ fontSize:32, fontWeight:800, color:"#fff", letterSpacing:-0.5, marginBottom:8 }}>{studio.name}</div>
+          {studio.city && <div style={{ fontSize:14, color:"rgba(255,255,255,.65)", marginBottom:16 }}>📍 {studio.city}</div>}
+          {studio.description && (
+            <div style={{ fontSize:15, color:"rgba(255,255,255,.8)", lineHeight:1.7, maxWidth:500, margin:"0 auto 24px" }}>
+              {studio.description}
+            </div>
+          )}
+          <a href="/login" style={{ display:"inline-block", padding:"12px 32px", borderRadius:12, background:accent, color:"#fff", fontSize:15, fontWeight:700, textDecoration:"none", boxShadow:"0 4px 20px rgba(0,0,0,.2)" }}>
+            Je réserve →
+          </a>
+        </div>
+      </div>
+
+      {/* Prochaines séances */}
+      <div style={{ maxWidth:720, margin:"0 auto", padding:"32px 24px" }}>
+        {upcomingSessions.length > 0 && (
+          <>
+            <div style={{ fontSize:18, fontWeight:800, color:"#2A1F14", marginBottom:16 }}>📅 Prochaines séances</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {upcomingSessions.map((s: any) => {
+                const dateStr = new Date(s.session_date).toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long" })
+                return (
+                  <div key={s.id} style={{ background:"#fff", borderRadius:12, padding:"14px 18px", border:"1px solid #DDD5C8", display:"flex", alignItems:"center", gap:14, boxShadow:"0 2px 8px rgba(42,31,20,.06)" }}>
+                    <div style={{ width:48, height:48, borderRadius:10, background:accentBg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>
+                      {s.disciplines?.icon || "🧘"}
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:15, fontWeight:700 }}>{s.disciplines?.name || "Séance"}</div>
+                      <div style={{ fontSize:12, color:"#8C7B6C", marginTop:2, textTransform:"capitalize" }}>
+                        {dateStr} · {s.session_time?.slice(0,5)} · {s.duration_min} min
+                      </div>
+                      {s.teacher && <div style={{ fontSize:12, color:"#8C7B6C" }}>{s.teacher}{s.room ? ` · ${s.room}` : ""}</div>}
+                    </div>
+                    <div style={{ textAlign:"right", flexShrink:0 }}>
+                      <div style={{ fontSize:13, fontWeight:700, color: s.spots - (s.booked||0) <= 0 ? "#D97706" : accent }}>
+                        {s.spots - (s.booked||0) <= 0 ? "Complet" : `${s.spots - (s.booked||0)} places`}
+                      </div>
+                      <a href="/login" style={{ fontSize:12, color:accent, fontWeight:600, textDecoration:"none" }}>Réserver →</a>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <div style={{ textAlign:"center", marginTop:20 }}>
+              <a href="/login" style={{ display:"inline-block", padding:"11px 28px", borderRadius:10, background:accent, color:"#fff", fontSize:14, fontWeight:700, textDecoration:"none" }}>
+                Voir tout le planning →
+              </a>
+            </div>
+          </>
+        )}
+
+        {/* Infos contact */}
+        {(studio.phone || studio.email || studio.website) && (
+          <div style={{ marginTop:32, padding:"20px 24px", background:"#fff", borderRadius:12, border:"1px solid #DDD5C8" }}>
+            <div style={{ fontSize:15, fontWeight:700, marginBottom:12 }}>📞 Contact</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {studio.phone && <div style={{ fontSize:14, color:"#5C4A38" }}>📱 {studio.phone}</div>}
+              {studio.email && <a href={`mailto:${studio.email}`} style={{ fontSize:14, color:accent, textDecoration:"none" }}>✉️ {studio.email}</a>}
+              {studio.website && <a href={studio.website} target="_blank" rel="noopener noreferrer" style={{ fontSize:14, color:accent, textDecoration:"none" }}>🌐 {studio.website}</a>}
+            </div>
+          </div>
+        )}
+
+        <div style={{ textAlign:"center", marginTop:32, paddingTop:24, borderTop:"1px solid #DDD5C8" }}>
+          <div style={{ fontSize:11, color:"#B0A090" }}>
+            Géré avec <a href="https://fydelys.fr" style={{ color:accent, textDecoration:"none", fontWeight:600 }}>Fydelys</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false)
+  const [studioSlug, setStudioSlug] = useState<string | null>(null)
   const stepsRef = useRef<HTMLDivElement>(null)
   const stepsVisible = useVisible(stepsRef, 0.2)
+
+  useEffect(() => {
+    const h = window.location.hostname
+    const m = h.match(/^([a-z0-9-]+)\.fydelys\.fr$/)
+    if (m && m[1] !== "www" && m[1] !== "app") {
+      setStudioSlug(m[1])
+    }
+  }, [])
+
+  // Afficher la page vitrine si sous-domaine studio
+  if (studioSlug) return <StudioPage slug={studioSlug}/>
 
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 40)

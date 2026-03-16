@@ -87,7 +87,7 @@ function Settings({ isMobile, onImpersonate }) {
   const realRole = userRole || "admin";
   const [currentRole, setCurrentRole] = useState(realRole);
   // ── Données studio depuis Supabase
-  const [studioForm, setStudioForm] = useState({ name:"", address:"", city:"", phone:"", email:"", website:"", cancel_delay_hours:12, booking_days_ahead:7, waitlist_max:10, timezone:"Europe/Paris", reminder_hours_default:24 });
+  const [studioForm, setStudioForm] = useState({ name:"", address:"", city:"", phone:"", email:"", website:"", cancel_delay_hours:12, booking_days_ahead:7, waitlist_max:10, timezone:"Europe/Paris", reminder_hours_default:24, description:"", cover_photo_url:"", accent_color:"#B07848", public_page_enabled:false });
   const [studioSaving, setStudioSaving] = useState(false);
   const [studioToast, setStudioToast] = useState(null);
   const showStudioToast = (msg, ok=true) => { setStudioToast({msg,ok}); setTimeout(()=>setStudioToast(null),3000); };
@@ -95,7 +95,7 @@ function Settings({ isMobile, onImpersonate }) {
   React.useEffect(() => {
     if (!studioId) return;
     createClient().from("studios")
-      .select("name, address, city, phone, email, website, cancel_delay_hours, booking_days_ahead, waitlist_max, timezone, reminder_hours_default")
+      .select("name, address, city, phone, email, website, cancel_delay_hours, booking_days_ahead, waitlist_max, timezone, reminder_hours_default, description, cover_photo_url, accent_color, slug, public_page_enabled")
       .eq("id", studioId).single()
       .then(({ data }) => {
         if (data) setStudioForm({
@@ -110,6 +110,11 @@ function Settings({ isMobile, onImpersonate }) {
           waitlist_max: data.waitlist_max ?? 10,
           timezone: data.timezone || "Europe/Paris",
           reminder_hours_default: data.reminder_hours_default ?? 24,
+          description: data.description || "",
+          cover_photo_url: data.cover_photo_url || "",
+          accent_color: data.accent_color || "#B07848",
+          slug: data.slug || "",
+          public_page_enabled: data.public_page_enabled ?? false,
         });
       });
   }, [studioId]);
@@ -128,6 +133,10 @@ function Settings({ isMobile, onImpersonate }) {
       cancel_delay_hours: parseInt(studioForm.cancel_delay_hours) || 12,
       booking_days_ahead: parseInt(studioForm.booking_days_ahead) || 7,
       waitlist_max: parseInt(studioForm.waitlist_max) || 10,
+      description: studioForm.description || null,
+      cover_photo_url: studioForm.cover_photo_url || null,
+      accent_color: studioForm.accent_color || "#B07848",
+      public_page_enabled: studioForm.public_page_enabled ?? false,
     };
     // Colonnes ajoutées par migration — incluses seulement si disponibles
     const extPayload = {
@@ -387,7 +396,7 @@ function Settings({ isMobile, onImpersonate }) {
     { key:"studio",  label:"Studio",       icon:<IcoSettings2 s={14} c="currentColor"/> },
     { key:"team",    label:"Équipe",        icon:<IcoUsers2 s={14} c="currentColor"/> },
     { key:"users",   label:"Utilisateurs", icon:<IcoTag2 s={14} c="currentColor"/> },
-    { key:"roles",  label:"Rôles",        icon:<IcoTag2 s={14} c="currentColor"/> },
+
     { key:"rooms",    label:"Salles",       icon:<IcoDoor s={14} c="currentColor"/> },
     ...(isAdmin ? [{ key:"payments", label:"Paiements", icon:<IcoEuro2 s={14} c="currentColor"/> }] : []),
     { key:"account",  label:"Mon compte",  icon:<IcoHome2 s={14} c="currentColor"/> },
@@ -534,6 +543,105 @@ function Settings({ isMobile, onImpersonate }) {
             </div>
             <div style={{ fontSize:12, color:C.textMuted, background:C.bg, padding:"8px 12px", borderRadius:8, border:`1px solid ${C.borderSoft}` }}>
               ℹ Un email de rappel sera envoyé <strong>{studioForm.reminder_hours_default}h</strong> avant chaque séance, et un email d'anniversaire le jour J, selon le fuseau <strong>{studioForm.timezone}</strong>.
+            </div>
+          </div>
+          {isAdmin && (
+            <div style={{ padding:"0 18px 16px" }}>
+              <Button sm variant="primary" onClick={saveStudio}>{studioSaving?"Enregistrement…":"Enregistrer"}</Button>
+            </div>
+          )}
+        </Card>
+
+        <Card noPad style={{ marginBottom:14 }}>
+          <SectionHead>Page publique</SectionHead>
+          <div style={{ padding:"16px 18px", display:"flex", flexDirection:"column", gap:14 }}>
+            {/* Toggle activation */}
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", background:studioForm.public_page_enabled?C.okBg:C.bg, borderRadius:10, border:`1.5px solid ${studioForm.public_page_enabled?C.ok:C.border}`, transition:"all .2s" }}>
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color:C.text }}>Page vitrine publique</div>
+                <div style={{ fontSize:12, color:C.textSoft, marginTop:2 }}>
+                  {studioForm.public_page_enabled ? "Activée — visible sur votre sous-domaine" : "Désactivée — redirige vers la connexion"}
+                </div>
+              </div>
+              <button disabled={!isAdmin} onClick={()=>setStudioForm(f=>({...f,public_page_enabled:!f.public_page_enabled}))}
+                style={{ width:44, height:24, borderRadius:12, border:"none", background:studioForm.public_page_enabled?C.ok:"#D0C8C0", cursor:isAdmin?"pointer":"default", position:"relative", transition:"background .2s", flexShrink:0 }}>
+                <div style={{ position:"absolute", top:3, left:studioForm.public_page_enabled?22:3, width:18, height:18, borderRadius:"50%", background:"white", transition:"left .2s", boxShadow:"0 1px 4px rgba(0,0,0,.2)" }}/>
+              </button>
+            </div>
+
+            {/* Lien de la page — seulement si activée */}
+            {studioForm.slug && studioForm.public_page_enabled && (
+              <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", background:C.accentBg, borderRadius:9, border:`1px solid ${C.border}` }}>
+                <span style={{ fontSize:12, color:C.textMuted }}>🌐 Votre page :</span>
+                <a href={`https://${studioForm.slug}.fydelys.fr`} target="_blank" rel="noopener noreferrer"
+                  style={{ fontSize:13, fontWeight:700, color:C.accent, textDecoration:"none" }}>
+                  {studioForm.slug}.fydelys.fr
+                </a>
+              </div>
+            )}
+            {studioForm.slug && !studioForm.public_page_enabled && (
+              <div style={{ fontSize:12, color:C.textMuted, padding:"8px 12px", background:C.bg, borderRadius:8, border:`1px solid ${C.borderSoft}` }}>
+                Les visiteurs sur <strong>{studioForm.slug}.fydelys.fr</strong> seront redirigés vers la page de connexion.
+              </div>
+            )}
+
+            {/* Description */}
+            <div>
+              <FieldLabel>Description du studio</FieldLabel>
+              <textarea value={studioForm.description} disabled={!isAdmin}
+                onChange={e=>setStudioForm(f=>({...f,description:e.target.value}))}
+                placeholder="Décrivez votre studio, votre ambiance, vos spécialités… (visible sur votre page publique)"
+                rows={3}
+                style={{ width:"100%", padding:"9px 12px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:14, outline:"none", boxSizing:"border-box", color:C.text, background:isAdmin?C.surfaceWarm:"#F8F5F2", resize:"vertical", fontFamily:"inherit", opacity:isAdmin?1:0.7 }}
+                onFocus={e=>{ if(isAdmin) e.target.style.borderColor=C.accent; }}
+                onBlur={e=>e.target.style.borderColor=C.border}/>
+              <div style={{ fontSize:11, color:C.textMuted, marginTop:4 }}>{(studioForm.description||"").length}/300 caractères</div>
+            </div>
+
+            {/* Photo de couverture */}
+            <div>
+              <FieldLabel>URL photo de couverture</FieldLabel>
+              <input value={studioForm.cover_photo_url} disabled={!isAdmin}
+                onChange={e=>setStudioForm(f=>({...f,cover_photo_url:e.target.value}))}
+                placeholder="https://monsite.fr/photo-studio.jpg"
+                style={{ width:"100%", padding:"9px 12px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:14, outline:"none", boxSizing:"border-box", color:C.text, background:isAdmin?C.surfaceWarm:"#F8F5F2", opacity:isAdmin?1:0.7 }}
+                onFocus={e=>{ if(isAdmin) e.target.style.borderColor=C.accent; }}
+                onBlur={e=>e.target.style.borderColor=C.border}/>
+              {studioForm.cover_photo_url && (
+                <div style={{ marginTop:8, borderRadius:8, overflow:"hidden", maxHeight:120, border:`1px solid ${C.border}` }}>
+                  <img src={studioForm.cover_photo_url} alt="Aperçu" style={{ width:"100%", objectFit:"cover", height:120 }}
+                    onError={e=>{ (e.target as HTMLImageElement).style.display="none"; }}/>
+                </div>
+              )}
+            </div>
+
+            {/* Couleur accentuation — palette pastel limitée */}
+            <div>
+              <FieldLabel>Couleur principale</FieldLabel>
+              <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginTop:4 }}>
+                {[
+                  { hex:"#B07848", label:"Terracotta" },
+                  { hex:"#8A7CC8", label:"Lavande"   },
+                  { hex:"#7C9E8A", label:"Sauge"     },
+                  { hex:"#C87C7C", label:"Rose poudré"},
+                  { hex:"#7CB8C8", label:"Ciel"      },
+                  { hex:"#B07CA0", label:"Mauve"     },
+                  { hex:"#7C9EC8", label:"Bleu doux" },
+                  { hex:"#C8B47C", label:"Sable"     },
+                ].map(({ hex, label }) => {
+                  const selected = (studioForm.accent_color || "#B07848").toLowerCase() === hex.toLowerCase();
+                  return (
+                    <button key={hex} disabled={!isAdmin}
+                      onClick={() => setStudioForm(f => ({ ...f, accent_color: hex }))}
+                      title={label}
+                      style={{ width:36, height:36, borderRadius:"50%", background:hex, border:selected?`3px solid #2A1F14`:`3px solid transparent`, cursor:isAdmin?"pointer":"default", flexShrink:0, outline:selected?`2px solid ${hex}`:"none", outlineOffset:2 }}/>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize:11, color:C.textMuted, marginTop:8, display:"flex", alignItems:"center", gap:6 }}>
+                <div style={{ width:14, height:14, borderRadius:"50%", background:studioForm.accent_color||"#B07848", border:`1.5px solid ${C.border}`, flexShrink:0 }}/>
+                Couleur sélectionnée : <strong>{studioForm.accent_color || "#B07848"}</strong>
+              </div>
             </div>
           </div>
           {isAdmin && (

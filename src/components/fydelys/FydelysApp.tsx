@@ -110,6 +110,13 @@ const PAGE_TITLES = {
     }
   };
 
+  // Écouter les events de navigation inter-composants (ex: Dashboard → Settings)
+  React.useEffect(() => {
+    const handler = (e: CustomEvent) => { if (e.detail) handleNav(e.detail); };
+    window.addEventListener("fydelys:nav", handler as EventListener);
+    return () => window.removeEventListener("fydelys:nav", handler as EventListener);
+  }, []);
+
   const [discs, setDiscs] = useState([]);
 
   // Charger disciplines dès que studioId est connu (propStudioId OU sharedStudioId)
