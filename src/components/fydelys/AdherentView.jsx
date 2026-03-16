@@ -14,7 +14,23 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
   const ADH_MOBILE_NAV = ADH_NAV;
   const [page, setPage] = useState("planning");
   const [toast, setToast] = useState(null);
-  const showToast = (msg, ok=true) => { setToast({msg,ok}); setTimeout(()=>setToast(null),3000); };
+  const showToast = (msg, ok=true) => { setToast({msg,ok}); setTimeout(()=>setToast(null),4000); };
+
+  // Gérer le retour depuis Stripe Checkout
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get("payment");
+    if (payment === "success") {
+      setPage("payment");
+      showToast("✅ Paiement confirmé ! Votre compte a été mis à jour.");
+      // Nettoyer l'URL
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (payment === "canceled") {
+      setPage("payment");
+      showToast("Paiement annulé.", false);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
   const p = isMobile ? 16 : 28;
 
   const { studioId, discs } = useContext(AppCtx);

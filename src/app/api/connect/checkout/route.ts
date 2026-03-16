@@ -79,8 +79,8 @@ export async function POST(req: NextRequest) {
           application_fee_percent: FYDELYS_COMMISSION_PCT,
           metadata: { studioId, memberId: memberId || "", subscriptionId, type: "subscription" },
         },
-        success_url: successUrl || `${origin}/mon-compte?payment=success`,
-        cancel_url:  cancelUrl  || `${origin}/mon-compte?payment=canceled`,
+        success_url: successUrl || `${origin}/?payment=success`,
+        cancel_url:  cancelUrl  || `${origin}/?payment=canceled`,
         metadata: { studioId, memberId: memberId || "", type: "subscription" },
         locale: "fr",
       }
@@ -113,8 +113,8 @@ export async function POST(req: NextRequest) {
           application_fee_amount: feeCents,
           metadata: { studioId, memberId: memberId || "", creditsPackId, credits: pack.credits_amount, type: "credits" },
         },
-        success_url: successUrl || `${origin}/mon-compte?payment=success`,
-        cancel_url:  cancelUrl  || `${origin}/mon-compte?payment=canceled`,
+        success_url: successUrl || `${origin}/?payment=success`,
+        cancel_url:  cancelUrl  || `${origin}/?payment=canceled`,
         metadata: { studioId, memberId: memberId || "", type: "credits" },
         locale: "fr",
       }
@@ -155,8 +155,8 @@ export async function POST(req: NextRequest) {
           application_fee_amount: feeCents,
           metadata: { studioId, memberId: memberId || "", sessionId, type: "session" },
         },
-        success_url: successUrl || `${origin}/mon-compte?payment=success`,
-        cancel_url:  cancelUrl  || `${origin}/mon-compte?payment=canceled`,
+        success_url: successUrl || `${origin}/?payment=success`,
+        cancel_url:  cancelUrl  || `${origin}/?payment=canceled`,
         metadata: { studioId, memberId: memberId || "", type: "session", sessionId },
         locale: "fr",
       }
