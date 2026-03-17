@@ -328,7 +328,14 @@ function SuperAdminView({ onSwitch, isMobile, onSignOut, onImpersonateStudio }) 
   const [tenants, setTenants] = useState(TENANTS_INIT);
   const [search, setSearch]   = useState("");
   const [filter, setFilter]   = useState("tous");
-  const [modal, setModal]     = useState(null); // null | {type:"new"} | {type:"edit",tenant} | {type:"delete",tenant}
+  const [modal, setModal]     = useState(null);
+  const [plans, setPlans]     = useState([
+    { slug:"essentiel", name:"Essentiel", price:9,  stripe_price_id:"" },
+    { slug:"standard",  name:"Standard",  price:29, stripe_price_id:"" },
+    { slug:"pro",       name:"Pro",       price:69, stripe_price_id:"" },
+  ]);
+  const [savingPlans, setSavingPlans] = useState(false);
+  const [showPlans, setShowPlans]     = useState(false); // null | {type:"new"} | {type:"edit",tenant} | {type:"delete",tenant}
   const [toast, setToast]     = useState(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -372,6 +379,13 @@ function SuperAdminView({ onSwitch, isMobile, onSignOut, onImpersonateStudio }) 
       });
       setTenants(mapped);
       setLoading(false);
+      // Charger les plans Fydelys
+      fetch("/api/sa/plans").then(r=>r.json()).then(({ plans: dbPlans }) => {
+        if (dbPlans?.length) setPlans(p => p.map(plan => {
+          const db = dbPlans.find(d => d.slug === plan.slug);
+          return db ? { ...plan, stripe_price_id: db.stripe_price_id || "" } : plan;
+        }));
+      }).catch(()=>{});
     }).catch(e => { console.error("SA load error:", e); setLoading(false); });
   }, []);
 
@@ -445,6 +459,47 @@ function SuperAdminView({ onSwitch, isMobile, onSignOut, onImpersonateStudio }) 
               <div style={{fontSize:10,color:"#B0A090"}}>{k.sub}</div>
             </div>
           ))}
+        </div>
+
+        {/* Configuration plans Fydelys */}
+        <div style={{background:"#FAFAF8",borderRadius:14,border:"1px solid #DDD5C8",marginBottom:20,overflow:"hidden"}}>
+          <div onClick={()=>setShowPlans(v=>!v)}
+            style={{padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",userSelect:"none"}}>
+            <div style={{fontSize:14,fontWeight:700,color:"#2A1F14"}}>⚙ Plans Fydelys — Stripe Price IDs</div>
+            <div style={{fontSize:12,color:"#8C7B6C"}}>{showPlans?"▲ Masquer":"▼ Configurer"}</div>
+          </div>
+          {showPlans && (
+            <div style={{borderTop:"1px solid #EAE4DA",padding:"16px 18px"}}>
+              <div style={{fontSize:12,color:"#8C7B6C",marginBottom:12,lineHeight:1.6}}>
+                Saisissez les <strong>stripe_price_id</strong> de vos produits d'abonnement Fydelys (depuis votre Dashboard Stripe plateforme, pas ceux des studios).
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:14}}>
+                {plans.map((plan,i)=>(
+                  <div key={plan.slug} style={{display:"grid",gridTemplateColumns:"100px 60px 1fr",gap:10,alignItems:"center"}}>
+                    <div style={{fontSize:13,fontWeight:700,color:"#2A1F14"}}>{plan.name}</div>
+                    <div style={{fontSize:12,color:"#8C7B6C"}}>{plan.price}€/mois</div>
+                    <input
+                      value={plan.stripe_price_id}
+                      onChange={e=>setPlans(p=>p.map((pl,j)=>j===i?{...pl,stripe_price_id:e.target.value}:pl))}
+                      placeholder="price_live_…"
+                      style={{padding:"7px 10px",border:"1.5px solid #DDD5C8",borderRadius:7,fontSize:12,outline:"none",color:"#2A1F14",background:"#FDFAF7",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                  </div>
+                ))}
+              </div>
+              <button onClick={async()=>{
+                setSavingPlans(true);
+                try {
+                  const res = await fetch("/api/sa/plans",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({plans})});
+                  if(res.ok) showToast("Plans enregistrés ✓");
+                  else showToast("Erreur lors de la sauvegarde",false);
+                } catch { showToast("Erreur réseau",false); }
+                setSavingPlans(false);
+              }} disabled={savingPlans}
+                style={{padding:"8px 18px",borderRadius:8,border:"none",background:"#7C3AED",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",opacity:savingPlans?.6:1}}>
+                {savingPlans?"Enregistrement…":"💾 Sauvegarder les plans"}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Table */}
