@@ -57,43 +57,46 @@ function SuperAdminView({ onSwitch, isMobile, onSignOut, onImpersonateStudio }) 
   // Charger les vrais studios depuis Supabase
   useEffect(() => {
     const supabase = createClient();
-    supabase
-      .from("studios")
-      .select("id, name, slug, city, address, email, phone, status, billing_status, trial_ends_at, plan_slug, created_at, notes, profiles!profiles_studio_id_fkey(first_name, last_name, phone, is_coach, role)")
-      .order("created_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (error) { console.error("Studios load error:", error); setLoading(false); return; }
-        if (data && data.length > 0) {
-          const mois = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
-          const mapped = data.map(s => {
-            const admin = (s.profiles || []).find((p) => p.role === "admin") || (s.profiles || [])[0];
-            return {
-              id:        s.id,
-              name:      s.name || "Sans nom",
-              slug:      s.slug || "",
-              city:      s.city || "",
-              address:   s.address || "",
-              email:     s.email || "",
-              phone:     s.phone || admin?.phone || "",
-              status:    s.status === "actif" ? "actif" : s.billing_status === "canceled" ? "suspendu" : "actif",
-              plan:      s.plan_slug || "Essentiel",
-              since:     (() => { const d = new Date(s.created_at); return `${mois[d.getMonth()]} ${d.getFullYear()}`; })(),
-              firstName: admin?.first_name || "",
-              lastName:  admin?.last_name  || "",
-              isCoach:   admin?.is_coach   || false,
-              contact:   admin ? `${admin.first_name||""} ${admin.last_name||""}`.trim() : "",
-              notes:     s.notes || "",
-              members:   0,
-              revenue:   0,
-              growth:    0,
-            };
-          });
-          setTenants(mapped);
-        } else {
-          setTenants([]);
-        }
-        setLoading(false);
+    // Deux queries séparées — le join FK est instable selon la version Supabase
+    Promise.all([
+      supabase.from("studios")
+        .select("id, name, slug, city, address, email, phone, status, billing_status, plan_slug, created_at, notes")
+        .order("created_at", { ascending: false }),
+      supabase.from("profiles")
+        .select("studio_id, first_name, last_name, phone, is_coach, role")
+        .eq("role", "admin")
+    ]).then(([{ data: studiosData, error }, { data: profilesData }]) => {
+      if (error) { console.error("Studios load error:", error); setLoading(false); return; }
+      const mois = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
+      const profileMap: Record<string, any> = {};
+      (profilesData || []).forEach((p: any) => { if (p.studio_id) profileMap[p.studio_id] = p; });
+
+      const mapped = (studiosData || []).map((s: any) => {
+        const admin = profileMap[s.id];
+        return {
+          id:        s.id,
+          name:      s.name || "Sans nom",
+          slug:      s.slug || "",
+          city:      s.city || "",
+          address:   s.address || "",
+          email:     s.email || "",
+          phone:     s.phone || admin?.phone || "",
+          status:    s.status === "actif" ? "actif" : s.billing_status === "canceled" ? "suspendu" : "actif",
+          plan:      s.plan_slug || "Essentiel",
+          since:     (() => { const d = new Date(s.created_at); return `${mois[d.getMonth()]} ${d.getFullYear()}`; })(),
+          firstName: admin?.first_name || "",
+          lastName:  admin?.last_name  || "",
+          isCoach:   admin?.is_coach   || false,
+          contact:   admin ? `${admin.first_name||""} ${admin.last_name||""}`.trim() : "",
+          notes:     s.notes || "",
+          members:   0,
+          revenue:   0,
+          growth:    0,
+        };
       });
+      setTenants(mapped);
+      setLoading(false);
+    });
   }, []);
 
   const filtered = tenants
@@ -473,13 +476,9 @@ function SuperAdminView({ onSwitch, isMobile, onSignOut, onImpersonateStudio }) 
               <div style={{display:"flex",gap:6,flexShrink:0}}>
                 <button
                   onClick={()=>onImpersonateStudio && onImpersonateStudio(t.slug)}
+                  title="Voir l'app studio comme un admin"
                   style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:"1.5px solid rgba(124,58,237,.35)",background:"rgba(124,58,237,.08)",color:"#7C3AED",cursor:"pointer",fontWeight:700}}>
-                  👁 Vue Studio
-                </button>
-                <button
-                  onClick={()=>window.open(`https://${t.slug}.fydelys.fr/dashboard`,"_blank")}
-                  style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:"1px solid rgba(160,104,56,.3)",background:"rgba(160,104,56,.08)",color:"#A06838",cursor:"pointer",fontWeight:600}}>
-                  🔗 Accéder
+                  👁 Simuler
                 </button>
                 <button onClick={()=>setModal({type:"edit",tenant:t})}
                   style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:"1px solid rgba(167,139,250,.3)",background:"rgba(167,139,250,.1)",color:"#8C5E38",cursor:"pointer",fontWeight:600}}>✏ Modifier</button>
