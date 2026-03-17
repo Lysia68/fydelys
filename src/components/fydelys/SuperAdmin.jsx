@@ -68,10 +68,10 @@ function SuperAdminView({ onSwitch, isMobile, onSignOut, onImpersonateStudio }) 
     ]).then(([{ data: studiosData, error }, { data: profilesData }]) => {
       if (error) { console.error("Studios load error:", error); setLoading(false); return; }
       const mois = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
-      const profileMap: Record<string, any> = {};
-      (profilesData || []).forEach((p: any) => { if (p.studio_id) profileMap[p.studio_id] = p; });
+      const profileMap = {};
+      (profilesData || []).forEach((p) => { if (p.studio_id) profileMap[p.studio_id] = p; });
 
-      const mapped = (studiosData || []).map((s: any) => {
+      const mapped = (studiosData || []).map((s) => {
         const admin = profileMap[s.id];
         return {
           id:        s.id,
