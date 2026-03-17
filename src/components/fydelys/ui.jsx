@@ -54,7 +54,7 @@ function FieldLabel({ children }) {
 }
 
 function Field({ label, value, onChange, type="text", placeholder, opts, error }) {
-  const s = { width:"100%", padding:"10px 14px", border:`1.5px solid ${error ? "#C43A3A" : C.border}`, borderRadius:8, fontSize:16, outline:"none", boxSizing:"border-box", color:C.text, background: error ? "#FFF5F5" : C.surfaceWarm, transition:"border-color .15s" };
+  const s = Object.assign({}, { width:"100%", padding:"10px 14px", border:`1.5px solid ${error ? "#C43A3A" : C.border}`, borderRadius:8, fontSize:16, outline:"none", boxSizing:"border-box", color:C.text, background: error ? "#FFF5F5" : C.surfaceWarm, transition:"border-color .15s" });
   return (
     <div>
       {label && <FieldLabel>{label}</FieldLabel>}
