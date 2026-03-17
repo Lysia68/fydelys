@@ -35,7 +35,8 @@ function Subscriptions({ isMobile }) {
 
   const startEdit = (sub) => {
     setEditId(sub.id);
-    setEditData({ name:sub.name, price:sub.price, period:sub.period, description:sub.description, popular:sub.popular });
+    setEditData({ name:sub.name, price:sub.price, period:sub.period, description:sub.description, popular:sub.popular,
+      stripe_product_id: sub.stripe_product_id||"", stripe_price_id: sub.stripe_price_id||"" });
   };
   const saveEdit = async (id) => {
     setSubs(prev=>prev.map(s=>s.id===id?{...s,...editData,price:parseFloat(editData.price)||0}:s));
@@ -44,6 +45,8 @@ function Subscriptions({ isMobile }) {
       await createClient().from("subscriptions").update({
         name: editData.name, price: parseFloat(editData.price)||0,
         period: editData.period, description: editData.description||"", popular: editData.popular||false,
+        stripe_product_id: editData.stripe_product_id||"",
+        stripe_price_id:   editData.stripe_price_id||"",
       }).eq("id", id);
     } catch(e) { console.error("update sub", e); }
   };
@@ -98,6 +101,33 @@ function Subscriptions({ isMobile }) {
                     <Field label="Période" value={editData.period} onChange={v=>setEditData({...editData,period:v})} opts={["mois","séance","carnet","trimestre","année"]}/>
                   </div>
                   <div><FieldLabel>Description</FieldLabel><input value={editData.description} onChange={e=>setEditData({...editData,description:e.target.value})} style={{ width:"100%", padding:"8px 11px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:14, outline:"none", boxSizing:"border-box", color:C.text, background:C.surfaceWarm }} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/></div>
+                  <div style={{ borderTop:`1px solid ${C.borderSoft}`, paddingTop:10 }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, textTransform:"uppercase", letterSpacing:.5, marginBottom:8 }}>🔗 Stripe (optionnel)</div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                      <div>
+                        <FieldLabel>Product ID</FieldLabel>
+                        <input value={editData.stripe_product_id||""}
+                          onChange={e=>setEditData({...editData,stripe_product_id:e.target.value})}
+                          placeholder="prod_…"
+                          style={{ width:"100%", padding:"8px 11px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:12, outline:"none", boxSizing:"border-box", color:C.text, background:C.surfaceWarm, fontFamily:"monospace" }}
+                          onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+                      </div>
+                      <div>
+                        <FieldLabel>Price ID</FieldLabel>
+                        <input value={editData.stripe_price_id||""}
+                          onChange={e=>setEditData({...editData,stripe_price_id:e.target.value})}
+                          placeholder="price_…"
+                          style={{ width:"100%", padding:"8px 11px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:12, outline:"none", boxSizing:"border-box", color:C.text, background:C.surfaceWarm, fontFamily:"monospace" }}
+                          onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+                      </div>
+                    </div>
+                    <div style={{ fontSize:11, color:C.textMuted, marginTop:5, lineHeight:1.6 }}>
+                      Trouvez ces IDs dans votre propre <a href="https://dashboard.stripe.com/products" target="_blank" rel="noopener" style={{ color:C.accent, textDecoration:"none" }}>Dashboard Stripe → Produits</a>
+                      <span style={{ display:"block", marginTop:3, padding:"4px 8px", background:"#FEF3C7", borderRadius:6, color:"#92400E", fontWeight:600 }}>
+                        ⚠ Ce sont les IDs de votre compte Stripe, pas ceux de Fydelys.
+                      </span>
+                    </div>
+                  </div>
                   <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", fontSize:13, color:C.text }}>
                     <input type="checkbox" checked={editData.popular||false} onChange={e=>setEditData({...editData,popular:e.target.checked})} style={{ width:15, height:15, cursor:"pointer" }}/>
                     Marquer comme populaire

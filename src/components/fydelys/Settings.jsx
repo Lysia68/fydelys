@@ -813,7 +813,7 @@ function Settings({ isMobile, onImpersonate }) {
               <div style={{ fontSize:16, fontWeight:800, color:C.text }}>{planName || "Essentiel"}</div>
               <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>{membersCount} adhérent{membersCount>1?"s":""} actif{membersCount>1?"s":""}</div>
             </div>
-            <Button sm variant="ghost" onClick={()=>window.open("https://fydelys.fr/#pricing","_blank")}>Changer de forfait</Button>
+            <Button sm variant="ghost" onClick={()=>window.location.href="/billing"}>Changer de forfait</Button>
           </div>
         </Card>
       </div>
@@ -1337,10 +1337,14 @@ function Settings({ isMobile, onImpersonate }) {
 
   // ── Tab: Paiements (Stripe Connect) ──────────────────────────────────────
   const TabPayments = () => {
-    const [connectStatus, setConnectStatus] = React.useState(null); // null=loading
+    const [connectStatus, setConnectStatus] = React.useState(null);
     const [loading, setLoading] = React.useState(true);
     const [connecting, setConnecting] = React.useState(false);
-    const [commission] = React.useState(2); // % commission Fydelys
+    const [commission] = React.useState(2);
+    // Config SA : mode paiement du studio
+    const [paymentMode, setPaymentMode] = React.useState(null); // null=loading, "connect"|"direct"
+    const [directKeys, setDirectKeys] = React.useState({ pk:"", sk_hint:"" });
+    const [savingMode, setSavingMode] = React.useState(false);
 
     React.useEffect(() => {
       if (!studioId) return;
@@ -1348,6 +1352,16 @@ function Settings({ isMobile, onImpersonate }) {
         .then(r => r.json())
         .then(d => { setConnectStatus(d); setLoading(false); })
         .catch(() => setLoading(false));
+
+      // Charger le mode paiement configuré par le SA
+      createClient().from("studios")
+        .select("payment_mode, stripe_pk")
+        .eq("id", studioId).single()
+        .then(({ data }) => {
+          setPaymentMode(data?.payment_mode || "connect");
+          setDirectKeys(k => ({ ...k, pk: data?.stripe_pk || "" }));
+        })
+        .catch(() => setPaymentMode("connect"));
 
       // Si retour depuis onboarding Stripe
       const params = new URLSearchParams(window.location.search);
@@ -1405,10 +1419,74 @@ function Settings({ isMobile, onImpersonate }) {
     const badge = statusBadge[st] || statusBadge.not_connected;
     const isActive = st === "active";
 
+    const savePaymentMode = async (mode) => {
+      setSavingMode(true);
+      await createClient().from("studios").update({
+        payment_mode: mode,
+        ...(mode === "direct" ? { stripe_pk: directKeys.pk } : {}),
+      }).eq("id", studioId);
+      setPaymentMode(mode);
+      showToast("Mode paiement mis à jour");
+      setSavingMode(false);
+    };
+
     return (
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
 
-        {/* Bloc Connect Stripe */}
+        {/* Bloc SA — choix du mode paiement */}
+        {isSA && paymentMode !== null && (
+          <Card style={{ borderLeft:`3px solid #7C3AED` }}>
+            <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>⚙ Configuration Super Admin</div>
+            <div style={{ fontSize:12, color:C.textSoft, marginBottom:14 }}>
+              Choisissez le mode de paiement pour ce studio.
+            </div>
+            <div style={{ display:"flex", gap:10, marginBottom:14 }}>
+              {[
+                { key:"connect", label:"⚡ Stripe Connect", desc:"Compte Express du studio, commission Fydelys" },
+                { key:"direct",  label:"🔑 Clés directes",  desc:"Le studio fournit ses propres clés Stripe" },
+              ].map(m => (
+                <div key={m.key} onClick={()=>setPaymentMode(m.key)}
+                  style={{ flex:1, padding:"12px", borderRadius:10, border:`2px solid ${paymentMode===m.key?"#7C3AED":C.border}`, background:paymentMode===m.key?"#F3EEFF":C.bg, cursor:"pointer" }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:paymentMode===m.key?"#7C3AED":C.text }}>{m.label}</div>
+                  <div style={{ fontSize:11, color:C.textSoft, marginTop:3 }}>{m.desc}</div>
+                </div>
+              ))}
+            </div>
+            {paymentMode === "direct" && (
+              <div style={{ marginBottom:12 }}>
+                <FieldLabel>Clé publique Stripe (pk_live_… ou pk_test_…)</FieldLabel>
+                <input value={directKeys.pk} onChange={e=>setDirectKeys(k=>({...k,pk:e.target.value}))}
+                  placeholder="pk_live_…"
+                  style={{ width:"100%", padding:"9px 12px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:13, outline:"none", boxSizing:"border-box", color:C.text, background:C.surfaceWarm, fontFamily:"monospace" }}/>
+                <div style={{ fontSize:11, color:C.textMuted, marginTop:4 }}>
+                  ⚠ La clé secrète reste côté serveur — à configurer dans les env vars du studio.
+                </div>
+              </div>
+            )}
+            <button onClick={()=>savePaymentMode(paymentMode)} disabled={savingMode}
+              style={{ padding:"8px 18px", borderRadius:8, border:"none", background:"#7C3AED", color:"white", fontSize:13, fontWeight:700, cursor:"pointer", opacity:savingMode?.6:1 }}>
+              {savingMode ? "Enregistrement…" : "Valider la configuration"}
+            </button>
+          </Card>
+        )}
+
+        {/* Bloc Connect Stripe — affiché seulement si mode=connect */}
+        {paymentMode === "direct" && (
+          <Card style={{ borderLeft:`3px solid ${C.ok}` }}>
+            <div style={{ fontSize:14, fontWeight:700, color:C.text, marginBottom:4 }}>🔑 Mode clés directes</div>
+            <div style={{ fontSize:12, color:C.textSoft }}>
+              Ce studio utilise ses propres clés Stripe. Les paiements sont traités directement sur son compte sans commission Fydelys.
+            </div>
+            {directKeys.pk && (
+              <div style={{ marginTop:12, padding:"8px 12px", background:C.bg, borderRadius:8, fontFamily:"monospace", fontSize:12, color:C.textMid, border:`1px solid ${C.border}` }}>
+                {directKeys.pk.slice(0,12)}…
+              </div>
+            )}
+          </Card>
+        )}
+
+        {(paymentMode === "connect" || !paymentMode) && (
+        <>{/* Bloc Connect Stripe */}
         <Card style={{ borderLeft:`3px solid ${isActive ? C.ok : C.accent}` }}>
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12, marginBottom:16 }}>
             <div>
@@ -1481,6 +1559,8 @@ function Settings({ isMobile, onImpersonate }) {
             </div>
           )}
         </Card>
+
+        </> ) }
 
         {/* Abonnements vendables */}
         <Card>

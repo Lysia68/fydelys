@@ -50,19 +50,33 @@ export async function POST(req: NextRequest) {
     if (type === "subscription" && subscriptionId) {
       const { data: sub } = await db
         .from("subscriptions")
-        .select("name, price, stripe_price_id")
+        .select("name, price, stripe_price_id, stripe_product_id")
         .eq("id", subscriptionId).single()
 
       if (!sub) return NextResponse.json({ error: "Abonnement introuvable" }, { status: 404 })
 
       // Créer le prix à la volée si pas de stripe_price_id
       let priceId = sub.stripe_price_id
+      // Vérifier que le price_id stocké appartient au compte Connect du studio (pas à Fydelys)
+      // Un price_id valide sur le compte Connect commence par "price_" et est vérifiable via stripeAccount
+      if (priceId) {
+        try {
+          await stripe.prices.retrieve(priceId, { stripeAccount: studio.stripe_connect_id })
+        } catch {
+          // Price ID invalide sur ce compte Connect → le régénérer
+          console.warn(`[connect/checkout] stripe_price_id ${priceId} invalide sur ${studio.stripe_connect_id} — recréation`)
+          priceId = null
+        }
+      }
       if (!priceId) {
+        const productParams: any = { name: `${studio.name} — ${sub.name}` }
+        // Utiliser le stripe_product_id du studio si défini (sur son propre compte)
+        const productId = sub.stripe_product_id
         const price = await stripe.prices.create({
           unit_amount: Math.round((sub.price || 0) * 100),
           currency: "eur",
           recurring: { interval: "month" },
-          product_data: { name: `${studio.name} — ${sub.name}` },
+          ...(productId ? { product: productId } : { product_data: productParams }),
         }, { stripeAccount: studio.stripe_connect_id })
         priceId = price.id
         await db.from("subscriptions").update({ stripe_price_id: priceId }).eq("id", subscriptionId)
