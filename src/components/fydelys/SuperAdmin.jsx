@@ -43,6 +43,262 @@ function SelectSA({ label, k, opts, required, value, onChange }) {
   );
 }
 
+// ── Form Modal (New + Edit) ───────────────────────────────────────────────────
+const toSlug = (s) =>
+  s.toLowerCase()
+   .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+   .replace(/[^a-z0-9]/g,"");
+
+const validateSlug = (s) => /^[a-z0-9]+$/.test(s);
+
+function TenantFormModal({ editing, setModal, showToast, setTenants, createClient, FYDELYS_PLANS }) {
+  const emptyF = editing
+    ? { name:editing.name, slug:editing.slug||"", email:editing.email||"", firstName:editing.firstName||"", lastName:editing.lastName||"", phone:editing.phone||"", city:editing.city||"", zip:editing.zip||"", address:editing.address||"", plan:editing.plan||"Essentiel", type:editing.type||"Yoga", notes:editing.notes||"", isCoach:editing.isCoach||false }
+    : { name:"", slug:"", email:"", firstName:"", lastName:"", phone:"", city:"", zip:"", address:"", plan:"Essentiel", type:"Yoga", notes:"", isCoach:false };
+  const [f, setF] = useState(emptyF);
+  const [step, setStep] = useState(1);
+  const [errors, setErrors] = useState({});
+
+  const upd = (k, v) => {
+    const next = {...f, [k]:v};
+    if(k==="name" && !editing) next.slug = toSlug(v);
+    if(k==="slug") next.slug = v.toLowerCase().replace(/[^a-z0-9-]/g,"").replace(/\..*$/,"");
+    setF(next);
+    setErrors(e=>({...e,[k]:undefined}));
+  };
+
+  const validate1 = () => {
+    const e = {};
+    if(!f.name.trim())               e.name = "Obligatoire";
+    if(!f.city.trim())               e.city = "Obligatoire";
+    if(!f.slug.trim())               e.slug = "Obligatoire";
+    else if(!validateSlug(f.slug))   e.slug = "Uniquement lettres minuscules, chiffres et tirets (ex: yoga-paris)";
+    return e;
+  };
+  const validate2 = () => {
+    const e = {};
+    if(!f.email.trim()||!f.email.includes("@")) e.email = "Email invalide";
+    if(!f.firstName.trim()) e.firstName = "Obligatoire";
+    if(!f.lastName.trim())  e.lastName  = "Obligatoire";
+    if(!f.phone.trim())     e.phone     = "Obligatoire";
+    return e;
+  };
+
+  const nextStep = () => {
+    if(step===1){ const e=validate1(); if(Object.keys(e).length){ setErrors(e); return; } }
+    if(step===2){ const e=validate2(); if(Object.keys(e).length){ setErrors(e); return; } }
+    setStep(s=>s+1);
+  };
+
+  const save = async () => {
+    const supabase = createClient();
+    const now = new Date();
+    const mois = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
+    const since = `${mois[now.getMonth()]} ${now.getFullYear()}`;
+
+    if(editing) {
+      // Mettre à jour le studio en base
+      const { error } = await supabase.from("studios").update({
+        name: f.name, slug: f.slug, city: f.city, address: f.address || null,
+        phone: f.phone || null, email: f.email, notes: f.notes || null,
+      }).eq("id", editing.id);
+      if(error) { showToast(`Erreur : ${error.message}`, false); return; }
+
+      // Mettre à jour le profil admin si existe
+      await supabase.from("profiles").update({
+        first_name: f.firstName, last_name: f.lastName,
+        is_coach: f.isCoach || false,
+      }).eq("studio_id", editing.id).eq("role", "admin");
+
+      setTenants(prev=>prev.map(t=>t.id===editing.id ? {
+        ...t, name:f.name, slug:f.slug, city:f.city, address:f.address,
+        email:f.email, phone:f.phone, notes:f.notes,
+        contact:`${f.firstName} ${f.lastName}`.trim(),
+        firstName:f.firstName, lastName:f.lastName, isCoach:f.isCoach,
+      } : t));
+      showToast(`✅ "${f.name}" mis à jour`);
+    } else {
+      // Créer le studio en base via service role (seed)
+      const res = await fetch("/api/sa/create-tenant", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          studioName: f.name, slug: f.slug, city: f.city, zip: f.zip||null,
+          address: f.address||null, type: f.type, email: f.email, phone: f.phone||null,
+          firstName: f.firstName, lastName: f.lastName, isCoach: f.isCoach||false,
+          plan: f.plan,
+        }),
+      });
+      const result = await res.json();
+      if(!res.ok || result.error) { showToast(`Erreur : ${result.error || "création échouée"}`, false); return; }
+
+      const newT = {
+        id: result.studioId || `t${Date.now()}`,
+        name:f.name, slug:f.slug, city:f.city, email:f.email,
+        contact:`${f.firstName} ${f.lastName}`,
+        firstName:f.firstName, lastName:f.lastName, phone:f.phone, notes:f.notes,
+        plan:f.plan, members:0, revenue:0, status:"actif", since, growth:0,
+      };
+      setTenants(prev=>[newT, ...prev]);
+      showToast(`🚀 "${f.name}" créé !`);
+    }
+    setModal(null);
+  };
+
+  const STEPS = ["Studio", "Contact", "Confirmation"];
+  return (
+    <div onClick={e=>e.target===e.currentTarget&&setModal(null)}
+      style={{position:"fixed",inset:0,background:"rgba(42,31,20,.5)",zIndex:800,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:"#FFFFFF",border:"1px solid rgba(167,139,250,.2)",borderRadius:20,padding:32,width:"100%",maxWidth:520,boxShadow:"0 32px 64px rgba(0,0,0,.5)",maxHeight:"90vh",overflowY:"auto"}}>
+
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+          <div>
+            <div style={{fontSize:20,fontWeight:800,color:"#2A1F14",letterSpacing:-0.5}}>{editing?"Modifier le tenant":"Nouveau tenant"}</div>
+            <div style={{fontSize:12,color:"#8C7B6C",marginTop:2}}>Étape {step} / 3 — {STEPS[step-1]}</div>
+          </div>
+          <button onClick={()=>setModal(null)} style={{background:"#F4EFE8",border:"1px solid #DDD5C8",borderRadius:8,width:32,height:32,cursor:"pointer",color:"#8C7B6C",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        </div>
+
+        <div style={{display:"flex",gap:6,marginBottom:28}}>
+          {STEPS.map((s,i)=>(
+            <div key={s} style={{flex:1,height:3,borderRadius:2,background:i+1<=step?"#A06838":"#EAE4DA"}}/>
+          ))}
+        </div>
+
+        {step===1&&(
+          <div style={{display:"flex",flexDirection:"column",gap:16}}>
+            <FieldSA label="Nom du studio / centre" k="name" placeholder="Ex: Yoga Flow Paris" required value={f.name} onChange={upd} error={errors.name}/>
+            <div>
+              <label style={{fontSize:11,fontWeight:700,color:"#8C7B6C",textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:5}}>
+                Sous-domaine <span style={{color:"#B0A090"}}>(lettres, chiffres, tirets)</span> <span style={{color:"#F87171"}}>*</span>
+              </label>
+              <div style={{display:"flex",alignItems:"center",background:"#FAFAF8",border:`1.5px solid ${errors.slug?"#F87171":"#DDD5C8"}`,borderRadius:9,overflow:"hidden"}}>
+                <input value={f.slug} onChange={e=>upd("slug",e.target.value)} placeholder="yogaflowparis"
+                  style={{...saInp(),border:"none",background:"transparent",flex:1}}/>
+                <span style={{padding:"9px 12px",color:"#8C7B6C",fontSize:13,borderLeft:"1px solid #DDD5C8",whiteSpace:"nowrap"}}>.fydelys.fr</span>
+              </div>
+              {errors.slug&&<div style={{fontSize:11,color:"#F87171",marginTop:3}}>{errors.slug}</div>}
+              <div style={{fontSize:11,color:"#B0A090",marginTop:4}}>✓ Autorisé : <code style={{color:"#A06838"}}>yoga-paris</code> · <code style={{color:"#A06838"}}>studio2</code> &nbsp; ✗ Interdit : points, espaces, majuscules, accents</div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:12}}>
+              <FieldSA label="Ville" k="city" placeholder="Paris, Lyon…" required value={f.city} onChange={upd} error={errors.city}/>
+              <FieldSA label="Code postal" k="zip" placeholder="75001" value={f.zip} onChange={upd}/>
+            </div>
+            <FieldSA label="Adresse" k="address" placeholder="12 rue de la Paix" value={f.address} onChange={upd}/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <SelectSA label="Type de pratique" k="type" required value={f.type} onChange={upd} opts={[
+                {v:"Yoga",l:"🧘 Yoga"},{v:"Pilates",l:"⚡ Pilates"},{v:"Danse",l:"💃 Danse"},
+                {v:"Fitness",l:"🏋 Fitness"},{v:"Méditation",l:"☯ Méditation"},{v:"Multi",l:"🌀 Multi-disciplines"}
+              ]}/>
+              <SelectSA label="Plan Fydelys" k="plan" value={f.plan} onChange={upd} opts={[
+                ...FYDELYS_PLANS.map(p=>({v:p.name,l:`${p.name} — ${p.price} €/mois`}))
+              ]}/>
+            </div>
+          </div>
+        )}
+
+        {step===2&&(
+          <div style={{display:"flex",flexDirection:"column",gap:16}}>
+            <div style={{padding:"12px 16px",background:"rgba(167,139,250,.08)",borderRadius:10,border:"1px solid rgba(167,139,250,.15)",fontSize:13,color:"#8C5E38"}}>
+              👤 Informations du gérant / responsable du studio
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <FieldSA label="Prénom" k="firstName" placeholder="Marie" required value={f.firstName} onChange={upd} error={errors.firstName}/>
+              <FieldSA label="Nom" k="lastName" placeholder="Laurent" required value={f.lastName} onChange={upd} error={errors.lastName}/>
+            </div>
+            <FieldSA label="Email professionnel" k="email" type="email" placeholder="marie@studio.fr" required value={f.email} onChange={upd} error={errors.email}/>
+            <FieldSA label="Téléphone" k="phone" type="tel" placeholder="+33 6 12 34 56 78" required value={f.phone} onChange={upd} error={errors.phone}/>
+            {/* Toggle coach */}
+            <div onClick={()=>upd("isCoach",!f.isCoach)}
+              style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",background:f.isCoach?"#F5EBE0":"#FAFAF8",border:`1px solid ${f.isCoach?"rgba(160,104,56,.3)":"#DDD5C8"}`,borderRadius:10,cursor:"pointer",userSelect:"none"}}>
+              <div>
+                <div style={{fontSize:13,fontWeight:700,color:f.isCoach?"#8C5E38":"#8C7B6C"}}>🎯 Aussi coach / intervenant</div>
+                <div style={{fontSize:11,color:"#B0A090",marginTop:2}}>Le gérant donne également des cours dans son studio</div>
+              </div>
+              <div style={{width:40,height:22,borderRadius:11,background:f.isCoach?"#A06838":"rgba(160,104,56,.15)",position:"relative",flexShrink:0,transition:"background .2s"}}>
+                <div style={{position:"absolute",top:3,left:f.isCoach?20:3,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+              </div>
+            </div>
+            <div>
+              <label style={{fontSize:11,fontWeight:700,color:"#8C7B6C",textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:5}}>Notes internes</label>
+              <textarea value={f.notes} onChange={e=>upd("notes",e.target.value)} placeholder="Informations complémentaires, source du lead…" rows={3}
+                style={{...saInp(),resize:"vertical"}}/>
+            </div>
+          </div>
+        )}
+
+        {step===3&&(
+          <div style={{display:"flex",flexDirection:"column",gap:16}}>
+            <div style={{padding:"16px",background:"rgba(52,211,153,.06)",borderRadius:12,border:"1px solid rgba(52,211,153,.2)"}}>
+              <div style={{fontSize:13,fontWeight:700,color:"#34D399",marginBottom:12}}>✅ Récapitulatif</div>
+              {[
+                ["Studio",       f.name],
+                ["Sous-domaine", `${f.slug}.fydelys.fr`],
+                ["Ville",        f.city],
+                ["Code postal",  f.zip],
+                ["Type",         f.type],
+                ["Plan",         f.plan],
+                ["Gérant",       `${f.firstName} ${f.lastName}`],
+                ["Email",        f.email],
+                ["Téléphone",    f.phone],
+                ["Rôle gérant",  f.isCoach ? "Admin + Coach" : "Admin uniquement"],
+              ].map(([k,v])=>(
+                <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #EDE6DC",fontSize:13}}>
+                  <span style={{color:"#8C7B6C"}}>{k}</span>
+                  <span style={{color:"#2A1F14",fontWeight:600}}>{v}</span>
+                </div>
+              ))}
+            </div>
+            {!editing&&(
+              <div style={{padding:"12px 16px",background:"#FBF6EE",borderRadius:10,border:"1px solid rgba(160,104,56,.2)",fontSize:12,color:"#8C7B6C",lineHeight:1.6}}>
+                🌱 <strong>Seed automatique :</strong> disciplines, créneaux du soir, abonnements et salle principale seront créés automatiquement.
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{display:"flex",gap:10,marginTop:24}}>
+          {step>1&&(
+            <button onClick={()=>setStep(s=>s-1)} style={{flex:1,padding:"11px",background:"transparent",border:"1px solid #DDD5C8",borderRadius:10,color:"#8C7B6C",fontSize:14,fontWeight:600,cursor:"pointer"}}>← Retour</button>
+          )}
+          {step<3?(
+            <button onClick={nextStep} style={{flex:2,padding:"11px",background:"linear-gradient(145deg,#B88050,#9A6030)",border:"none",borderRadius:10,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>Continuer →</button>
+          ):(
+            <button onClick={save} style={{flex:2,padding:"11px",background:editing?"linear-gradient(135deg,#2563EB,#1D4ED8)":"linear-gradient(135deg,#059669,#047857)",border:"none",borderRadius:10,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>
+              {editing?"💾 Enregistrer":"🚀 Créer le tenant"}
+            </button>
+          )}
+          {step===1&&<button onClick={()=>setModal(null)} style={{flex:1,padding:"11px",background:"transparent",border:"1px solid #DDD5C8",borderRadius:10,color:"#B0A090",fontSize:14,cursor:"pointer"}}>Annuler</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Delete Confirm Modal ──────────────────────────────────────────────────────
+function DeleteModal({ tenant, setModal, showToast, setTenants, createClient }) {
+  return (
+    <div onClick={e=>e.target===e.currentTarget&&setModal(null)}
+      style={{position:"fixed",inset:0,background:"rgba(42,31,20,.5)",zIndex:800,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:"#FFFFFF",border:"1px solid rgba(248,113,113,.3)",borderRadius:20,padding:32,width:"100%",maxWidth:420,boxShadow:"0 32px 64px rgba(0,0,0,.5)"}}>
+        <div style={{fontSize:32,textAlign:"center",marginBottom:16}}>🗑</div>
+        <div style={{fontSize:18,fontWeight:800,color:"#2A1F14",textAlign:"center",marginBottom:8}}>Supprimer ce tenant ?</div>
+        <div style={{fontSize:14,color:"#8C7B6C",textAlign:"center",marginBottom:24,lineHeight:1.6}}>
+          <strong style={{color:"#F87171"}}>{tenant.name}</strong> et toutes ses données (membres, séances, paiements) seront supprimées définitivement.
+        </div>
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={()=>setModal(null)} style={{flex:1,padding:"11px",background:"transparent",border:"1px solid #DDD5C8",borderRadius:10,color:"#8C7B6C",fontSize:14,fontWeight:600,cursor:"pointer"}}>Annuler</button>
+          <button onClick={()=>{ setTenants(prev=>prev.filter(t=>t.id!==tenant.id)); setModal(null); showToast(`"${tenant.name}" supprimé`,false); }}
+            style={{flex:1,padding:"11px",background:"linear-gradient(135deg,#DC2626,#B91C1C)",border:"none",borderRadius:10,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>
+            Supprimer définitivement
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function SuperAdminView({ onSwitch, isMobile, onSignOut, onImpersonateStudio }) {
   const [tenants, setTenants] = useState(TENANTS_INIT);
   const [search, setSearch]   = useState("");
@@ -109,263 +365,11 @@ function SuperAdminView({ onSwitch, isMobile, onSignOut, onImpersonateStudio }) 
   const suspCount  = tenants.filter(t=>t.status==="suspendu").length;
 
   // ── Helpers slug ─────────────────────────────────────────────────────────────
-  const toSlug = (s) =>
-    s.toLowerCase()
-     .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
-     .replace(/[^a-z0-9]/g,"");
-
-  const validateSlug = (s) => /^[a-z0-9]+$/.test(s);
+  // toSlug and validateSlug are defined at module level
 
   // ── Shared styles ─────────────────────────────────────────────────────────────
   const SA = saInp();
 
-  // ── Form Modal (New + Edit) ───────────────────────────────────────────────────
-  function TenantFormModal({ editing }) {
-    const emptyF = editing
-      ? { name:editing.name, slug:editing.slug||"", email:editing.email||"", firstName:editing.firstName||"", lastName:editing.lastName||"", phone:editing.phone||"", city:editing.city||"", zip:editing.zip||"", address:editing.address||"", plan:editing.plan||"Essentiel", type:editing.type||"Yoga", notes:editing.notes||"", isCoach:editing.isCoach||false }
-      : { name:"", slug:"", email:"", firstName:"", lastName:"", phone:"", city:"", zip:"", address:"", plan:"Essentiel", type:"Yoga", notes:"", isCoach:false };
-    const [f, setF] = useState(emptyF);
-    const [step, setStep] = useState(1);
-    const [errors, setErrors] = useState({});
-
-    const upd = (k, v) => {
-      const next = {...f, [k]:v};
-      if(k==="name" && !editing) next.slug = toSlug(v);
-      if(k==="slug") next.slug = v.toLowerCase().replace(/[^a-z0-9-]/g,"").replace(/\..*$/,"");
-      setF(next);
-      setErrors(e=>({...e,[k]:undefined}));
-    };
-
-    const validate1 = () => {
-      const e = {};
-      if(!f.name.trim())               e.name = "Obligatoire";
-      if(!f.city.trim())               e.city = "Obligatoire";
-      if(!f.slug.trim())               e.slug = "Obligatoire";
-      else if(!validateSlug(f.slug))   e.slug = "Uniquement lettres minuscules, chiffres et tirets (ex: yoga-paris)";
-      return e;
-    };
-    const validate2 = () => {
-      const e = {};
-      if(!f.email.trim()||!f.email.includes("@")) e.email = "Email invalide";
-      if(!f.firstName.trim()) e.firstName = "Obligatoire";
-      if(!f.lastName.trim())  e.lastName  = "Obligatoire";
-      if(!f.phone.trim())     e.phone     = "Obligatoire";
-      return e;
-    };
-
-    const nextStep = () => {
-      if(step===1){ const e=validate1(); if(Object.keys(e).length){ setErrors(e); return; } }
-      if(step===2){ const e=validate2(); if(Object.keys(e).length){ setErrors(e); return; } }
-      setStep(s=>s+1);
-    };
-
-    const save = async () => {
-      const supabase = createClient();
-      const now = new Date();
-      const mois = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
-      const since = `${mois[now.getMonth()]} ${now.getFullYear()}`;
-
-      if(editing) {
-        // Mettre à jour le studio en base
-        const { error } = await supabase.from("studios").update({
-          name: f.name, slug: f.slug, city: f.city, address: f.address || null,
-          phone: f.phone || null, email: f.email, notes: f.notes || null,
-        }).eq("id", editing.id);
-        if(error) { showToast(`Erreur : ${error.message}`, false); return; }
-
-        // Mettre à jour le profil admin si existe
-        await supabase.from("profiles").update({
-          first_name: f.firstName, last_name: f.lastName,
-          is_coach: f.isCoach || false,
-        }).eq("studio_id", editing.id).eq("role", "admin");
-
-        setTenants(prev=>prev.map(t=>t.id===editing.id ? {
-          ...t, name:f.name, slug:f.slug, city:f.city, address:f.address,
-          email:f.email, phone:f.phone, notes:f.notes,
-          contact:`${f.firstName} ${f.lastName}`.trim(),
-          firstName:f.firstName, lastName:f.lastName, isCoach:f.isCoach,
-        } : t));
-        showToast(`✅ "${f.name}" mis à jour`);
-      } else {
-        // Créer le studio en base via service role (seed)
-        const res = await fetch("/api/sa/create-tenant", {
-          method: "POST",
-          headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({
-            studioName: f.name, slug: f.slug, city: f.city, zip: f.zip||null,
-            address: f.address||null, type: f.type, email: f.email, phone: f.phone||null,
-            firstName: f.firstName, lastName: f.lastName, isCoach: f.isCoach||false,
-            plan: f.plan,
-          }),
-        });
-        const result = await res.json();
-        if(!res.ok || result.error) { showToast(`Erreur : ${result.error || "création échouée"}`, false); return; }
-
-        const newT = {
-          id: result.studioId || `t${Date.now()}`,
-          name:f.name, slug:f.slug, city:f.city, email:f.email,
-          contact:`${f.firstName} ${f.lastName}`,
-          firstName:f.firstName, lastName:f.lastName, phone:f.phone, notes:f.notes,
-          plan:f.plan, members:0, revenue:0, status:"actif", since, growth:0,
-        };
-        setTenants(prev=>[newT, ...prev]);
-        showToast(`🚀 "${f.name}" créé !`);
-      }
-      setModal(null);
-    };
-
-    const STEPS = ["Studio", "Contact", "Confirmation"];
-    return (
-      <div onClick={e=>e.target===e.currentTarget&&setModal(null)}
-        style={{position:"fixed",inset:0,background:"rgba(42,31,20,.5)",zIndex:800,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-        <div style={{background:"#FFFFFF",border:"1px solid rgba(167,139,250,.2)",borderRadius:20,padding:32,width:"100%",maxWidth:520,boxShadow:"0 32px 64px rgba(0,0,0,.5)",maxHeight:"90vh",overflowY:"auto"}}>
-
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
-            <div>
-              <div style={{fontSize:20,fontWeight:800,color:"#2A1F14",letterSpacing:-0.5}}>{editing?"Modifier le tenant":"Nouveau tenant"}</div>
-              <div style={{fontSize:12,color:"#8C7B6C",marginTop:2}}>Étape {step} / 3 — {STEPS[step-1]}</div>
-            </div>
-            <button onClick={()=>setModal(null)} style={{background:"#F4EFE8",border:"1px solid #DDD5C8",borderRadius:8,width:32,height:32,cursor:"pointer",color:"#8C7B6C",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
-          </div>
-
-          <div style={{display:"flex",gap:6,marginBottom:28}}>
-            {STEPS.map((s,i)=>(
-              <div key={s} style={{flex:1,height:3,borderRadius:2,background:i+1<=step?"#A06838":"#EAE4DA"}}/>
-            ))}
-          </div>
-
-          {step===1&&(
-            <div style={{display:"flex",flexDirection:"column",gap:16}}>
-              <FieldSA label="Nom du studio / centre" k="name" placeholder="Ex: Yoga Flow Paris" required value={f.name} onChange={upd} error={errors.name}/>
-              <div>
-                <label style={{fontSize:11,fontWeight:700,color:"#8C7B6C",textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:5}}>
-                  Sous-domaine <span style={{color:"#B0A090"}}>(lettres, chiffres, tirets)</span> <span style={{color:"#F87171"}}>*</span>
-                </label>
-                <div style={{display:"flex",alignItems:"center",background:"#FAFAF8",border:`1.5px solid ${errors.slug?"#F87171":"#DDD5C8"}`,borderRadius:9,overflow:"hidden"}}>
-                  <input value={f.slug} onChange={e=>upd("slug",e.target.value)} placeholder="yogaflowparis"
-                    style={{...saInp(),border:"none",background:"transparent",flex:1}}/>
-                  <span style={{padding:"9px 12px",color:"#8C7B6C",fontSize:13,borderLeft:"1px solid #DDD5C8",whiteSpace:"nowrap"}}>.fydelys.fr</span>
-                </div>
-                {errors.slug&&<div style={{fontSize:11,color:"#F87171",marginTop:3}}>{errors.slug}</div>}
-                <div style={{fontSize:11,color:"#B0A090",marginTop:4}}>✓ Autorisé : <code style={{color:"#A06838"}}>yoga-paris</code> · <code style={{color:"#A06838"}}>studio2</code> &nbsp; ✗ Interdit : points, espaces, majuscules, accents</div>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:12}}>
-                <FieldSA label="Ville" k="city" placeholder="Paris, Lyon…" required value={f.city} onChange={upd} error={errors.city}/>
-                <FieldSA label="Code postal" k="zip" placeholder="75001" value={f.zip} onChange={upd}/>
-              </div>
-              <FieldSA label="Adresse" k="address" placeholder="12 rue de la Paix" value={f.address} onChange={upd}/>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                <SelectSA label="Type de pratique" k="type" required value={f.type} onChange={upd} opts={[
-                  {v:"Yoga",l:"🧘 Yoga"},{v:"Pilates",l:"⚡ Pilates"},{v:"Danse",l:"💃 Danse"},
-                  {v:"Fitness",l:"🏋 Fitness"},{v:"Méditation",l:"☯ Méditation"},{v:"Multi",l:"🌀 Multi-disciplines"}
-                ]}/>
-                <SelectSA label="Plan Fydelys" k="plan" value={f.plan} onChange={upd} opts={[
-                  ...FYDELYS_PLANS.map(p=>({v:p.name,l:`${p.name} — ${p.price} €/mois`}))
-                ]}/>
-              </div>
-            </div>
-          )}
-
-          {step===2&&(
-            <div style={{display:"flex",flexDirection:"column",gap:16}}>
-              <div style={{padding:"12px 16px",background:"rgba(167,139,250,.08)",borderRadius:10,border:"1px solid rgba(167,139,250,.15)",fontSize:13,color:"#8C5E38"}}>
-                👤 Informations du gérant / responsable du studio
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                <FieldSA label="Prénom" k="firstName" placeholder="Marie" required value={f.firstName} onChange={upd} error={errors.firstName}/>
-                <FieldSA label="Nom" k="lastName" placeholder="Laurent" required value={f.lastName} onChange={upd} error={errors.lastName}/>
-              </div>
-              <FieldSA label="Email professionnel" k="email" type="email" placeholder="marie@studio.fr" required value={f.email} onChange={upd} error={errors.email}/>
-              <FieldSA label="Téléphone" k="phone" type="tel" placeholder="+33 6 12 34 56 78" required value={f.phone} onChange={upd} error={errors.phone}/>
-              {/* Toggle coach */}
-              <div onClick={()=>upd("isCoach",!f.isCoach)}
-                style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",background:f.isCoach?"#F5EBE0":"#FAFAF8",border:`1px solid ${f.isCoach?"rgba(160,104,56,.3)":"#DDD5C8"}`,borderRadius:10,cursor:"pointer",userSelect:"none"}}>
-                <div>
-                  <div style={{fontSize:13,fontWeight:700,color:f.isCoach?"#8C5E38":"#8C7B6C"}}>🎯 Aussi coach / intervenant</div>
-                  <div style={{fontSize:11,color:"#B0A090",marginTop:2}}>Le gérant donne également des cours dans son studio</div>
-                </div>
-                <div style={{width:40,height:22,borderRadius:11,background:f.isCoach?"#A06838":"rgba(160,104,56,.15)",position:"relative",flexShrink:0,transition:"background .2s"}}>
-                  <div style={{position:"absolute",top:3,left:f.isCoach?20:3,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
-                </div>
-              </div>
-              <div>
-                <label style={{fontSize:11,fontWeight:700,color:"#8C7B6C",textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:5}}>Notes internes</label>
-                <textarea value={f.notes} onChange={e=>upd("notes",e.target.value)} placeholder="Informations complémentaires, source du lead…" rows={3}
-                  style={{...saInp(),resize:"vertical"}}/>
-              </div>
-            </div>
-          )}
-
-          {step===3&&(
-            <div style={{display:"flex",flexDirection:"column",gap:16}}>
-              <div style={{padding:"16px",background:"rgba(52,211,153,.06)",borderRadius:12,border:"1px solid rgba(52,211,153,.2)"}}>
-                <div style={{fontSize:13,fontWeight:700,color:"#34D399",marginBottom:12}}>✅ Récapitulatif</div>
-                {[
-                  ["Studio",       f.name],
-                  ["Sous-domaine", `${f.slug}.fydelys.fr`],
-                  ["Ville",        f.city],
-                  ["Code postal",  f.zip],
-                  ["Type",         f.type],
-                  ["Plan",         f.plan],
-                  ["Gérant",       `${f.firstName} ${f.lastName}`],
-                  ["Email",        f.email],
-                  ["Téléphone",    f.phone],
-                  ["Rôle gérant",  f.isCoach ? "Admin + Coach" : "Admin uniquement"],
-                ].map(([k,v])=>(
-                  <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #EDE6DC",fontSize:13}}>
-                    <span style={{color:"#8C7B6C"}}>{k}</span>
-                    <span style={{color:"#2A1F14",fontWeight:600}}>{v}</span>
-                  </div>
-                ))}
-              </div>
-              {!editing&&(
-                <div style={{padding:"12px 16px",background:"#FBF6EE",borderRadius:10,border:"1px solid rgba(160,104,56,.2)",fontSize:12,color:"#8C7B6C",lineHeight:1.6}}>
-                  🌱 <strong>Seed automatique :</strong> disciplines, créneaux du soir, abonnements et salle principale seront créés automatiquement.
-                </div>
-              )}
-            </div>
-          )}
-
-          <div style={{display:"flex",gap:10,marginTop:24}}>
-            {step>1&&(
-              <button onClick={()=>setStep(s=>s-1)} style={{flex:1,padding:"11px",background:"transparent",border:"1px solid #DDD5C8",borderRadius:10,color:"#8C7B6C",fontSize:14,fontWeight:600,cursor:"pointer"}}>← Retour</button>
-            )}
-            {step<3?(
-              <button onClick={nextStep} style={{flex:2,padding:"11px",background:"linear-gradient(145deg,#B88050,#9A6030)",border:"none",borderRadius:10,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>Continuer →</button>
-            ):(
-              <button onClick={save} style={{flex:2,padding:"11px",background:editing?"linear-gradient(135deg,#2563EB,#1D4ED8)":"linear-gradient(135deg,#059669,#047857)",border:"none",borderRadius:10,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>
-                {editing?"💾 Enregistrer":"🚀 Créer le tenant"}
-              </button>
-            )}
-            {step===1&&<button onClick={()=>setModal(null)} style={{flex:1,padding:"11px",background:"transparent",border:"1px solid #DDD5C8",borderRadius:10,color:"#B0A090",fontSize:14,cursor:"pointer"}}>Annuler</button>}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Delete Confirm Modal ──────────────────────────────────────────────────────
-  function DeleteModal({ tenant }) {
-    return (
-      <div onClick={e=>e.target===e.currentTarget&&setModal(null)}
-        style={{position:"fixed",inset:0,background:"rgba(42,31,20,.5)",zIndex:800,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-        <div style={{background:"#FFFFFF",border:"1px solid rgba(248,113,113,.3)",borderRadius:20,padding:32,width:"100%",maxWidth:420,boxShadow:"0 32px 64px rgba(0,0,0,.5)"}}>
-          <div style={{fontSize:32,textAlign:"center",marginBottom:16}}>🗑</div>
-          <div style={{fontSize:18,fontWeight:800,color:"#2A1F14",textAlign:"center",marginBottom:8}}>Supprimer ce tenant ?</div>
-          <div style={{fontSize:14,color:"#8C7B6C",textAlign:"center",marginBottom:24,lineHeight:1.6}}>
-            <strong style={{color:"#F87171"}}>{tenant.name}</strong> et toutes ses données (membres, séances, paiements) seront supprimées définitivement.
-          </div>
-          <div style={{display:"flex",gap:10}}>
-            <button onClick={()=>setModal(null)} style={{flex:1,padding:"11px",background:"transparent",border:"1px solid #DDD5C8",borderRadius:10,color:"#8C7B6C",fontSize:14,fontWeight:600,cursor:"pointer"}}>Annuler</button>
-            <button onClick={()=>{ setTenants(prev=>prev.filter(t=>t.id!==tenant.id)); setModal(null); showToast(`"${tenant.name}" supprimé`,false); }}
-              style={{flex:1,padding:"11px",background:"linear-gradient(135deg,#DC2626,#B91C1C)",border:"none",borderRadius:10,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>
-              Supprimer définitivement
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div style={{minHeight:"100vh",background:"#F4EFE8"}}>
@@ -381,9 +385,9 @@ function SuperAdminView({ onSwitch, isMobile, onSignOut, onImpersonateStudio }) 
           {toast.msg}
         </div>
       )}
-      {modal?.type==="new"    && <TenantFormModal/>}
-      {modal?.type==="edit"   && <TenantFormModal editing={modal.tenant}/>}
-      {modal?.type==="delete" && <DeleteModal tenant={modal.tenant}/>}
+      {modal?.type==="new"    && <TenantFormModal setModal={setModal} showToast={showToast} setTenants={setTenants} createClient={createClient} FYDELYS_PLANS={FYDELYS_PLANS}/>}
+      {modal?.type==="edit"   && <TenantFormModal editing={modal.tenant} setModal={setModal} showToast={showToast} setTenants={setTenants} createClient={createClient} FYDELYS_PLANS={FYDELYS_PLANS}/>}
+      {modal?.type==="delete" && <DeleteModal tenant={modal.tenant} setModal={setModal} showToast={showToast} setTenants={setTenants} createClient={createClient}/>}
 
       {confirmLogout && <ConfirmModal message="Voulez-vous vous déconnecter de Fydelys ?" onConfirm={()=>{ setConfirmLogout(false); onSignOut?.(); }} onCancel={()=>setConfirmLogout(false)}/>}
       {/* TopBar */}
