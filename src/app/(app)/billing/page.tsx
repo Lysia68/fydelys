@@ -29,15 +29,23 @@ const stripeAppearance = {
 }
 
 const PLANS = [
-  { slug:"essentiel", name:"Essentiel", price:9,  desc:"Pour débuter",           features:["50 adhérents","2 coachs","Planning","Paiements"],                       color:C.accent, bg:C.accentBg },
-  { slug:"standard",  name:"Standard",  price:29, desc:"Pour les studios actifs", features:["200 adhérents","5 coachs","Planning","Paiements","Statistiques"],       color:C.gold,   bg:C.goldBg, popular:true },
-  { slug:"pro",       name:"Pro",       price:69, desc:"Pour les grands studios",  features:["Illimité","Coachs illimités","Tout Standard +","Support prioritaire"], color:C.ok,     bg:C.okBg },
+  { slug:"essentiel", name:"Essentiel", price:9,  desc:"Pour débuter",           smsCredits:0,   features:["50 adhérents","2 coachs","Planning","Paiements","SMS à l'achat"],                             color:C.accent, bg:C.accentBg },
+  { slug:"standard",  name:"Standard",  price:29, desc:"Pour les studios actifs", smsCredits:50,  features:["200 adhérents","5 coachs","Planning","Paiements","Statistiques","50 SMS/mois inclus"],       color:C.gold,   bg:C.goldBg, popular:true },
+  { slug:"pro",       name:"Pro",       price:69, desc:"Pour les grands studios",  smsCredits:100, features:["Illimité","Coachs illimités","Tout Standard +","Support prioritaire","100 SMS/mois inclus"], color:C.ok,     bg:C.okBg },
+]
+
+const SMS_PACKS = [
+  { id:"sms_100",  label:"100 SMS",  credits:100,  price:8,  pricePerSms:"0.08€" },
+  { id:"sms_500",  label:"500 SMS",  credits:500,  price:35, pricePerSms:"0.07€" },
+  { id:"sms_1000", label:"1000 SMS", credits:1000, price:60, pricePerSms:"0.06€" },
 ]
 
 type Studio = {
   id:string; name:string; billing_status:string
   trial_ends_at:string|null; plan_slug:string
   stripe_customer_id:string|null; stripe_subscription_id:string|null
+  sms_credits_balance:number|null; sms_credits_included:number|null
+  sms_credits_reset_at:string|null
 }
 
 // ── Modal paiement avec Stripe.js vanilla ─────────────────────────────────────
@@ -176,7 +184,7 @@ export default function BillingPage() {
       const {data:profile}=await supabase.from("profiles").select("studio_id,role").eq("id",user.id).single()
       if(!profile||profile.role!=="admin"){router.push("/dashboard");return}
       const {data:st}=await supabase.from("studios")
-        .select("id,name,billing_status,trial_ends_at,plan_slug,stripe_customer_id,stripe_subscription_id")
+        .select("id,name,billing_status,trial_ends_at,plan_slug,stripe_customer_id,stripe_subscription_id,sms_credits_balance,sms_credits_included,sms_credits_reset_at")
         .eq("id",profile.studio_id).single()
       setStudio(st);setLoading(false)
     }
@@ -298,6 +306,67 @@ export default function BillingPage() {
             )
           })}
         </div>
+
+        {/* ── Section SMS ────────────────────────────────────────── */}
+        {studio?.sms_credits_included !== null && (
+          <div style={{marginBottom:24}}>
+            <h2 style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:4}}>📱 Crédits SMS</h2>
+            <div style={{fontSize:13,color:C.textSoft,marginBottom:16}}>
+              Votre plan inclut <strong>{studio?.sms_credits_included || 0} SMS/mois</strong>.
+              Les crédits non utilisés se <strong>cumulent</strong> d'un mois à l'autre (rollover).
+              Rechargez à tout moment si besoin.
+            </div>
+
+            {/* Solde actuel */}
+            <div style={{padding:"14px 18px",background:C.accentBg,borderRadius:12,border:`1px solid ${C.border}`,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div>
+                <div style={{fontSize:13,color:C.textSoft}}>Solde actuel</div>
+                <div style={{fontSize:28,fontWeight:800,color:C.accent,lineHeight:1}}>{studio?.sms_credits_balance ?? 0}</div>
+                <div style={{fontSize:11,color:C.textMuted,marginTop:2}}>crédits disponibles</div>
+              </div>
+              {studio?.sms_credits_reset_at && (
+                <div style={{fontSize:11,color:C.textSoft,textAlign:"right"}}>
+                  <div>Remise à zéro le</div>
+                  <div style={{fontWeight:700,color:C.text}}>{new Date(studio.sms_credits_reset_at).toLocaleDateString("fr-FR",{day:"numeric",month:"long"})}</div>
+                </div>
+              )}
+            </div>
+
+            {/* Packs d'achat */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
+              {SMS_PACKS.map(pack => {
+                const isBusy = busy === pack.id
+                return (
+                  <div key={pack.id} style={{background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:"16px",textAlign:"center"}}>
+                    <div style={{fontSize:13,fontWeight:700,color:C.textMid,marginBottom:4}}>{pack.label}</div>
+                    <div style={{fontSize:24,fontWeight:800,color:C.text,lineHeight:1}}>{pack.price}€</div>
+                    <div style={{fontSize:11,color:C.textMuted,marginBottom:12}}>{pack.pricePerSms}/SMS</div>
+                    <button
+                      onClick={async()=>{
+                        if(!studio) return
+                        setBusy(pack.id)
+                        try {
+                          const res = await fetch("/api/stripe/sms-credits",{
+                            method:"POST",
+                            headers:{"Content-Type":"application/json"},
+                            body:JSON.stringify({studioId:studio.id,packId:pack.id})
+                          })
+                          const data = await res.json()
+                          if(data.clientSecret) setModal({plan:{...PLANS[0],name:pack.label,price:pack.price,color:C.accent,bg:C.accentBg,desc:"",features:[],smsCredits:0},clientSecret:data.clientSecret,intentType:"payment"})
+                          else showToast(data.error||"Erreur",false)
+                        } catch { showToast("Erreur réseau",false) }
+                        setBusy(null)
+                      }}
+                      disabled={!!isBusy}
+                      style={{width:"100%",padding:"8px",background:C.accent,border:"none",borderRadius:8,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",opacity:isBusy?0.6:1}}>
+                      {isBusy?"Chargement…":"Acheter"}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         <div style={{padding:"16px 20px",background:C.surface,border:`1px solid ${C.borderSoft}`,borderRadius:12,fontSize:12,color:C.textSoft,lineHeight:1.7}}>
           <div style={{fontWeight:700,color:C.textMid,marginBottom:4}}>ℹ️ Informations de facturation</div>

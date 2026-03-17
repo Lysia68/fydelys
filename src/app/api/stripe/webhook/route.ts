@@ -1,170 +1,186 @@
 import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
-import { createServiceSupabase } from "@/lib/supabase-server"
+import { createClient } from "@supabase/supabase-js"
 
 export const dynamic = "force-dynamic"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2024-06-20" })
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+})
+
+async function updateStudioBilling(studioId: string, patch: Record<string, any>) {
+  // Initialisé ici pour éviter l'erreur "supabaseKey is required" au build
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  )
+  const { error } = await supabaseAdmin.from("studios").update(patch).eq("id", studioId)
+  if (error) console.error("Supabase update error:", error)
+}
+
+async function getStudioBySubscription(subId: string) {
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  )
+  const { data } = await supabaseAdmin
+    .from("studios").select("id, billing_status").eq("stripe_subscription_id", subId).single()
+  return data
+}
 
 export async function POST(req: NextRequest) {
-  const body = await req.text()
-  const sig  = req.headers.get("stripe-signature")!
-
-  // Webhook secret Connect (différent du webhook Fydelys billing)
-  const secret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET!
-  if (!secret) {
-    console.error("STRIPE_CONNECT_WEBHOOK_SECRET manquant")
-    return NextResponse.json({ error: "Config error" }, { status: 500 })
-  }
+  const body    = await req.text()
+  const sig     = req.headers.get("stripe-signature")!
+  const secret  = process.env.STRIPE_WEBHOOK_SECRET!
 
   let event: Stripe.Event
   try {
     event = stripe.webhooks.constructEvent(body, sig, secret)
   } catch (err: any) {
-    console.error("Connect webhook signature error:", err.message)
+    console.error("Webhook signature error:", err.message)
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
   }
 
-  const db = createServiceSupabase()
+  const getStudioId = (obj: any): string | null =>
+    obj?.metadata?.studioId || null
 
   try {
     switch (event.type) {
 
-      // ── Paiement one-time réussi (crédits ou séance) ─────────────────────
+      // ── Paiement réussi → activer ────────────────────────────────────────
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session
-        if (session.payment_status !== "paid") break
-
-        const { studioId, memberId, type, sessionId, creditsPackId, credits } = session.metadata || {}
+        const studioId = getStudioId(session)
         if (!studioId) break
-
-        if (type === "credits" && memberId && credits) {
-          // Créditer le membre
-          const creditsAmount = parseInt(credits)
-          const { data: member } = await db
-            .from("members").select("credits, credits_total").eq("id", memberId).single()
-          if (member) {
-            await db.from("members").update({
-              credits:       (member.credits || 0) + creditsAmount,
-              credits_total: (member.credits_total || 0) + creditsAmount,
-            }).eq("id", memberId)
-          }
-          // Enregistrer le paiement
-          await db.from("member_payments").insert({
-            studio_id:         studioId,
-            member_id:         memberId,
-            amount:            (session.amount_total || 0) / 100,
-            status:            "payé",
-            payment_date:      new Date().toISOString().slice(0, 10),
-            payment_type:      "Carte",
-            source:            "card_credits",
-            stripe_payment_id: session.payment_intent as string,
-            notes:             `Pack crédits — ${creditsAmount} crédits`,
-          })
-        }
-
-        else if (type === "session" && memberId && sessionId) {
-          // Créer la réservation
-          const { data: existing } = await db
-            .from("bookings").select("id").eq("session_id", sessionId).eq("member_id", memberId).maybeSingle()
-
-          if (!existing) {
-            await db.from("bookings").insert({
-              session_id: sessionId,
-              member_id:  memberId,
-              status:     "confirmed",
-              attended:   false,
-            })
-            // Enregistrer le paiement
-            await db.from("member_payments").insert({
-              studio_id:         studioId,
-              member_id:         memberId,
-              amount:            (session.amount_total || 0) / 100,
-              status:            "payé",
-              payment_date:      new Date().toISOString().slice(0, 10),
-              payment_type:      "Carte",
-              source:            "card_session",
-              stripe_payment_id: session.payment_intent as string,
-              notes:             `Séance à l'unité`,
-            })
-          }
-        }
-        break
-      }
-
-      // ── Abonnement créé/renouvelé ────────────────────────────────────────
-      case "invoice.payment_succeeded": {
-        const invoice = event.data.object as Stripe.Invoice
-        const sub = invoice.subscription
-        if (!sub) break
-
-        // Récupérer les metadata de la subscription
-        const subscription = await stripe.subscriptions.retrieve(
-          typeof sub === "string" ? sub : sub.id,
-          { stripeAccount: (event as any).account }
-        )
-        const { studioId, memberId, subscriptionId } = subscription.metadata || {}
-        if (!studioId || !memberId) break
-
-        // Mettre à jour le statut membre
-        const nextPayment = new Date()
-        nextPayment.setMonth(nextPayment.getMonth() + 1)
-
-        await db.from("members").update({
-          status:            "Actif",
-          subscription_id:   subscriptionId || null,
-          next_payment:      nextPayment.toISOString().slice(0, 10),
-          stripe_sub_id:     typeof sub === "string" ? sub : sub.id,
-        }).eq("id", memberId)
-
-        // Enregistrer le paiement
-        await db.from("member_payments").insert({
-          studio_id:         studioId,
-          member_id:         memberId,
-          amount:            (invoice.amount_paid || 0) / 100,
-          status:            "payé",
-          payment_date:      new Date().toISOString().slice(0, 10),
-          payment_type:      "Carte",
-          source:            "card_subscription",
-          stripe_payment_id: invoice.payment_intent as string,
-          notes:             `Abonnement mensuel`,
+        const subId   = session.subscription as string
+        const planSlug = session.metadata?.planSlug || "essentiel"
+        await updateStudioBilling(studioId, {
+          billing_status:         "active",
+          stripe_subscription_id: subId,
+          plan_slug:              planSlug,
+          plan_started_at:        new Date().toISOString(),
         })
         break
       }
 
-      // ── Abonnement annulé / paiement échoué ─────────────────────────────
-      case "customer.subscription.deleted":
+      // ── Abonnement actif / mis à jour ────────────────────────────────────
+      case "customer.subscription.updated": {
+        const sub = event.data.object as Stripe.Subscription
+        const studioId = getStudioId(sub)
+        if (!studioId) break
+
+        const planSlug = sub.metadata?.planSlug || "essentiel"
+        const statusMap: Record<string, string> = {
+          active:   "active",
+          trialing: "trialing",
+          past_due: "past_due",
+          canceled: "canceled",
+          unpaid:   "suspended",
+          paused:   "suspended",
+        }
+        const billing_status = statusMap[sub.status] || "suspended"
+        await updateStudioBilling(studioId, {
+          billing_status,
+          plan_slug: planSlug,
+          stripe_subscription_id: sub.id,
+        })
+        break
+      }
+
+      // ── Abonnement annulé ────────────────────────────────────────────────
+      case "customer.subscription.deleted": {
+        const sub = event.data.object as Stripe.Subscription
+        const studioId = getStudioId(sub)
+        if (!studioId) break
+        await updateStudioBilling(studioId, {
+          billing_status: "canceled",
+          stripe_subscription_id: null,
+        })
+        break
+      }
+
+      // ── Paiement échoué → past_due ───────────────────────────────────────
       case "invoice.payment_failed": {
-        const obj = event.data.object as any
-        const subId = obj.id || obj.subscription
+        const invoice = event.data.object as Stripe.Invoice
+        const subId   = invoice.subscription as string
         if (!subId) break
-
-        // Trouver le membre via stripe_sub_id
-        const { data: member } = await db
-          .from("members").select("id").eq("stripe_sub_id", typeof subId === "string" ? subId : subId.id).maybeSingle()
-        if (member) {
-          await db.from("members").update({
-            status: event.type === "customer.subscription.deleted" ? "Inactif" : "Suspendu",
-          }).eq("id", member.id)
+        const studio = await getStudioBySubscription(subId)
+        if (studio) {
+          await updateStudioBilling(studio.id, { billing_status: "past_due" })
         }
         break
       }
 
-      // ── Compte Connect activé ────────────────────────────────────────────
-      case "account.updated": {
-        const account = event.data.object as Stripe.Account
-        if (account.charges_enabled && account.payouts_enabled) {
-          await db.from("studios")
-            .update({ stripe_connect_status: "active" })
-            .eq("stripe_connect_id", account.id)
+      // ── Paiement récupéré après échec ────────────────────────────────────
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object as Stripe.Invoice
+        const subId   = invoice.subscription as string
+        if (!subId) break
+        const studio = await getStudioBySubscription(subId)
+        if (studio && studio.billing_status === "past_due") {
+          await updateStudioBilling(studio.id, { billing_status: "active" })
         }
         break
       }
+
+      // ── Achat crédits SMS ────────────────────────────────────────────────
+      case "payment_intent.succeeded": {
+        const pi = event.data.object as Stripe.PaymentIntent
+        const { studioId, packId, credits } = pi.metadata || {}
+        if (studioId && credits) {
+          const creditsToAdd = parseInt(credits)
+          // Récupérer le solde actuel et l'incrémenter
+          const { data: st } = await db.from("studios")
+            .select("sms_credits_balance").eq("id", studioId).single()
+          const newBalance = (st?.sms_credits_balance || 0) + creditsToAdd
+          await db.from("studios").update({ sms_credits_balance: newBalance }).eq("id", studioId)
+          // Logger l'achat
+          await db.from("sms_credit_purchases").insert({
+            studio_id: studioId, credits: creditsToAdd,
+            amount_cents: pi.amount, stripe_payment_id: pi.id,
+          })
+        }
+        break
+      }
+
+      // ── Remise à zéro mensuelle crédits SMS lors du renouvellement ──────
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object as Stripe.Invoice
+        const subId   = invoice.subscription as string
+        if (subId) {
+          const studio = await getStudioBySubscription(subId)
+          if (studio && studio.billing_status === "past_due") {
+            await updateStudioBilling(studio.id, { billing_status: "active" })
+          }
+          // Remettre les crédits inclus du plan + reset date
+          if (studio) {
+            const SMS_BY_PLAN: Record<string, number> = { essentiel:0, standard:50, pro:100 }
+            const included = SMS_BY_PLAN[studio.plan_slug] || 0
+            if (included > 0) {
+              const nextReset = new Date()
+              nextReset.setMonth(nextReset.getMonth() + 1)
+              // Rollover : ajouter les crédits inclus au solde existant (pas de remise à zéro)
+              const { data: currentSt } = await db.from("studios")
+                .select("sms_credits_balance").eq("id", studio.id).single()
+              const newBalance = (currentSt?.sms_credits_balance || 0) + included
+              await db.from("studios").update({
+                sms_credits_included: included,
+                sms_credits_balance:  newBalance,
+                sms_credits_reset_at: nextReset.toISOString().slice(0, 10),
+              }).eq("id", studio.id)
+            }
+          }
+        }
+        break
+      }
+
+      default:
+        break
     }
 
     return NextResponse.json({ received: true })
   } catch (err: any) {
-    console.error("Connect webhook handler error:", err)
+    console.error("Webhook handler error:", err)
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
