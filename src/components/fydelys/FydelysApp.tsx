@@ -38,6 +38,7 @@ const PAGE_TITLES = {
   settings:"Paramètres", aide:"Aide"
 };
   const [sharedStudioId, setSharedStudioId] = useState(propStudioId || null);
+  const [dynamicMembersCount, setDynamicMembersCount] = useState<number|null>(null);
   useEffect(() => {
     // propStudioId arrive en async depuis layout — on le sync dès qu'il est disponible
     if (propStudioId) { setSharedStudioId(propStudioId); return; }
@@ -132,6 +133,17 @@ const PAGE_TITLES = {
 
   const [discs, setDiscs] = useState([]);
 
+  // Charger membersCount dynamiquement (utile lors de l'impersonation SA)
+  useEffect(() => {
+    const id = sharedStudioId;
+    if (!id) return;
+    createClient().from("members")
+      .select("id", { count: "exact", head: true })
+      .eq("studio_id", id)
+      .eq("status", "Actif")
+      .then(({ count }) => { if (count !== null) setDynamicMembersCount(count); });
+  }, [sharedStudioId]);
+
   // Charger disciplines dès que studioId est connu (propStudioId OU sharedStudioId)
   useEffect(() => {
     const id = propStudioId || sharedStudioId;
@@ -181,7 +193,8 @@ const PAGE_TITLES = {
   );
   const activeStudioName = (impersonating?.as === "admin" && impersonatedStudioName) ? impersonatedStudioName : studioName;
   const appCtxValue = {
-    studioName: activeStudioName, studioSlug, userName, planName, membersCount,
+    studioName: activeStudioName, studioSlug, userName, planName,
+    membersCount: dynamicMembersCount !== null ? dynamicMembersCount : membersCount,
     userRole, userEmail: "", discs, setDiscs,
     studioId: sharedStudioId, setStudioId: setSharedStudioId,
   };
@@ -226,9 +239,9 @@ const PAGE_TITLES = {
           ::-webkit-scrollbar-thumb { background:#D0C4B8; border-radius:3px; }
           ::-webkit-scrollbar-track { background:transparent; }
         `}</style>
-        {!isMobile && <Sidebar active={page} onNav={handleNav} studioName={activeStudioName} planName={planName} membersCount={membersCount} userName={userName} userRole={userRole}/>}
+        {!isMobile && <Sidebar active={page} onNav={handleNav} studioName={activeStudioName} planName={planName} membersCount={dynamicMembersCount !== null ? dynamicMembersCount : membersCount} userName={userName} userRole={userRole}/>}
         <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, paddingBottom:isMobile?60:0 }}>
-          <TopBar title={PAGE_TITLES[page]} isMobile={isMobile} onSignOut={onSignOut} isSuperAdmin={initialRole==="superadmin"} studioName={activeStudioName}/>
+          <TopBar title={PAGE_TITLES[page]} isMobile={isMobile} onSignOut={onSignOut} isSuperAdmin={initialRole==="superadmin" && !isImpersonatingAdmin} studioName={activeStudioName}/>
           {showTrialBanner && (
             <div style={{ background:trialDaysLeft<=3?"#F5EAE6":"#FDF4E3", borderBottom:`1px solid ${trialDaysLeft<=3?"#F5C2B5":"rgba(196,146,42,.25)"}`, padding:"10px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
               <div style={{ fontSize:13, color:trialDaysLeft<=3?"#A85030":"#C4922A", fontWeight:600 }}>
