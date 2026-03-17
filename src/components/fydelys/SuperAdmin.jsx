@@ -66,7 +66,7 @@ function SuperAdminView({ onSwitch, isMobile, onSignOut, onImpersonateStudio }) 
         if (data && data.length > 0) {
           const mois = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
           const mapped = data.map(s => {
-            const admin = (s.profiles || []).find((p:any) => p.role === "admin") || (s.profiles || [])[0];
+            const admin = (s.profiles || []).find((p) => p.role === "admin") || (s.profiles || [])[0];
             return {
               id:        s.id,
               name:      s.name || "Sans nom",
