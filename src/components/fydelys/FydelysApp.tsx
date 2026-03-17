@@ -86,11 +86,19 @@ const PAGE_TITLES = {
     if (!impersonating) return;
     setRole(impersonating.fromRole);
     setImpersonating(null);
-  }, [impersonating]);
+    setSharedStudioId(propStudioId || null); // Réinitialiser au retour SA
+  }, [impersonating, propStudioId]);
 
-  const startImpersonateStudio = React.useCallback((studioSlugTarget) => {
+  const startImpersonateStudio = React.useCallback(async (studioSlugTarget) => {
     setImpersonating({ as: "admin", fromRole: "superadmin", studioSlug: studioSlugTarget });
     setRole("admin");
+    // Charger le studioId via l'API service role (bypass RLS depuis fydelys.fr)
+    try {
+      const res = await fetch("/api/sa/studios");
+      const { studios } = await res.json();
+      const target = (studios || []).find((s: any) => s.slug === studioSlugTarget);
+      if (target) setSharedStudioId(target.id);
+    } catch(e) { console.error("impersonate studioId load error", e); }
   }, []);
 
   // Lire la page initiale depuis l'URL (ex: /members → "members")
