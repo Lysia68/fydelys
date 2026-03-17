@@ -21,11 +21,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    // Récupérer plan + studio
-    const { data: plan } = await supabase
-      .from("plans").select("stripe_price_id, name").eq("slug", planSlug).single()
-    if (!plan?.stripe_price_id) {
-      return NextResponse.json({ error: "Plan non configuré" }, { status: 404 })
+    // Récupérer plan (prix hardcodés si pas de table plans configurée)
+    const PLAN_PRICES: Record<string, { name: string; price: number }> = {
+      essentiel: { name: "Essentiel",  price: 9  },
+      standard:  { name: "Standard",   price: 29 },
+      pro:       { name: "Pro",        price: 69 },
+    }
+    const { data: planRow } = await supabase
+      .from("plans").select("stripe_price_id, name").eq("slug", planSlug).maybeSingle()
+
+    let priceId = planRow?.stripe_price_id || null
+    const planInfo = PLAN_PRICES[planSlug]
+    if (!planInfo) return NextResponse.json({ error: "Plan inconnu" }, { status: 400 })
+
+    // Créer le price Stripe à la volée si pas encore configuré
+    if (!priceId) {
+      const stripeProduct = await stripe.products.create({ name: `Fydelys ${planInfo.name}` })
+      const stripePrice = await stripe.prices.create({
+        unit_amount: planInfo.price * 100,
+        currency: "eur",
+        recurring: { interval: "month" },
+        product: stripeProduct.id,
+      })
+      priceId = stripePrice.id
+      // Sauvegarder pour la prochaine fois
+      await supabase.from("plans").upsert({ slug: planSlug, name: planInfo.name, price: planInfo.price, stripe_price_id: priceId }, { onConflict: "slug" })
     }
 
     const { data: studio } = await supabase
@@ -55,7 +75,7 @@ export async function POST(req: NextRequest) {
     // → génère un PaymentIntent qu'on confirme via Elements
     const subscription = await stripe.subscriptions.create({
       customer: customerId,
-      items: [{ price: plan.stripe_price_id }],
+      items: [{ price: priceId }],
       payment_behavior: "default_incomplete",
       payment_settings: { save_default_payment_method: "on_subscription" },
       expand: ["latest_invoice.payment_intent"],
