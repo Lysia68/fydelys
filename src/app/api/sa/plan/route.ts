@@ -28,11 +28,21 @@ export async function POST(req: NextRequest) {
   const { plans } = await req.json()
   if (!Array.isArray(plans)) return NextResponse.json({ error: "plans requis" }, { status: 400 })
 
+  const errors: string[] = []
   for (const plan of plans) {
-    await db.from("plans").upsert({
-      slug: plan.slug, name: plan.name, price_monthly: plan.price,
-      stripe_price_id: plan.stripe_price_id || null,
+    const priceId = plan.stripe_price_id?.trim() || null
+    // Valider que c'est bien un Price ID (price_…) et non un Product ID (prod_…)
+    if (priceId && !priceId.startsWith("price_")) {
+      errors.push(`${plan.name} : "${priceId}" est un Product ID (prod_…), pas un Price ID. Créez un prix dans Stripe Dashboard → Produits → ${plan.name} → Ajouter un prix.`)
+      continue
+    }
+    const { error } = await db.from("plans").upsert({
+      slug: plan.slug, name: plan.name,
+      price_monthly: plan.price_monthly || plan.price,
+      stripe_price_id: priceId,
     }, { onConflict: "slug" })
+    if (error) errors.push(`${plan.name} : ${error.message}`)
   }
+  if (errors.length) return NextResponse.json({ ok: false, errors }, { status: 400 })
   return NextResponse.json({ ok: true })
 }
