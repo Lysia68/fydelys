@@ -71,16 +71,31 @@ export async function POST(req: NextRequest) {
       ])
     }
 
-    // Envoyer SMS si activé pour ce studio + membre opt-in
+    // Envoyer SMS si activé + crédits disponibles
     if (studio?.sms_enabled && member?.phone && member.sms_opt_in !== false) {
-      const sessDate = new Date(sess.session_date).toLocaleDateString("fr-FR", { weekday:"short", day:"numeric", month:"short" })
-      const sessTime = sess.session_time?.slice(0, 5) || ""
-      const disc     = (sess as any).disciplines
-      const discName = disc?.name || "Séance"
-      const body = status === "waitlist"
-        ? smsWaitlist({ studioName: studio.name, discName, sessDate, sessTime })
-        : smsConfirmation({ studioName: studio.name, discName, sessDate, sessTime })
-      await sendSMS({ to: member.phone, body })
+      // Vérifier solde crédits
+      const { data: studioCredits } = await db.from("studios")
+        .select("sms_credits_balance").eq("id", studioId).single()
+      const balance = studioCredits?.sms_credits_balance ?? 0
+
+      if (balance > 0) {
+        const sessDate = new Date(sess.session_date).toLocaleDateString("fr-FR", { weekday:"short", day:"numeric", month:"short" })
+        const sessTime = sess.session_time?.slice(0, 5) || ""
+        const disc     = (sess as any).disciplines
+        const discName = disc?.name || "Séance"
+        const body = status === "waitlist"
+          ? smsWaitlist({ studioName: studio.name, discName, sessDate, sessTime })
+          : smsConfirmation({ studioName: studio.name, discName, sessDate, sessTime })
+        const smsResult = await sendSMS({ to: member.phone, body })
+        if (smsResult.ok) {
+          // Décrémenter le solde
+          await db.from("studios").update({
+            sms_credits_balance: balance - 1
+          }).eq("id", studioId)
+        }
+      } else {
+        console.log(`[SMS] Studio ${studioId} — solde insuffisant (${balance} crédits)`)
+      }
     }
 
     return NextResponse.json({ ok: true, bookingId: booking.id, status })
