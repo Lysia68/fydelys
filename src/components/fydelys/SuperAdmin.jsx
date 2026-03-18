@@ -12,7 +12,7 @@ const saInp = (f=false,err=false) => ({
   border:`1.5px solid ${err?"#F87171":f?"#A06838":"#DDD5C8"}`,
   borderRadius:9, fontSize:13, outline:"none",
   color:"#2A1F14", background:"#FDFAF7",
-  boxSizing:"border-box",
+  boxSizing:/** @type {"border-box"} */ ("border-box"),
   boxShadow: f?"0 0 0 3px rgba(160,104,56,.07)":"none"
 });
 
@@ -558,7 +558,7 @@ function SuperAdminView({ onSwitch, isMobile, onSignOut, onImpersonateStudio }) 
                       value={plan.stripe_price_id}
                       onChange={e=>setPlans(p=>p.map((pl,j)=>j===i?{...pl,stripe_price_id:e.target.value}:pl))}
                       placeholder="price_live_… (pas prod_…)"
-                      style={{padding:"7px 10px",border:`1.5px solid ${plan.stripe_price_id&&!plan.stripe_price_id.startsWith("price_")?"#F87171":"#DDD5C8"}`,borderRadius:7,fontSize:12,outline:"none",color:"#2A1F14",background:"#FDFAF7",fontFamily:"monospace",boxSizing:"border-box"}}/>
+                      style={{padding:"7px 10px",border:`1.5px solid ${plan.stripe_price_id&&!plan.stripe_price_id.startsWith("price_")?"#F87171":"#DDD5C8"}`,borderRadius:7,fontSize:12,outline:"none",color:"#2A1F14",background:"#FDFAF7",fontFamily:"monospace",boxSizing:/** @type {"border-box"} */("border-box")}}/>
                   </div>
                 ))}
               </div>
@@ -587,7 +587,7 @@ function SuperAdminView({ onSwitch, isMobile, onSignOut, onImpersonateStudio }) 
         <div style={{background:"#FAFAF8",borderRadius:14,border:"1px solid #DDD5C8",overflow:"hidden"}}>
           <div style={{padding:"14px 18px",borderBottom:"1px solid #EAE4DA",display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Rechercher…"
-              style={{flex:1,minWidth:160,padding:"8px 14px",background:"#FDFAF7",border:"1px solid #DDD5C8",borderRadius:8,color:"#2A1F14",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+              style={{flex:1,minWidth:160,padding:"8px 14px",background:"#FDFAF7",border:"1px solid #DDD5C8",borderRadius:8,color:"#2A1F14",fontSize:13,outline:"none",boxSizing:/** @type {"border-box"} */("border-box")}}/>
             <div style={{display:"flex",gap:6}}>
               {["tous","actif","suspendu"].map(f=>(
                 <button key={f} onClick={()=>setFilter(f)} style={{fontSize:12,padding:"5px 12px",borderRadius:16,border:`1px solid ${filter===f?"#A06838":"#DDD5C8"}`,background:filter===f?"#A06838":"transparent",color:filter===f?"#fff":"#8C7B6C",fontWeight:600,cursor:"pointer"}}>
