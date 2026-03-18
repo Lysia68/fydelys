@@ -173,7 +173,8 @@ const FYDELYS_PLANS = [
       { label: "Séances récurrentes",             ok: true  },
       { label: "Paiements adhérents (Stripe)",    ok: false },
       { label: "Invitation d'équipe",             ok: false },
-      { label: "Rappel cours 1h avant",                     ok: false },
+      { label: "Rappel cours 1h avant",           ok: false },
+      { label: "SMS notifications",               ok: false },
       { label: "Support prioritaire",             ok: false },
     ]
   },
@@ -198,7 +199,8 @@ const FYDELYS_PLANS = [
       { label: "Séances récurrentes",             ok: true  },
       { label: "Paiements adhérents (Stripe)",    ok: true  },
       { label: "Invitation d'équipe",             ok: true  },
-      { label: "Rappel cours 1h avant",                     ok: true  },
+      { label: "Rappel cours 1h avant",           ok: true  },
+      { label: "50 SMS/mois inclus",              ok: true  },
       { label: "Support prioritaire",             ok: false },
     ]
   },
@@ -222,7 +224,8 @@ const FYDELYS_PLANS = [
       { label: "Séances récurrentes",             ok: true  },
       { label: "Paiements adhérents (Stripe)",    ok: true  },
       { label: "Invitation d'équipe",             ok: true  },
-      { label: "Rappel cours 1h avant",                     ok: true  },
+      { label: "Rappel cours 1h avant",           ok: true  },
+      { label: "100 SMS/mois inclus",             ok: true  },
       { label: "Support prioritaire",             ok: true  },
     ]
   },
@@ -604,7 +607,7 @@ function Dashboard({ isMobile }) {
     Promise.all([
       sb.from("sessions").select("id,discipline_id,teacher,room,duration_min,spots,session_date,session_time,status").eq("studio_id", studioId),
       sb.from("profiles").select("id,status").eq("studio_id", studioId).eq("role","member"),
-      sb.from("payments").select("id,amount,status,payment_date").eq("studio_id", studioId),
+      sb.from("member_payments").select("id,amount,status,payment_date").eq("studio_id", studioId),
     ]).then(([sessRes, membRes, payRes]) => {
       const sessData = sessRes.data || [];
       const membData = membRes.data || [];
@@ -1750,7 +1753,7 @@ function Payments({ isMobile }) {
   useEffect(() => {
     if (!studioId) return;
     setDbLoading(true);
-    createClient().from("payments")
+    createClient().from("member_payments")
       .select("id, member_id, amount, status, payment_date, payment_type, notes, members(first_name, last_name), subscriptions(name)")
       .eq("studio_id", studioId).order("payment_date", { ascending: false })
       .then(({ data, error }) => {
@@ -1773,7 +1776,7 @@ function Payments({ isMobile }) {
     const pay = payments.find(p=>p.id===id);
     setToast(`Relance envoyée à ${pay?.member||""}`);
     setTimeout(()=>setToast(null),3000);
-    try { await createClient().from("payments").update({ notes:(pay?.notes||"")+" [relancé]" }).eq("id",id); }
+    try { await createClient().from("member_payments").update({ notes:(pay?.notes||"")+" [relancé]" }).eq("id",id); }
     catch(e) { console.error("relancer",e); }
   };
 
@@ -4127,7 +4130,7 @@ function Settings({ isMobile }) {
                     ))}
                   </div>
                   {!isCurrent && (
-                    <button onClick={()=>showToast(`Passage au plan ${plan.name} — bientôt disponible`)}
+                    <button onClick={()=>window.location.href="/billing"}
                       style={{ width:"100%", padding:"8px 12px", borderRadius:8, border:`1.5px solid ${plan.color}`, background:"transparent", color:plan.color, fontSize:12, fontWeight:700, cursor:"pointer" }}>
                       Choisir {plan.name} →
                     </button>
