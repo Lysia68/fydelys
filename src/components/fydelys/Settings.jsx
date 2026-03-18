@@ -1,4 +1,5 @@
-"use client";
+"use client"; // v2.0 - SMS + Paiements + Vitrine + Salles
+
 
 import React, { useState, useEffect, useContext } from "react";
 import { createClient } from "@/lib/supabase";
