@@ -357,6 +357,89 @@ function Members({ isMobile }) {
     );
   };
 
+  const GiftModal = () => {
+    const m = modal?.member;
+    const [qty, setQty] = React.useState(1);
+    const [reason, setReason] = React.useState("");
+    const [saving, setSaving] = React.useState(false);
+
+    const gift = async () => {
+      if (!qty || qty < 1) return;
+      setSaving(true);
+      const newCredits = (m.credits || 0) + parseInt(qty);
+      const newTotal   = (m.creditTotal || 0) + parseInt(qty);
+      try {
+        await fetch("/api/members", {
+          method: "PATCH",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({ id: m.id, credits: newCredits, credits_total: newTotal }),
+        });
+        setMembers(prev => prev.map(mb => mb.id === m.id
+          ? { ...mb, credits: newCredits, creditTotal: newTotal }
+          : mb
+        ));
+        if (selected?.id === m.id) setSelected(s => ({ ...s, credits: newCredits, creditTotal: newTotal }));
+        showToast(`🎁 ${qty} séance${qty > 1 ? "s" : ""} offerte${qty > 1 ? "s" : ""} à ${m.firstName}`);
+        setModal(null);
+      } catch { showToast("Erreur lors de l'attribution", false); }
+      setSaving(false);
+    };
+
+    return (
+      <Modal>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
+          <div>
+            <div style={{fontSize:17,fontWeight:800,color:C.text}}>🎁 Offrir des séances</div>
+            <div style={{fontSize:13,color:C.textSoft,marginTop:2}}>{m?.firstName} {m?.lastName}</div>
+          </div>
+          <button onClick={()=>setModal(null)} style={{background:"none",border:`1.5px solid ${C.border}`,borderRadius:8,padding:"5px 8px",cursor:"pointer",display:"flex",alignItems:"center"}}><IcoX s={16} c={C.textSoft}/></button>
+        </div>
+
+        {/* Solde actuel */}
+        <div style={{padding:"10px 14px",background:C.accentBg,borderRadius:9,border:`1px solid ${C.border}`,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span style={{fontSize:13,color:C.textSoft}}>Solde actuel</span>
+          <span style={{fontSize:16,fontWeight:800,color:C.accent}}>{m?.credits || 0} séance{(m?.credits||0) > 1 ? "s" : ""}</span>
+        </div>
+
+        {/* Quantité */}
+        <div style={{marginBottom:14}}>
+          <FieldLabel>Nombre de séances à offrir</FieldLabel>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            {[1,2,3,5,10].map(n => (
+              <button key={n} onClick={()=>setQty(n)}
+                style={{padding:"8px 14px",borderRadius:8,border:`1.5px solid ${qty===n?C.accent:C.border}`,background:qty===n?C.accentBg:C.surface,color:qty===n?C.accent:C.textMid,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                {n}
+              </button>
+            ))}
+            <input type="number" min="1" max="100" value={qty} onChange={e=>setQty(Math.max(1,parseInt(e.target.value)||1))}
+              style={{width:60,padding:"8px",border:`1.5px solid ${C.border}`,borderRadius:8,fontSize:13,textAlign:"center",outline:"none",color:C.text,background:C.surface}}/>
+          </div>
+        </div>
+
+        {/* Raison (optionnel) */}
+        <div style={{marginBottom:18}}>
+          <FieldLabel>Motif (optionnel)</FieldLabel>
+          <input value={reason} onChange={e=>setReason(e.target.value)} placeholder="Ex: Séance offerte, compensation, cadeau anniversaire…"
+            style={{width:"100%",padding:"9px 12px",border:`1.5px solid ${C.border}`,borderRadius:8,fontSize:13,outline:"none",color:C.text,background:C.surface,boxSizing:"border-box"}}/>
+        </div>
+
+        {/* Résumé */}
+        <div style={{padding:"10px 14px",background:"#F0FDF4",borderRadius:9,border:"1px solid rgba(52,211,153,.25)",marginBottom:18}}>
+          <span style={{fontSize:13,color:"#065F46"}}>
+            Après attribution : <strong>{(m?.credits||0) + parseInt(qty||0)} séances</strong> disponibles
+          </span>
+        </div>
+
+        <div style={{display:"flex",gap:10}}>
+          <Button variant="ghost" sm onClick={()=>setModal(null)}>Annuler</Button>
+          <Button variant="primary" sm onClick={gift} disabled={saving}>
+            {saving ? "Attribution…" : `🎁 Offrir ${qty} séance${qty>1?"s":""}`}
+          </Button>
+        </div>
+      </Modal>
+    );
+  };
+
   const MemberDetail = () => {
     const m=selected;
     const adresseFull=[m.address,[m.postalCode,m.city].filter(Boolean).join(" ")].filter(Boolean).join(", ");
@@ -398,6 +481,7 @@ function Members({ isMobile }) {
           <Button variant="primary" sm onClick={()=>setModal({type:"email",member:m})}><span style={{display:"flex",alignItems:"center",gap:5}}><IcoMail s={13} c="white"/>Envoyer un email</span></Button>
           <Button variant="ghost" sm onClick={()=>setModal({type:"subscription",member:m})}><span style={{display:"flex",alignItems:"center",gap:5}}><IcoTag2 s={13} c={C.textMid}/>Modifier l'abonnement</span></Button>
           <Button variant="ghost" sm onClick={()=>setModal({type:"history",member:m})}><span style={{display:"flex",alignItems:"center",gap:5}}><IcoCalendar2 s={13} c={C.textMid}/>Historique séances</span></Button>
+          <Button variant="ghost" sm onClick={()=>setModal({type:"gift",member:m})}><span style={{display:"flex",alignItems:"center",gap:5}}>🎁 Offrir des séances</span></Button>
         </div>
       </Card>
     );
@@ -413,6 +497,7 @@ function Members({ isMobile }) {
       {modal?.type==="email"        && <EmailModal/>}
       {modal?.type==="subscription" && <SubscriptionModal/>}
       {modal?.type==="history"      && <HistoryModal/>}
+      {modal?.type==="gift"         && <GiftModal/>}
 
       {/* Modal Modifier */}
       {editMode && editForm && (

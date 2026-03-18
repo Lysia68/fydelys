@@ -103,7 +103,11 @@ export function PlanningAccordion({ sess, sessId, bookings, onChangeStatus, onAd
 
       // Déduction crédits : présent → -1 crédit / annulation présence → +1 crédit
       const booking = conf.find(b => b.id === bookingId);
-      if (booking?.memberId && booking?.credits !== null && booking?.credits !== undefined) {
+      // Abonnements récurrents (mois/trimestre/année) = crédits illimités, pas de déduction
+      const UNLIMITED_PERIODS = ["mois", "trimestre", "année", "annuel", "annee", "monthly", "yearly"];
+      const isUnlimited = booking?.subPeriod && UNLIMITED_PERIODS.includes(booking.subPeriod.toLowerCase());
+
+      if (!isUnlimited && booking?.memberId && booking?.credits !== null && booking?.credits !== undefined) {
         if (val === true && prevVal !== true) {
           // Marquer présent → déduire 1 crédit si credits > 0
           if (booking.credits > 0) {
@@ -126,8 +130,10 @@ export function PlanningAccordion({ sess, sessId, bookings, onChangeStatus, onAd
     if (!error) {
       setAttended(prev => { const n={...prev}; ids.forEach(id=>{n[id]=true;}); return n; });
       // Déduire 1 crédit par membre présent (si crédits > 0)
+      const UNLIMITED_PERIODS = ["mois", "trimestre", "année", "annuel", "annee", "monthly", "yearly"];
       for (const b of toMark) {
-        if (b.memberId && b.credits > 0) {
+        const isUnlimited = b.subPeriod && UNLIMITED_PERIODS.includes(b.subPeriod.toLowerCase());
+        if (!isUnlimited && b.memberId && b.credits > 0) {
           await sb.from("members").update({ credits: b.credits - 1 }).eq("id", b.memberId);
         }
       }
@@ -176,7 +182,7 @@ export function PlanningAccordion({ sess, sessId, bookings, onChangeStatus, onAd
               <div style={{ display:"flex", alignItems:"center", gap:9, marginBottom:6 }}>
                 <div style={{ width:30, height:30, borderRadius:"50%", background:C.accentBg, border:`1px solid #DFC0A0`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, color:C.accent, flexShrink:0 }}>{b.name?.[0]?.toUpperCase()}</div>
                 <div style={{ fontSize:15, fontWeight:700, color:C.text, flex:1 }}>{b.name}</div>
-                <CreditBadge credits={b.credits} total={b.total} sub={b.sub}/>
+                <CreditBadge credits={b.credits} total={b.total} sub={b.sub} subPeriod={b.subPeriod}/>
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:8, paddingLeft:39 }}>
                 <span style={{ padding:"3px 10px", borderRadius:20, fontSize:13, fontWeight:600, whiteSpace:"nowrap", flexShrink:0, ...stStyle(b.st) }}>{stLbl(b.st)}</span>
