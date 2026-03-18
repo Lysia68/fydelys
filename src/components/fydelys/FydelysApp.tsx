@@ -110,13 +110,19 @@ const PAGE_TITLES = {
   }, []);
 
   // Lire la page initiale depuis l'URL (ex: /members → "members")
+  const VALID_PAGES = ["dashboard","planning","members","subscriptions","payments","disciplines","settings","aide"];
   const getPageFromUrl = () => {
     if (typeof window === "undefined") return "planning";
     const path = window.location.pathname.replace(/^\//, "").split("/")[0];
-    const validPages = ["dashboard","planning","members","subscriptions","payments","disciplines","settings","aide"];
-    return validPages.includes(path) ? path : "planning";
+    return VALID_PAGES.includes(path) ? path : "planning";
   };
-  const [page, setPage] = useState(getPageFromUrl);
+  const [page, setPage] = useState<string>(getPageFromUrl);
+
+  // Sync page avec URL après hydratation côté client
+  useEffect(() => {
+    const path = window.location.pathname.replace(/^\//, "").split("/")[0];
+    if (VALID_PAGES.includes(path)) setPage(path);
+  }, []);
 
   // Synchroniser l'URL quand on change de page
   const handleNav = (newPage) => {
