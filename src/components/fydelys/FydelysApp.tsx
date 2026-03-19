@@ -111,10 +111,6 @@ const PAGE_TITLES = {
 
   // Lire la page initiale depuis l'URL (ex: /members → "members")
   const VALID_PAGES = ["dashboard","planning","members","subscriptions","payments","disciplines","settings","aide"];
-  // /billing est une page standalone — ne pas l'intercepter
-  if (typeof window !== "undefined" && window.location.pathname.startsWith("/billing")) {
-    return null;
-  }
   const getPageFromUrl = () => {
     if (typeof window === "undefined") return "planning";
     const path = window.location.pathname.replace(/^\//, "").split("/")[0];
@@ -244,7 +240,7 @@ const PAGE_TITLES = {
         `}</style>
         {!isMobile && <Sidebar active={page} onNav={handleNav} studioName={activeStudioName} planName={planName} membersCount={dynamicMembersCount !== null ? dynamicMembersCount : membersCount} userName={userName} userRole={userRole} trialEndsAt={trialEndsAt} billingStatus={billingStatus}/>}
         <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, paddingBottom:isMobile?60:0 }}>
-          <TopBar title={PAGE_TITLES[page]} isMobile={isMobile} onSignOut={onSignOut} isSuperAdmin={initialRole==="superadmin" && !isImpersonatingAdmin} studioName={activeStudioName}/>
+          <TopBar title={PAGE_TITLES[page]} isMobile={isMobile} onSignOut={onSignOut} isSuperAdmin={initialRole==="superadmin" && !isImpersonatingAdmin} studioName={activeStudioName} billingStatus={billingStatus} planName={planName}/>
           {showTrialBanner && (
             <div style={{ background:trialDaysLeft<=3?"#F5EAE6":"#FDF4E3", borderBottom:`1px solid ${trialDaysLeft<=3?"#F5C2B5":"rgba(196,146,42,.25)"}`, padding:"10px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
               <div style={{ fontSize:13, color:trialDaysLeft<=3?"#A85030":"#C4922A", fontWeight:600 }}>

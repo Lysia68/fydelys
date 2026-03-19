@@ -145,7 +145,7 @@ function BottomNav({ active, onNav }) {
   );
 }
 
-function TopBar({ title, isMobile, onSignOut, isSuperAdmin, studioName = "" }) {
+function TopBar({ title, isMobile, onSignOut, isSuperAdmin, studioName = "", billingStatus = "active", planName = "" }) {
   const [confirmLogout, setConfirmLogout] = useState(false);
   return (
     <>
@@ -155,7 +155,14 @@ function TopBar({ title, isMobile, onSignOut, isSuperAdmin, studioName = "" }) {
           {isMobile ? <>Fyde<span style={{ color:C.accent }}>lys</span></> : title}
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          {!isMobile && studioName && <Pill color={C.textSoft} bg={C.bg}>{studioName}</Pill>}
+          {!isMobile && studioName && (
+            <a href="/billing" style={{ display:"flex", alignItems:"center", gap:6, padding:"4px 12px", borderRadius:20, border:`1px solid ${billingStatus==="active"?"rgba(78,138,88,.35)":billingStatus==="trialing"?"rgba(196,146,42,.35)":C.border}`, background:billingStatus==="active"?"#F0FAF2":billingStatus==="trialing"?"#FDF8EC":C.bg, textDecoration:"none", cursor:"pointer" }}>
+              <span style={{ fontSize:11, fontWeight:700, color:billingStatus==="active"?"#4E8A58":billingStatus==="trialing"?"#C4922A":C.textMid }}>
+                {billingStatus==="active"?"✓ Actif":billingStatus==="trialing"?"⏳ Essai":billingStatus==="past_due"?"⚠ Impayé":"Inactif"}
+              </span>
+              {planName && <span style={{ fontSize:11, color:C.textMuted, fontWeight:500 }}>{planName.charAt(0).toUpperCase()+planName.slice(1)}</span>}
+            </a>
+          )}
           {isSuperAdmin && (
             <a href="https://fydelys.fr/dashboard"
               style={{ fontSize:11, padding:"5px 12px", borderRadius:8, border:`1px solid ${C.border}`, background:C.bg, color:C.textSoft, textDecoration:"none", fontWeight:600, display:"flex", alignItems:"center", gap:5, whiteSpace:"nowrap" }}>
@@ -179,5 +186,5 @@ function TopBar({ title, isMobile, onSignOut, isSuperAdmin, studioName = "" }) {
     </>
   );
 }
-//
+
 export { NAV, Sidebar, BottomNav, TopBar };
