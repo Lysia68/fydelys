@@ -41,10 +41,10 @@ export async function GET(request: NextRequest) {
     discMap[l.profile_id].push(l.discipline_id)
   })
 
-  // Si all=true (Settings), retourner tous les profils. Sinon uniquement les coachs (Planning dropdown)
+  // Si all=true (Settings), retourner tous les profils sauf superadmin. Sinon uniquement les coachs (Planning dropdown)
   const allParam = request.nextUrl.searchParams.get("all")
   const profilesFiltered = allParam === "true"
-    ? (profiles || [])
+    ? (profiles || []).filter((p: any) => p.role !== "superadmin")
     : (profiles || []).filter((p: any) => p.is_coach || p.role === "coach")
 
   const coaches = profilesFiltered.map((p: any) => {

@@ -411,6 +411,7 @@ function Planning({ isMobile }) {
   const [closureForm, setClosureForm] = useState({ label:"Fermeture", date_start:"", date_end:"", single:true });
   const [closureEdit, setClosureEdit] = useState(null); // null | closure obj
   const [localDiscs, setLocalDiscs]   = useState([]);
+  const [discsLoading, setDiscsLoading] = useState(true);
   const [confirmModal, setConfirmModal] = useState(null); // { msg, subMsg, danger, onConfirm }
   const [planToast, setPlanToast]     = useState(null); // { msg, ok }
   const p = isMobile ? 12 : 28;
@@ -463,7 +464,7 @@ function Planning({ isMobile }) {
 
   // Si le context discs arrive après le mount (cas fréquent), vider localDiscs pour laisser place aux discs du context
   useEffect(() => {
-    if (discs?.length && localDiscs.length) setLocalDiscs([]);
+    if (discs?.length) { setLocalDiscs([]); setDiscsLoading(false); }
   }, [discs?.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Charger disciplines + coachs en parallèle dès que studioId est dispo
@@ -471,11 +472,9 @@ function Planning({ isMobile }) {
   useEffect(() => {
     if (!studioId) return;
     const sb = createClient();
-    // Disciplines (seulement si context vide)
-    if (!discs?.length) {
-      sb.from("disciplines").select("id,name,icon,color,slots").eq("studio_id", studioId).order("created_at")
-        .then(({ data }) => { if (data?.length) setLocalDiscs(data.map(d => ({ ...d, slots: d.slots || [] }))); });
-    }
+    // Toujours charger les disciplines depuis Supabase pour éviter race condition au premier rendu
+    sb.from("disciplines").select("id,name,icon,color,slots").eq("studio_id", studioId).order("created_at")
+      .then(({ data }) => { setLocalDiscs(data?.length ? data.map(d => ({ ...d, slots: d.slots || [] })) : []); setDiscsLoading(false); });
     // Coachs — via /api/team (service role) pour contourner RLS profiles
     fetch(`/api/team?studioId=${studioId}`)
       .then(r => r.ok ? r.json() : null)
@@ -1002,7 +1001,11 @@ function Planning({ isMobile }) {
                       </div>
                     </div>
 
-                    {allSlotsRaw.length === 0 ? (
+                    {discsLoading ? (
+                      <div style={{ padding: 14, background: "#FFF8F0", borderRadius: 10, border: `1px dashed ${C.border}`, fontSize: 13, color: C.textSoft }}>
+                        ⏳ Chargement des créneaux…
+                      </div>
+                    ) : allSlotsRaw.length === 0 ? (
                       <div style={{ padding: 14, background: "#FFF8F0", borderRadius: 10, border: `1px dashed ${C.border}`, fontSize: 13, color: C.textSoft }}>
                         ℹ Aucun créneau configuré. Allez dans <strong>Disciplines</strong> pour définir les horaires.
                       </div>
