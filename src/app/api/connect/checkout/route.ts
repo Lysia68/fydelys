@@ -50,53 +50,76 @@ export async function POST(req: NextRequest) {
     if (type === "subscription" && subscriptionId) {
       const { data: sub } = await db
         .from("subscriptions")
-        .select("name, price, stripe_price_id, stripe_product_id")
+        .select("name, price, period, credits_amount, stripe_price_id, stripe_product_id")
         .eq("id", subscriptionId).single()
 
       if (!sub) return NextResponse.json({ error: "Abonnement introuvable" }, { status: 404 })
 
-      // Créer le prix à la volée si pas de stripe_price_id
-      let priceId = sub.stripe_price_id
-      // Vérifier que le price_id stocké appartient au compte Connect du studio (pas à Fydelys)
-      // Un price_id valide sur le compte Connect commence par "price_" et est vérifiable via stripeAccount
-      if (priceId) {
-        try {
-          await stripe.prices.retrieve(priceId, { stripeAccount: studio.stripe_connect_id })
-        } catch {
-          // Price ID invalide sur ce compte Connect → le régénérer
-          console.warn(`[connect/checkout] stripe_price_id ${priceId} invalide sur ${studio.stripe_connect_id} — recréation`)
-          priceId = null
-        }
-      }
-      if (!priceId) {
-        const productParams: any = { name: `${studio.name} — ${sub.name}` }
-        // Utiliser le stripe_product_id du studio si défini (sur son propre compte)
-        const productId = sub.stripe_product_id
-        const price = await stripe.prices.create({
-          unit_amount: Math.round((sub.price || 0) * 100),
-          currency: "eur",
-          recurring: { interval: "month" },
-          ...(productId ? { product: productId } : { product_data: productParams }),
-        }, { stripeAccount: studio.stripe_connect_id })
-        priceId = price.id
-        await db.from("subscriptions").update({ stripe_price_id: priceId }).eq("id", subscriptionId)
-      }
-
+      const isOnce = sub.period === "once"
       const amountCents = Math.round((sub.price || 0) * 100)
       const feeCents = Math.round(amountCents * FYDELYS_COMMISSION_PCT / 100)
 
-      sessionParams = {
-        mode: "subscription",
-        payment_method_types: ["card"],
-        line_items: [{ price: priceId, quantity: 1 }],
-        subscription_data: {
-          application_fee_percent: FYDELYS_COMMISSION_PCT,
-          metadata: { studioId, memberId: memberId || "", subscriptionId, type: "subscription" },
-        },
-        success_url: successUrl || `${origin}/?payment=success`,
-        cancel_url:  cancelUrl  || `${origin}/?payment=canceled`,
-        metadata: { studioId, memberId: memberId || "", type: "subscription" },
-        locale: "fr",
+      if (isOnce) {
+        // ── Paiement unique (séance à l'achat) ────────────────────────────────
+        sessionParams = {
+          mode: "payment",
+          payment_method_types: ["card"],
+          line_items: [{
+            price_data: {
+              currency: "eur",
+              unit_amount: amountCents,
+              product_data: { name: `${studio.name} — ${sub.name}` },
+            },
+            quantity: 1,
+          }],
+          payment_intent_data: {
+            application_fee_amount: feeCents,
+            metadata: { studioId, memberId: memberId || "", subscriptionId, credits: String(sub.credits_amount || 1), type: "subscription_once" },
+          },
+          success_url: successUrl || `${origin}/?payment=success`,
+          cancel_url:  cancelUrl  || `${origin}/?payment=canceled`,
+          metadata: { studioId, memberId: memberId || "", subscriptionId, credits: String(sub.credits_amount || 1), type: "subscription_once" },
+          locale: "fr",
+        }
+      } else {
+        // ── Abonnement récurrent ───────────────────────────────────────────────
+        let priceId = sub.stripe_price_id
+        if (priceId) {
+          try {
+            await stripe.prices.retrieve(priceId, { stripeAccount: studio.stripe_connect_id })
+          } catch {
+            console.warn(`[connect/checkout] stripe_price_id ${priceId} invalide — recréation`)
+            priceId = null
+          }
+        }
+        if (!priceId) {
+          const productId = sub.stripe_product_id
+          const intervalMap: Record<string, "month"|"year"|"week"> = { mois: "month", trimestre: "month", année: "year", semaine: "week" }
+          const interval = intervalMap[sub.period] || "month"
+          const intervalCount = sub.period === "trimestre" ? 3 : 1
+          const price = await stripe.prices.create({
+            unit_amount: amountCents,
+            currency: "eur",
+            recurring: { interval, interval_count: intervalCount },
+            ...(productId ? { product: productId } : { product_data: { name: `${studio.name} — ${sub.name}` } }),
+          }, { stripeAccount: studio.stripe_connect_id })
+          priceId = price.id
+          await db.from("subscriptions").update({ stripe_price_id: priceId }).eq("id", subscriptionId)
+        }
+
+        sessionParams = {
+          mode: "subscription",
+          payment_method_types: ["card"],
+          line_items: [{ price: priceId, quantity: 1 }],
+          subscription_data: {
+            application_fee_percent: FYDELYS_COMMISSION_PCT,
+            metadata: { studioId, memberId: memberId || "", subscriptionId, type: "subscription" },
+          },
+          success_url: successUrl || `${origin}/?payment=success`,
+          cancel_url:  cancelUrl  || `${origin}/?payment=canceled`,
+          metadata: { studioId, memberId: memberId || "", type: "subscription" },
+          locale: "fr",
+        }
       }
     }
 

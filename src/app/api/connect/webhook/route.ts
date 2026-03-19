@@ -38,6 +38,27 @@ export async function POST(req: NextRequest) {
         const { studioId, memberId, type, sessionId, creditsPackId, credits } = session.metadata || {}
         if (!studioId) break
 
+        // Achat à l'unité (period=once) — crédits dans metadata
+        if (type === "subscription_once" && memberId) {
+          const creditsToAdd = parseInt(session.metadata?.credits || "1")
+          const { data: member } = await db.from("members").select("credits, credits_total").eq("id", memberId).single()
+          if (member) {
+            await db.from("members").update({
+              credits:       (member.credits || 0) + creditsToAdd,
+              credits_total: (member.credits_total || 0) + creditsToAdd,
+            }).eq("id", memberId)
+          }
+          await db.from("member_payments").insert({
+            studio_id: studioId, member_id: memberId,
+            amount: (session.amount_total || 0) / 100,
+            status: "payé", payment_date: new Date().toISOString().slice(0, 10),
+            payment_type: "Carte", source: "card_subscription_once",
+            stripe_payment_id: session.payment_intent as string,
+            notes: `Achat — ${creditsToAdd} crédit${creditsToAdd > 1 ? "s" : ""}`,
+          })
+          break
+        }
+
         if (type === "credits" && memberId && credits) {
           // Créditer le membre
           const creditsAmount = parseInt(credits)
