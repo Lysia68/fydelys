@@ -153,10 +153,27 @@ export async function POST(req: NextRequest) {
       // ── Compte Connect activé ────────────────────────────────────────────
       case "account.updated": {
         const account = event.data.object as Stripe.Account
+        const studioIdFromMeta = account.metadata?.studioId
+
         if (account.charges_enabled && account.payouts_enabled) {
-          await db.from("studios")
-            .update({ stripe_connect_status: "active" })
-            .eq("stripe_connect_id", account.id)
+          if (studioIdFromMeta) {
+            // Sauvegarder l'ID Connect + statut actif via metadata studioId
+            await db.from("studios").update({
+              stripe_connect_id: account.id,
+              stripe_connect_status: "active",
+            }).eq("id", studioIdFromMeta)
+          } else {
+            // Fallback : chercher par stripe_connect_id déjà stocké
+            await db.from("studios")
+              .update({ stripe_connect_status: "active" })
+              .eq("stripe_connect_id", account.id)
+          }
+        } else if (studioIdFromMeta) {
+          // Compte créé mais pas encore activé → sauvegarder l'ID
+          await db.from("studios").update({
+            stripe_connect_id: account.id,
+            stripe_connect_status: "pending",
+          }).eq("id", studioIdFromMeta)
         }
         break
       }
