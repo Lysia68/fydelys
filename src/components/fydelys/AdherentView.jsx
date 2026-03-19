@@ -447,7 +447,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
     useEffect(() => {
       if (!me?.id) return;
       createClient().from("member_payments")
-        .select("id, amount, payment_date, payment_type, source, notes, status")
+        .select("id, amount, payment_date, payment_type, source, notes, status, stripe_payment_id")
         .eq("member_id", me.id)
         .order("payment_date", { ascending: false })
         .limit(50)
@@ -474,11 +474,21 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
                       {" · "}{p.payment_type || "Carte"}
                     </div>
                   </div>
-                  <div style={{ textAlign:"right", flexShrink:0 }}>
+                  <div style={{ textAlign:"right", flexShrink:0, display:"flex", flexDirection:"column", alignItems:"flex-end", gap:6 }}>
                     <div style={{ fontSize:15, fontWeight:800, color:C.accent }}>{p.amount?.toFixed(2)} €</div>
                     <Tag color={p.status==="payé"?C.ok:C.warn} bg={p.status==="payé"?C.okBg:C.warnBg} style={{ fontSize:10 }}>
                       {p.status || "payé"}
                     </Tag>
+                    {p.stripe_payment_id
+                      ? <a href={`/api/invoice?paymentId=${p.id}`} target="_blank" rel="noopener noreferrer"
+                          style={{ fontSize:11, fontWeight:600, color:C.accent, textDecoration:"none", padding:"3px 10px", border:`1px solid ${C.accent}40`, borderRadius:6, background:C.accentBg, whiteSpace:"nowrap" }}>
+                          🧾 Facture
+                        </a>
+                      : <span style={{ fontSize:11, fontWeight:500, color:C.textMuted, padding:"3px 10px", border:`1px solid ${C.border}`, borderRadius:6, background:C.bg, whiteSpace:"nowrap", cursor:"not-allowed", opacity:0.45 }}
+                          title="Facture non disponible">
+                          🧾 Facture
+                        </span>
+                    }
                   </div>
                 </Card>
               ))}

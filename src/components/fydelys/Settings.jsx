@@ -831,7 +831,7 @@ function Settings({ isMobile, onImpersonate }) {
               <div style={{ fontSize:16, fontWeight:800, color:C.text }}>{planName || "Essentiel"}</div>
               <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>{membersCount} adhérent{membersCount>1?"s":""} actif{membersCount>1?"s":""}</div>
             </div>
-            <Button sm variant="ghost" onClick={()=>window.location.href="/billing"}>Changer de forfait</Button>
+            <Button sm variant="ghost" onClick={()=>{ window.location.assign("/billing") }}>Gérer mon abonnement →</Button>
           </div>
         </Card>
       </div>

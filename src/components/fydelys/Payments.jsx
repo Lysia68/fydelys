@@ -22,17 +22,18 @@ function Payments({ isMobile }) {
     if (!studioId) return;
     setDbLoading(true);
     createClient().from("member_payments")
-      .select("id, member_id, amount, status, payment_date, payment_type, notes, members(first_name, last_name), subscriptions(name)")
+      .select("id, member_id, amount, status, payment_date, payment_type, notes, stripe_payment_id, members(first_name, last_name), subscriptions(name)")
       .eq("studio_id", studioId).order("payment_date", { ascending: false })
       .then(({ data, error }) => {
         if (error) { console.error("load payments", error); setDbLoading(false); return; }
-        if (!data || data.length === 0) { setPayments(PAYMENTS_DEMO); setIsDemoData(true); setDbLoading(false); return; }
+        if (!data || data.length === 0) { setPayments([]); setIsDemoData(false); setDbLoading(false); return; }
         if (data) setPayments(data.map(pay => ({
           id: pay.id, memberId: pay.member_id,
           member: pay.members ? `${pay.members.first_name} ${pay.members.last_name}` : "—",
           amount: pay.amount, status: pay.status,
           date: pay.payment_date, type: pay.payment_type || "Carte",
           subscription: pay.subscriptions?.name || "—", notes: pay.notes || "",
+          stripe_payment_id: pay.stripe_payment_id || null,
           relance: false,
         })));
         setDbLoading(false);
@@ -75,6 +76,9 @@ function Payments({ isMobile }) {
         ))}
       </div>
       <Card noPad>
+        {payments.length === 0 && !dbLoading && (
+          <EmptyState icon={<IcoBarChart2 s={40} c={C.textMuted}/>} title="Aucun paiement enregistré" sub="Les paiements de vos adhérents apparaîtront ici"/>
+        )}
         {payments.map(pay=>(
           <div key={pay.id}
             style={{ padding:"11px 16px", borderBottom:`1px solid ${C.borderSoft}`, transition:"background .1s" }}
@@ -92,6 +96,16 @@ function Payments({ isMobile }) {
                   ? <span style={{ fontSize:12, fontWeight:600, color:C.ok, display:"flex", alignItems:"center", gap:4 }}><IcoCheck s={12} c={C.ok}/>Relancé</span>
                   : <Button sm variant="primary" onClick={()=>relancer(pay.id)}><span style={{display:"flex",alignItems:"center",gap:5}}><IcoMail s={12} c="white"/>Relancer</span></Button>
               )}
+              {pay.stripe_payment_id
+                ? <a href={`/api/invoice?paymentId=${pay.id}`} target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize:11, fontWeight:600, color:C.accent, textDecoration:"none", padding:"3px 8px", border:`1px solid ${C.accent}30`, borderRadius:6, background:C.accentBg, display:"flex", alignItems:"center", gap:4, whiteSpace:"nowrap" }}>
+                    🧾 Facture
+                  </a>
+                : <span style={{ fontSize:11, fontWeight:600, color:C.textMuted, padding:"3px 8px", border:`1px solid ${C.border}`, borderRadius:6, background:C.bg, display:"flex", alignItems:"center", gap:4, whiteSpace:"nowrap", cursor:"not-allowed", opacity:0.5 }}
+                    title="Facture Stripe non disponible">
+                    🧾 Facture
+                  </span>
+              }
             </div>
           </div>
         ))}

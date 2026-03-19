@@ -30,33 +30,55 @@ export async function POST(req: NextRequest) {
 
     const db = createServiceSupabase()
 
-    // Récupérer le studio + son compte Connect
+    // Récupérer le studio + mode paiement
     const { data: studio } = await db
       .from("studios")
-      .select("id, name, slug, stripe_connect_id, stripe_connect_status")
+      .select("id, name, slug, stripe_connect_id, stripe_connect_status, payment_mode, stripe_sk, stripe_pk")
       .eq("id", studioId).single()
 
-    if (!studio?.stripe_connect_id)
-      return NextResponse.json({ error: "Studio non connecté à Stripe" }, { status: 400 })
+    if (!studio) return NextResponse.json({ error: "Studio introuvable" }, { status: 404 })
 
-    if (studio.stripe_connect_status !== "active")
-      return NextResponse.json({ error: "Compte Stripe non activé" }, { status: 400 })
-
+    const paymentMode = studio.payment_mode || "connect"
     const origin = successUrl ? new URL(successUrl).origin : `https://${studio.slug}.fydelys.fr`
+
+    // Stripe à utiliser selon le mode
+    let stripeInstance = stripe // Stripe Fydelys par défaut (Connect)
+    let useConnect = false
+    let connectAccountId: string | undefined
+
+    if (paymentMode === "direct" && studio.stripe_sk) {
+      // Mode direct : clés propres au studio
+      stripeInstance = new Stripe(studio.stripe_sk, { apiVersion: "2024-06-20" })
+    } else if (paymentMode === "connect") {
+      if (!studio?.stripe_connect_id)
+        return NextResponse.json({ error: "Studio non connecté à Stripe" }, { status: 400 })
+      if (studio.stripe_connect_status !== "active")
+        return NextResponse.json({ error: "Compte Stripe non activé" }, { status: 400 })
+      useConnect = true
+      connectAccountId = studio.stripe_connect_id
+    } else {
+      return NextResponse.json({ error: "Paiements non configurés pour ce studio" }, { status: 400 })
+    }
 
     let sessionParams: Stripe.Checkout.SessionCreateParams
 
     // ── Abonnement mensuel ───────────────────────────────────────────────────
     if (type === "subscription" && subscriptionId) {
-      const { data: sub } = await db
+      // Requête sans credits_amount pour compatibilité si colonne absente
+      const { data: sub, error: subErr } = await db
         .from("subscriptions")
-        .select("name, price, period, credits_amount, stripe_price_id, stripe_product_id")
+        .select("id, name, price, period, stripe_price_id, stripe_product_id")
         .eq("id", subscriptionId).single()
 
-      if (!sub) {
-        console.error("[connect/checkout] Abonnement introuvable:", subscriptionId, "studioId:", studioId)
+      if (!sub || subErr) {
+        console.error("[connect/checkout] Abonnement introuvable:", subscriptionId, "err:", subErr?.message)
         return NextResponse.json({ error: `Abonnement introuvable (id: ${subscriptionId})` }, { status: 404 })
       }
+
+      // Récupérer credits si colonne disponible
+      const { data: subExtra } = await db
+        .from("subscriptions").select("credits").eq("id", subscriptionId).maybeSingle()
+      const creditsAmount = (subExtra as any)?.credits || (subExtra as any)?.credits_amount || 1
 
       const isOnce = ["once", "séance", "carnet", "session", "unit"].includes(sub.period || "")
       const amountCents = Math.round((sub.price || 0) * 100)
@@ -76,12 +98,12 @@ export async function POST(req: NextRequest) {
             quantity: 1,
           }],
           payment_intent_data: {
-            application_fee_amount: feeCents,
-            metadata: { studioId, memberId: memberId || "", subscriptionId, credits: String(sub.credits_amount || 1), type: "subscription_once" },
+            application_fee_amount: connectAccountId ? feeCents : undefined,
+            metadata: { studioId, memberId: memberId || "", subscriptionId, credits: String(creditsAmount), type: "subscription_once" },
           },
           success_url: successUrl || `${origin}/?payment=success`,
           cancel_url:  cancelUrl  || `${origin}/?payment=canceled`,
-          metadata: { studioId, memberId: memberId || "", subscriptionId, credits: String(sub.credits_amount || 1), type: "subscription_once" },
+          metadata: { studioId, memberId: memberId || "", subscriptionId, credits: String(creditsAmount), type: "subscription_once" },
           locale: "fr",
         }
       } else {
@@ -89,7 +111,7 @@ export async function POST(req: NextRequest) {
         let priceId = sub.stripe_price_id
         if (priceId) {
           try {
-            await stripe.prices.retrieve(priceId, { stripeAccount: studio.stripe_connect_id })
+            await stripeInstance.prices.retrieve(priceId, connectAccountId ? { stripeAccount: connectAccountId } : {})
           } catch {
             console.warn(`[connect/checkout] stripe_price_id ${priceId} invalide — recréation`)
             priceId = null
@@ -100,12 +122,12 @@ export async function POST(req: NextRequest) {
           const intervalMap: Record<string, "month"|"year"|"week"> = { mois: "month", trimestre: "month", année: "year", semaine: "week" }
           const interval = intervalMap[sub.period] || "month"
           const intervalCount = sub.period === "trimestre" ? 3 : 1
-          const price = await stripe.prices.create({
+          const price = await stripeInstance.prices.create({
             unit_amount: amountCents,
             currency: "eur",
             recurring: { interval, interval_count: intervalCount },
             ...(productId ? { product: productId } : { product_data: { name: `${studio.name} — ${sub.name}` } }),
-          }, { stripeAccount: studio.stripe_connect_id })
+          }, connectAccountId ? { stripeAccount: connectAccountId } : {})
           priceId = price.id
           await db.from("subscriptions").update({ stripe_price_id: priceId }).eq("id", subscriptionId)
         }
@@ -115,7 +137,7 @@ export async function POST(req: NextRequest) {
           payment_method_types: ["card"],
           line_items: [{ price: priceId, quantity: 1 }],
           subscription_data: {
-            application_fee_percent: FYDELYS_COMMISSION_PCT,
+            application_fee_percent: connectAccountId ? FYDELYS_COMMISSION_PCT : undefined,
             metadata: { studioId, memberId: memberId || "", subscriptionId, type: "subscription" },
           },
           success_url: successUrl || `${origin}/?payment=success`,
@@ -150,7 +172,7 @@ export async function POST(req: NextRequest) {
           quantity: 1,
         }],
         payment_intent_data: {
-          application_fee_amount: feeCents,
+          application_fee_amount: connectAccountId ? feeCents : undefined,
           metadata: { studioId, memberId: memberId || "", creditsPackId, credits: pack.credits_amount, type: "credits" },
         },
         success_url: successUrl || `${origin}/?payment=success`,
@@ -192,7 +214,7 @@ export async function POST(req: NextRequest) {
           quantity: 1,
         }],
         payment_intent_data: {
-          application_fee_amount: feeCents,
+          application_fee_amount: connectAccountId ? feeCents : undefined,
           metadata: { studioId, memberId: memberId || "", sessionId, type: "session" },
         },
         success_url: successUrl || `${origin}/?payment=success`,
@@ -206,11 +228,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Type de paiement invalide" }, { status: 400 })
     }
 
-    // Créer la session sur le compte Connect du studio
-    const session = await stripe.checkout.sessions.create(
-      sessionParams,
-      { stripeAccount: studio.stripe_connect_id }
-    )
+    // Créer la session Stripe (Connect ou Direct)
+    const sessionOptions = connectAccountId ? { stripeAccount: connectAccountId } : {}
+    const session = await stripeInstance.checkout.sessions.create(sessionParams, sessionOptions)
 
     return NextResponse.json({ url: session.url, sessionId: session.id })
 

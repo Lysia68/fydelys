@@ -3,7 +3,6 @@ import { useEffect, useState } from "react"
 
 export default function AuthConfirmPage() {
   const [status, setStatus] = useState("Connexion en cours…")
-  const [detail, setDetail] = useState("")
   const [isError, setIsError] = useState(false)
 
   useEffect(() => {
@@ -13,8 +12,6 @@ export default function AuthConfirmPage() {
     const code      = params.get("code")
     const tokenHash = params.get("token_hash")
     const type      = params.get("type") || "magiclink"
-
-    setDetail(`code=${code?"oui":"non"} | hash=${hash.includes("access_token")?"oui":"non"} | token_hash=${tokenHash?"oui":"non"} | tenant=${tenant||"(vide)"}`)
 
     function redirectFinal(slug: string | null) {
       if (!slug) {
@@ -101,9 +98,7 @@ export default function AuthConfirmPage() {
         <div style={{ fontSize:16, color: isError ? "#C0392B" : "#5C4A38", fontWeight:600, marginBottom:8 }}>
           {status}
         </div>
-        <div style={{ fontSize:11, color:"#B0A090", marginTop:8, wordBreak:"break-all", background:"#EDE4D8", padding:"8px 12px", borderRadius:8 }}>
-          {detail}
-        </div>
+
         {isError && (
           <a href="/login" style={{ display:"inline-block", marginTop:20, fontSize:13, color:"#9A6030", textDecoration:"underline" }}>
             Retour à la connexion
