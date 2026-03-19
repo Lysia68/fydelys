@@ -111,6 +111,10 @@ const PAGE_TITLES = {
 
   // Lire la page initiale depuis l'URL (ex: /members → "members")
   const VALID_PAGES = ["dashboard","planning","members","subscriptions","payments","disciplines","settings","aide"];
+  // /billing est une page standalone — ne pas l'intercepter
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/billing")) {
+    return null;
+  }
   const getPageFromUrl = () => {
     if (typeof window === "undefined") return "planning";
     const path = window.location.pathname.replace(/^\//, "").split("/")[0];
