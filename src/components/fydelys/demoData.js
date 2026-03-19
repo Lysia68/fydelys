@@ -222,6 +222,7 @@ const ADH_NAV_KEYS = [
   { key:"planning",  label:"Planning"    },
   { key:"account",   label:"Mon compte"  },
   { key:"history",   label:"Historique"  },
+  { key:"purchases", label:"Mes achats"  },
   { key:"payment",   label:"Paiement"    },
 ];
 

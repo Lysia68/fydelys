@@ -10,7 +10,7 @@ import { Card, SectionHead, Button, Tag, Pill, EmptyState, DateLabel, Field, Ses
 import { OnboardingView } from "./OnboardingView";
 
 function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId = null }) {
-  const ADH_NAV = ADH_NAV_KEYS.map((n,i) => ({ ...n, icon:[IcoCalendar2,IcoHeart,IcoActivity,IcoCreditCard2][i] }));
+  const ADH_NAV = ADH_NAV_KEYS.map((n,i) => ({ ...n, icon:[IcoCalendar2,IcoHeart,IcoActivity,IcoTag2,IcoCreditCard2][i] }));
   const ADH_MOBILE_NAV = ADH_NAV;
   const [page, setPage] = useState("planning");
   const [toast, setToast] = useState(null);
@@ -438,6 +438,56 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
   }
 
   // ── Paiement / Abonnement ───────────────────────────────────────────────────
+
+  // ── Mes achats ──────────────────────────────────────────────────────────────
+  function AdhPurchases() {
+    const [payments, setPayments] = useState([]);
+    const [loading, setLoading]   = useState(true);
+
+    useEffect(() => {
+      if (!me?.id) return;
+      createClient().from("member_payments")
+        .select("id, amount, payment_date, payment_type, source, notes, status")
+        .eq("member_id", me.id)
+        .order("payment_date", { ascending: false })
+        .limit(50)
+        .then(({ data }) => { setPayments(data || []); setLoading(false); });
+    }, [me?.id]);
+
+    if (loading) return <div style={{ padding:p, color:C.textMuted, fontSize:14 }}>Chargement…</div>;
+
+    return (
+      <div style={{ padding:p }}>
+        <SectionHead title="Mes achats" sub="Historique de vos paiements"/>
+        {payments.length === 0
+          ? <EmptyState icon={<IcoTag2 s={40} c={C.textMuted}/>} title="Aucun achat" sub="Vos achats apparaîtront ici après paiement"/>
+          : <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {payments.map(p => (
+                <Card key={p.id} style={{ display:"flex", alignItems:"center", gap:14 }}>
+                  <div style={{ width:38, height:38, borderRadius:10, background:C.accentBg, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                    <IcoCreditCard2 s={18} c={C.accent}/>
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:C.text }}>{p.notes || "Achat"}</div>
+                    <div style={{ fontSize:12, color:C.textSoft, marginTop:2 }}>
+                      {new Date(p.payment_date).toLocaleDateString("fr-FR", { day:"numeric", month:"long", year:"numeric" })}
+                      {" · "}{p.payment_type || "Carte"}
+                    </div>
+                  </div>
+                  <div style={{ textAlign:"right", flexShrink:0 }}>
+                    <div style={{ fontSize:15, fontWeight:800, color:C.accent }}>{p.amount?.toFixed(2)} €</div>
+                    <Tag color={p.status==="payé"?C.ok:C.warn} bg={p.status==="payé"?C.okBg:C.warnBg} style={{ fontSize:10 }}>
+                      {p.status || "payé"}
+                    </Tag>
+                  </div>
+                </Card>
+              ))}
+            </div>
+        }
+      </div>
+    );
+  }
+
   function AdhPayment() {
     const [subs, setSubs]               = useState([]);
     const [packs, setPacks]             = useState([]);
@@ -698,6 +748,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
           {page === "planning" && <AdhPlanning/>}
           {page === "account"  && <AdhAccount/>}
           {page === "history"  && <AdhHistory/>}
+          {page === "purchases" && <AdhPurchases/>}
           {page === "payment"  && <AdhPayment/>}
         </div>
       </div>

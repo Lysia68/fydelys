@@ -53,7 +53,10 @@ export async function POST(req: NextRequest) {
         .select("name, price, period, credits_amount, stripe_price_id, stripe_product_id")
         .eq("id", subscriptionId).single()
 
-      if (!sub) return NextResponse.json({ error: "Abonnement introuvable" }, { status: 404 })
+      if (!sub) {
+        console.error("[connect/checkout] Abonnement introuvable:", subscriptionId, "studioId:", studioId)
+        return NextResponse.json({ error: `Abonnement introuvable (id: ${subscriptionId})` }, { status: 404 })
+      }
 
       const isOnce = ["once", "séance", "carnet", "session", "unit"].includes(sub.period || "")
       const amountCents = Math.round((sub.price || 0) * 100)
