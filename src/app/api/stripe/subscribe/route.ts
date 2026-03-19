@@ -71,44 +71,31 @@ export async function POST(req: NextRequest) {
       : undefined
     const hasTrialLeft = trialEnd && trialEnd > Math.floor(Date.now() / 1000)
 
-    const returnUrl = `https://${studioId ? (await supabase.from("studios").select("slug").eq("id", studioId).single()).data?.slug + "." : ""}fydelys.fr/billing?success=1`
+    // Récupérer le slug du studio pour les URLs de retour
+    const { data: studioSlugData } = await supabase.from("studios").select("slug").eq("id", studioId).single()
+    const slug = studioSlugData?.slug || "app"
+    const baseUrl = `https://${slug}.fydelys.fr`
 
-    if (hasTrialLeft) {
-      // Cas trial : Stripe Checkout Session pour enregistrer la carte sans débit
-      const session = await stripe.checkout.sessions.create({
-        customer: customerId,
-        mode: "subscription",
-        line_items: [{ price: priceId, quantity: 1 }],
-        subscription_data: { trial_end: trialEnd, metadata: { studioId, planSlug } },
-        success_url: `https://yogalatestudio.fydelys.fr/billing?success=1`,
-        cancel_url: `https://yogalatestudio.fydelys.fr/billing`,
-        payment_method_collection: "always",
-        metadata: { studioId, planSlug },
-      })
-      return NextResponse.json({ url: session.url, type: "checkout" })
+    // Toujours utiliser Stripe Checkout (évite les problèmes de domaine avec Elements)
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+      customer: customerId,
+      mode: "subscription",
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${baseUrl}/billing?success=1&plan=${planSlug}`,
+      cancel_url: `${baseUrl}/billing`,
+      payment_method_collection: "always",
+      metadata: { studioId, planSlug },
     }
 
-    // Cas sans trial : subscription avec PaymentIntent
-    const subscription = await stripe.subscriptions.create({
-      customer: customerId,
-      items: [{ price: priceId }],
-      payment_behavior: "default_incomplete",
-      payment_settings: { save_default_payment_method: "on_subscription" },
-      expand: ["latest_invoice.payment_intent"],
-      metadata: { studioId, planSlug },
-    })
+    if (hasTrialLeft) {
+      sessionParams.subscription_data = { trial_end: trialEnd, metadata: { studioId, planSlug } }
+    } else {
+      sessionParams.subscription_data = { metadata: { studioId, planSlug } }
+    }
 
-    const invoice = subscription.latest_invoice as Stripe.Invoice
-    const paymentIntent = invoice.payment_intent as Stripe.PaymentIntent
-    const clientSecret = paymentIntent?.client_secret ?? null
+    const session = await stripe.checkout.sessions.create(sessionParams)
 
-    // Sauvegarder l'id subscription en pending
-    await supabase.from("studios").update({
-      stripe_subscription_id: subscription.id,
-      plan_slug: planSlug,
-    }).eq("id", studioId)
-
-    return NextResponse.json({ clientSecret, type: "payment", subscriptionId: subscription.id })
+    return NextResponse.json({ url: session.url, type: "checkout" })
   } catch (err: any) {
     console.error("Subscribe error:", err)
     return NextResponse.json({ error: err.message }, { status: 500 })
