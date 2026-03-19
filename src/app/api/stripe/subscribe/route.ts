@@ -71,39 +71,36 @@ export async function POST(req: NextRequest) {
       : undefined
     const hasTrialLeft = trialEnd && trialEnd > Math.floor(Date.now() / 1000)
 
-    // Créer la subscription avec payment_behavior = default_incomplete
-    // → génère un PaymentIntent qu'on confirme via Elements
+    const returnUrl = `https://${studioId ? (await supabase.from("studios").select("slug").eq("id", studioId).single()).data?.slug + "." : ""}fydelys.fr/billing?success=1`
+
+    if (hasTrialLeft) {
+      // Cas trial : Stripe Checkout Session pour enregistrer la carte sans débit
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        mode: "subscription",
+        line_items: [{ price: priceId, quantity: 1 }],
+        subscription_data: { trial_end: trialEnd, metadata: { studioId, planSlug } },
+        success_url: `https://yogalatestudio.fydelys.fr/billing?success=1`,
+        cancel_url: `https://yogalatestudio.fydelys.fr/billing`,
+        payment_method_collection: "always",
+        metadata: { studioId, planSlug },
+      })
+      return NextResponse.json({ url: session.url, type: "checkout" })
+    }
+
+    // Cas sans trial : subscription avec PaymentIntent
     const subscription = await stripe.subscriptions.create({
       customer: customerId,
       items: [{ price: priceId }],
       payment_behavior: "default_incomplete",
       payment_settings: { save_default_payment_method: "on_subscription" },
       expand: ["latest_invoice.payment_intent"],
-      ...(hasTrialLeft ? { trial_end: trialEnd } : {}),
       metadata: { studioId, planSlug },
     })
 
     const invoice = subscription.latest_invoice as Stripe.Invoice
     const paymentIntent = invoice.payment_intent as Stripe.PaymentIntent
-
-    // Si trial → pas de paiement immédiat, on a un SetupIntent à la place
-    let clientSecret: string | null = null
-    let type: "payment" | "setup" = "payment"
-
-    if (hasTrialLeft) {
-      // Créer un SetupIntent pour enregistrer la carte sans débit immédiat
-      const setup = await stripe.setupIntents.create({
-        customer: customerId,
-        payment_method_types: ["card"],
-        usage: "on_session",
-        metadata: { studioId, planSlug, subscriptionId: subscription.id },
-      })
-      clientSecret = setup.client_secret
-      type = "setup"
-    } else {
-      clientSecret = paymentIntent?.client_secret ?? null
-      type = "payment"
-    }
+    const clientSecret = paymentIntent?.client_secret ?? null
 
     // Sauvegarder l'id subscription en pending
     await supabase.from("studios").update({
@@ -111,7 +108,7 @@ export async function POST(req: NextRequest) {
       plan_slug: planSlug,
     }).eq("id", studioId)
 
-    return NextResponse.json({ clientSecret, type, subscriptionId: subscription.id })
+    return NextResponse.json({ clientSecret, type: "payment", subscriptionId: subscription.id })
   } catch (err: any) {
     console.error("Subscribe error:", err)
     return NextResponse.json({ error: err.message }, { status: 500 })

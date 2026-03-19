@@ -209,8 +209,14 @@ function BillingPageContent() {
     try {
       const res  = await fetch("/api/stripe/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({planSlug:plan.slug,studioId:studio.id})})
       const data = await res.json()
-      if(data.clientSecret) setModal({plan,clientSecret:data.clientSecret,intentType:data.type})
-      else showToast(data.error||"Erreur d'initialisation",false)
+      if(data.url && data.type === "checkout") {
+        // Cas trial → redirection vers Stripe Checkout
+        window.location.href = data.url
+      } else if(data.clientSecret) {
+        setModal({plan,clientSecret:data.clientSecret,intentType:data.type})
+      } else {
+        showToast(data.error||"Erreur d'initialisation",false)
+      }
     } catch { showToast("Erreur réseau",false) }
     setBusy(null)
   }
