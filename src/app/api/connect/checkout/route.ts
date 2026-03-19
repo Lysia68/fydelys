@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
 
       if (!sub) return NextResponse.json({ error: "Abonnement introuvable" }, { status: 404 })
 
-      const isOnce = sub.period === "once"
+      const isOnce = ["once", "séance", "carnet", "session", "unit"].includes(sub.period || "")
       const amountCents = Math.round((sub.price || 0) * 100)
       const feeCents = Math.round(amountCents * FYDELYS_COMMISSION_PCT / 100)
 

@@ -515,7 +515,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
                   {sub.price} €<span style={{ fontSize:13, fontWeight:400, color:C.textSoft }}> / {sub.period||"mois"}</span>
                 </div>
                 <Button sm block onClick={()=>handleCheckout("subscription", sub.id)} disabled={redirecting===sub.id}>
-                  {redirecting===sub.id ? "Redirection…" : sub.period === "once" ? "Acheter →" : "Souscrire →"}
+                  {redirecting===sub.id ? "Redirection…" : ["once","séance","carnet","session","unit"].includes(sub.period) ? "Acheter →" : "Souscrire →"}
                 </Button>
               </div>
             ))
