@@ -27,31 +27,6 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
   const [history, setHistory] = useState([]);   // bookings passés
   const [loading, setLoading] = useState(true);
 
-  // Gérer le retour depuis Stripe Checkout
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const payment = params.get("payment");
-    if (payment === "success") {
-      setPage("payment");
-      showToast("✅ Paiement confirmé ! Votre compte a été mis à jour.");
-      window.history.replaceState({}, "", window.location.pathname);
-      if (studioId) {
-        setTimeout(async () => {
-          const sb = createClient();
-          const { data: { user } } = await sb.auth.getUser();
-          if (!user) return;
-          const { data: member } = await sb.from("members")
-            .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, address, postal_code, city, profile_complete")
-            .eq("studio_id", studioId).eq("auth_user_id", user.id).maybeSingle();
-          if (member) setMe(member);
-        }, 2000);
-      }
-    } else if (payment === "canceled") {
-      setPage("payment");
-      showToast("Paiement annulé.", false);
-      window.history.replaceState({}, "", window.location.pathname);
-    }
-  }, [studioId]);
 
   useEffect(() => {
     if (!studioId) return;
@@ -79,6 +54,24 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
       }
 
       if (member) setMe(member);
+
+      // Si retour depuis Stripe → recharger après délai webhook
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("payment") === "success" && member) {
+        setPage("payment");
+        showToast("✅ Paiement confirmé ! Votre compte a été mis à jour.");
+        window.history.replaceState({}, "", window.location.pathname);
+        setTimeout(async () => {
+          const { data: fresh } = await sb.from("members")
+            .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, address, postal_code, city, profile_complete")
+            .eq("id", member.id).maybeSingle();
+          if (fresh) setMe(fresh);
+        }, 2000);
+      } else if (params.get("payment") === "canceled") {
+        setPage("payment");
+        showToast("Paiement annulé.", false);
+        window.history.replaceState({}, "", window.location.pathname);
+      }
 
       // Bookings actifs
       if (member?.id) {
@@ -509,7 +502,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
         )}
 
         {/* Abonnements */}
-        <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:12 }}>📋 Abonnements</div>
+        <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:12 }}>📋 Formules</div>
         <div style={{ display:"grid", gridTemplateColumns:`repeat(${isMobile?1:2},1fr)`, gap:12, marginBottom:24 }}>
           {subsLoading
             ? <div style={{ color:C.textMuted, fontSize:14 }}>Chargement…</div>
@@ -522,7 +515,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
                   {sub.price} €<span style={{ fontSize:13, fontWeight:400, color:C.textSoft }}> / {sub.period||"mois"}</span>
                 </div>
                 <Button sm block onClick={()=>handleCheckout("subscription", sub.id)} disabled={redirecting===sub.id}>
-                  {redirecting===sub.id ? "Redirection…" : "Souscrire →"}
+                  {redirecting===sub.id ? "Redirection…" : sub.period === "once" ? "Acheter →" : "Souscrire →"}
                 </Button>
               </div>
             ))
