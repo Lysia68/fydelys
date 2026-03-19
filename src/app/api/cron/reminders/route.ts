@@ -58,18 +58,19 @@ export async function GET(request: Request) {
 
     // Filtrer précisément selon l'heure en tenant compte de la timezone du studio
     const targetSessions = sessions.filter(s => {
-      const sessDateTime = new Date(`${s.session_date}T${s.session_time}`)
-      // Ajuster selon timezone (approximation — Vercel tourne en UTC)
-      const tzOffset = getTzOffsetMinutes(tz)
-      const sessUTC = new Date(sessDateTime.getTime() - tzOffset * 60 * 1000)
+      // La session_date/time est stockée en heure locale du studio
+      // Pour convertir en UTC : soustraire l'offset (Paris UTC+1 = +60min → UTC = local - 60min)
+      const sessLocal = new Date(`${s.session_date}T${s.session_time}`)
+      const tzOffsetMs = getTzOffsetMs(tz)
+      const sessUTC = new Date(sessLocal.getTime() - tzOffsetMs)
       return sessUTC >= windowStart && sessUTC <= windowEnd
     })
 
     debugInfo[debugInfo.length-1].targetSessions = targetSessions.length
     debugInfo[debugInfo.length-1].sessionsDetail = sessions?.map(s => {
       const sessDateTime = new Date(`${s.session_date}T${s.session_time}`)
-      const tzOffset = getTzOffsetMinutes(tz)
-      const sessUTC = new Date(sessDateTime.getTime() - tzOffset * 60 * 1000)
+      const tzOffsetMs = getTzOffsetMs(tz)
+      const sessUTC = new Date(sessDateTime.getTime() - tzOffsetMs)
       return { id: s.id, date: s.session_date, time: s.session_time, sessUTC: sessUTC.toISOString(), inWindow: sessUTC >= windowStart && sessUTC <= windowEnd }
     })
     if (!targetSessions.length) continue
@@ -162,15 +163,22 @@ export async function GET(request: Request) {
   return NextResponse.json({ ok: true, sent: totalSent, skipped: totalSkipped, errors, debug: debugInfo })
 }
 
-// Offset timezone approximatif (Europe/Paris = UTC+1 hiver, UTC+2 été)
-function getTzOffsetMinutes(tz: string): number {
+// Offset timezone en millisecondes (positif = ahead of UTC, ex: Paris UTC+1 = +3600000ms)
+function getTzOffsetMs(tz: string): number {
   try {
     const now = new Date()
-    const tzDate = new Date(now.toLocaleString("en-US", { timeZone: tz }))
-    return Math.round((tzDate.getTime() - now.getTime()) / 60000)
+    // toLocaleString donne l'heure locale — la différence avec UTC donne l'offset
+    const localStr = now.toLocaleString("en-US", { timeZone: tz })
+    const localDate = new Date(localStr)
+    return Math.round(localDate.getTime() - now.getTime())
   } catch {
-    return 60 // fallback Europe/Paris hiver
+    return 3600000 // fallback Europe/Paris hiver UTC+1
   }
+}
+
+// Alias pour compatibilité
+function getTzOffsetMinutes(tz: string): number {
+  return getTzOffsetMs(tz) / 60000
 }
 
 function buildReminderEmail({ studio, sess, sessDate, sessTime, discName, discIcon, member, firstName, reminderHours }: any) {
