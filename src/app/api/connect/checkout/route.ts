@@ -46,7 +46,9 @@ export async function POST(req: NextRequest) {
     let useConnect = false
     let connectAccountId: string | undefined
 
-    if (paymentMode === "direct" && studio.stripe_sk) {
+    if (paymentMode === "direct") {
+      if (!studio.stripe_sk)
+        return NextResponse.json({ error: "Clés Stripe non configurées pour ce studio" }, { status: 400 })
       // Mode direct : clés propres au studio
       stripeInstance = new Stripe(studio.stripe_sk, { apiVersion: "2024-06-20" })
     } else if (paymentMode === "connect") {
@@ -177,7 +179,7 @@ export async function POST(req: NextRequest) {
         },
         success_url: successUrl || `${origin}/?payment=success`,
         cancel_url:  cancelUrl  || `${origin}/?payment=canceled`,
-        metadata: { studioId, memberId: memberId || "", type: "credits" },
+        metadata: { studioId, memberId: memberId || "", type: "credits", creditsPackId, credits: String(pack.credits_amount) },
         locale: "fr",
       }
     }

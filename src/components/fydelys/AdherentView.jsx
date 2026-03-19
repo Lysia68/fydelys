@@ -504,6 +504,23 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
     const [subsLoading, setSubsLoading] = useState(true);
     const [redirecting, setRedirecting] = useState(null);
 
+    const [paymentMode, setPaymentMode] = useState(null); // null=chargement, "connect"|"direct"|"disabled"
+
+    useEffect(() => {
+      if (!studioId) return;
+      createClient().from("studios")
+        .select("payment_mode, stripe_connect_id, stripe_connect_status, stripe_pk")
+        .eq("id", studioId).single()
+        .then(({ data }) => {
+          const mode = data?.payment_mode;
+          if (!mode) { setPaymentMode("disabled"); return; }
+          if (mode === "connect" && data?.stripe_connect_status !== "active") { setPaymentMode("disabled"); return; }
+          if (mode === "direct" && !data?.stripe_pk) { setPaymentMode("disabled"); return; }
+          setPaymentMode(mode);
+        })
+        .catch(() => setPaymentMode("disabled"));
+    }, [studioId]);
+
     useEffect(() => {
       if (!studioId) return;
       createClient().from("subscriptions")
@@ -540,6 +557,18 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
         if (url) window.location.href = url;
       } catch(e) { showToast("Erreur de paiement", false); setRedirecting(null); }
     };
+
+    // Guard paiements désactivés / non configurés
+    if (paymentMode === null) return <div style={{ padding:p, color:C.textMuted, fontSize:14 }}>Chargement…</div>;
+    if (paymentMode === "disabled") return (
+      <div style={{ padding:p }}>
+        <div style={{ textAlign:"center", padding:"40px 20px", color:C.textMuted }}>
+          <div style={{ fontSize:32, marginBottom:12 }}>🔒</div>
+          <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:6 }}>Paiements non disponibles</div>
+          <div style={{ fontSize:13 }}>Le studio n'a pas encore activé les paiements en ligne. Contactez votre studio pour régler votre abonnement.</div>
+        </div>
+      </div>
+    );
 
     return (
       <div style={{ padding:p }}>

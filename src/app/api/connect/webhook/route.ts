@@ -85,8 +85,7 @@ export async function POST(req: NextRequest) {
             amount: (session.amount_total || 0) / 100,
             status: "payé", payment_date: new Date().toISOString().slice(0, 10),
             payment_type: "Carte", source: "card_subscription_once",
-            stripe_payment_id: session.payment_intent as string,
-            notes: `Achat — ${creditsToAdd} crédit${creditsToAdd > 1 ? "s" : ""}`,
+            stripe_payment_id: (session.payment_intent as string) || session.id,
           })
           break
         }
@@ -111,7 +110,7 @@ export async function POST(req: NextRequest) {
             payment_date:      new Date().toISOString().slice(0, 10),
             payment_type:      "Carte",
             source:            "card_credits",
-            stripe_payment_id: session.payment_intent as string,
+            stripe_payment_id: (session.payment_intent as string) || session.id,
             notes:             `Pack crédits — ${creditsAmount} crédits`,
           })
         }
@@ -137,7 +136,7 @@ export async function POST(req: NextRequest) {
               payment_date:      new Date().toISOString().slice(0, 10),
               payment_type:      "Carte",
               source:            "card_session",
-              stripe_payment_id: session.payment_intent as string,
+              stripe_payment_id: (session.payment_intent as string) || session.id,
               notes:             `Séance à l'unité`,
             })
           }
