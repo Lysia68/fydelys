@@ -475,7 +475,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
                     </div>
                   </div>
                   <div style={{ textAlign:"right", flexShrink:0, display:"flex", flexDirection:"column", alignItems:"flex-end", gap:6 }}>
-                    <div style={{ fontSize:15, fontWeight:800, color:C.accent }}>{p.amount?.toFixed(2)} €</div>
+                    <div style={{ fontSize:15, fontWeight:800, color:C.accent }}>{parseFloat(p.amount||0).toFixed(2)} €</div>
                     <Tag color={p.status==="payé"?C.ok:C.warn} bg={p.status==="payé"?C.okBg:C.warnBg} style={{ fontSize:10 }}>
                       {p.status || "payé"}
                     </Tag>
