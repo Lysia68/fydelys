@@ -1171,41 +1171,42 @@ function Planning({ isMobile }) {
           <div style={{ textAlign: "center", padding: "40px 0", color: C.textMuted, fontSize: 15 }}>⏳ Chargement…</div>
         ) : timeline.length === 0 ? (
           <EmptyState icon="📅" title="Aucune séance" sub={filterDiscs.length ? "Aucune séance pour cette discipline" : "Commencez par créer une séance !"} />
-        ) : timeline.map((item, idx) => item.type === "closure" ? (
-          <div key={"cl-"+item.closure.id} style={{ display:"flex", alignItems:"center", gap:10, margin:"4px 0 12px", padding:"10px 16px", background:"#FFFBEB", borderRadius:12, border:"1.5px solid #FDE68A" }}>
-            <span style={{ fontSize:18 }}>🔒</span>
-            <div>
-              <div style={{ fontSize:13, fontWeight:800, color:"#92400E" }}>{item.closure.label || "Fermeture studio"}</div>
-              <div style={{ fontSize:12, color:"#B45309", marginTop:1 }}>
-                {item.closure.date_start === item.closure.date_end
-                  ? new Date(item.closure.date_start + "T12:00:00").toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long" })
-                  : `Du ${new Date(item.closure.date_start + "T12:00:00").toLocaleDateString("fr-FR", { day:"numeric", month:"long" })} au ${new Date(item.closure.date_end + "T12:00:00").toLocaleDateString("fr-FR", { day:"numeric", month:"long" })}`
-                }
+        ) : timeline.map((item, idx) => {
+          if (item.type === "closure") return (
+            <div key={"cl-"+item.closure.id} style={{ display:"flex", alignItems:"center", gap:10, margin:"4px 0 12px", padding:"10px 16px", background:"#FFFBEB", borderRadius:12, border:"1.5px solid #FDE68A" }}>
+              <span style={{ fontSize:18 }}>🔒</span>
+              <div>
+                <div style={{ fontSize:13, fontWeight:800, color:"#92400E" }}>{item.closure.label || "Fermeture studio"}</div>
+                <div style={{ fontSize:12, color:"#B45309", marginTop:1 }}>
+                  {item.closure.date_start === item.closure.date_end
+                    ? new Date(item.closure.date_start + "T12:00:00").toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long" })
+                    : `Du ${new Date(item.closure.date_start + "T12:00:00").toLocaleDateString("fr-FR", { day:"numeric", month:"long" })} au ${new Date(item.closure.date_end + "T12:00:00").toLocaleDateString("fr-FR", { day:"numeric", month:"long" })}`
+                  }
+                </div>
               </div>
             </div>
-          </div>
-        ) : (() => {
-          const isPast   = item.date < today;
-          const isToday  = item.date === today;
-          return (
-          <div key={item.date}
-            ref={isToday ? todayRef : null}
-            style={{ marginBottom: 22, opacity: isPast ? 0.45 : 1, transition: "opacity .2s" }}>
-            <DateLabel date={item.date} />
-            {filtered.filter(s => s.date === item.date).map(s => (
-              <PlanningSessionCard key={s.id} sess={s} expandedId={expandedId} bookings={bookings} discs={effectiveDiscs} closures={closures} isMobile={isMobile} onConfirm={openConfirm} roomsList={roomsList}
-                onToggle={id => setExpandedId(prev => prev === id ? null : id)}
-                onChangeStatus={handleChangeStatus}
-                onAddBooking={id => setBookingModal(id)}
-                onSendReminder={handleSendReminder}
-                onDelete={deleteSession}
-                onCancel={cancelSession}
-                onRestore={restoreSession}
-              />
-            ))}
-          </div>
           );
-        })()}
+          const isPast  = item.date < today;
+          const isToday = item.date === today;
+          return (
+            <div key={item.date}
+              ref={isToday ? todayRef : null}
+              style={{ marginBottom: 22, opacity: isPast ? 0.45 : 1, transition: "opacity .2s" }}>
+              <DateLabel date={item.date} />
+              {filtered.filter(s => s.date === item.date).map(s => (
+                <PlanningSessionCard key={s.id} sess={s} expandedId={expandedId} bookings={bookings} discs={effectiveDiscs} closures={closures} isMobile={isMobile} onConfirm={openConfirm} roomsList={roomsList}
+                  onToggle={id => setExpandedId(prev => prev === id ? null : id)}
+                  onChangeStatus={handleChangeStatus}
+                  onAddBooking={id => setBookingModal(id)}
+                  onSendReminder={handleSendReminder}
+                  onDelete={deleteSession}
+                  onCancel={cancelSession}
+                  onRestore={restoreSession}
+                />
+              ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
