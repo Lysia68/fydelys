@@ -281,9 +281,9 @@ function StudioPage({ slug }: { slug: string }) {
           <div style={{ marginTop:32, padding:"20px 24px", background:"#fff", borderRadius:12, border:"1px solid #DDD5C8" }}>
             <div style={{ fontSize:15, fontWeight:700, marginBottom:12 }}><IcoPhone size={16} color="#A06838" style={{marginRight:6}}/> Contact</div>
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-              {studio.phone && <div style={{ fontSize:14, color:"#5C4A38" }}><IcoPhone size={14} color="#8C7B6C" style={{marginRight:6}}/>{studio.phone}</div>}
-              {studio.email && <a href={`mailto:${studio.email}`} style={{ fontSize:14, color:accent, textDecoration:"none" }}><IcoMail size={14} color="#A06838" style={{marginRight:6}}/>{studio.email}</a>}
-              {studio.website && <a href={studio.website} target="_blank" rel="noopener noreferrer" style={{ fontSize:14, color:accent, textDecoration:"none" }}><IcoGlobe size={14} color="#A06838" style={{marginRight:6}}/>{studio.website}</a>}
+              {studio.phone && <div style={{ fontSize:14, color:"#5C4A38", display:"flex", alignItems:"center", gap:8 }}><IcoPhone size={14} color="#8C7B6C"/>{studio.phone}</div>}
+              {studio.email && <a href={`mailto:${studio.email}`} style={{ fontSize:14, color:accent, textDecoration:"none", display:"flex", alignItems:"center", gap:8 }}><IcoMail size={14} color="#A06838"/>{studio.email}</a>}
+              {studio.website && <a href={studio.website} target="_blank" rel="noopener noreferrer" style={{ fontSize:14, color:accent, textDecoration:"none", display:"flex", alignItems:"center", gap:8 }}><IcoGlobe size={14} color="#A06838"/>{studio.website}</a>}
             </div>
           </div>
         )}
