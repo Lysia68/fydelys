@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
   // Récupérer le paiement + studio
   const { data: pay } = await db.from("member_payments")
-    .select("id, amount, payment_date, payment_type, notes, status, source, studio_id, member_id, stripe_payment_id, members(first_name, last_name, email)")
+    .select("id, amount, payment_date, payment_type, notes, status, source, studio_id, member_id, stripe_payment_id, members(first_name, last_name, email, address, postal_code, city)")
     .eq("id", paymentId).single()
 
   if (!pay) return NextResponse.json({ error: "Paiement introuvable" }, { status: 404 })
@@ -83,21 +83,21 @@ export async function GET(req: NextRequest) {
   body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1a1a1a; background: #f5f5f5; }
   .page { max-width: 760px; margin: 0 auto; background: #fff; min-height: 100vh; }
   /* ── Header ── */
-  .header { background: linear-gradient(135deg, #2A1F14 0%, #5C3D20 100%); color: white; padding: 40px 48px 32px; display: flex; justify-content: space-between; align-items: flex-start; }
-  .logo-block .studio-name { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; color: #F5D5A8; }
+  .header { background: linear-gradient(135deg, #2A1F14 0%, #5C3D20 100%); color: white; padding: 24px 36px 18px; display: flex; justify-content: space-between; align-items: flex-start; }
+  .logo-block .studio-name { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: #F5D5A8; }
   .logo-block .studio-sub { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 4px; line-height: 1.6; }
   .invoice-meta { text-align: right; }
   .invoice-meta .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: rgba(255,255,255,0.5); margin-bottom: 6px; }
   .invoice-meta .invoice-number { font-size: 22px; font-weight: 800; color: #F5D5A8; }
   .invoice-meta .invoice-date { font-size: 13px; color: rgba(255,255,255,0.7); margin-top: 4px; }
-  .status-bar { background: #A06838; padding: 10px 48px; display: flex; justify-content: space-between; align-items: center; }
+  .status-bar { background: #A06838; padding: 7px 36px; display: flex; justify-content: space-between; align-items: center; }
   .status-bar .status-label { font-size: 12px; font-weight: 700; color: white; text-transform: uppercase; letter-spacing: 1px; }
   .status-bar .status-badge { background: rgba(255,255,255,0.2); color: white; padding: 3px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
   /* ── Body ── */
-  .body { padding: 40px 48px; }
+  .body { padding: 20px 36px 12px; }
   /* ── Parties ── */
-  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 40px; padding-bottom: 36px; border-bottom: 2px solid #F0E8DC; }
-  .party-card { background: #FDFAF7; border: 1px solid #EDE4D8; border-radius: 10px; padding: 20px 22px; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 2px solid #F0E8DC; }
+  .party-card { background: #FDFAF7; border: 1px solid #EDE4D8; border-radius: 10px; padding: 12px 16px; }
   .party-card .party-type { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #A06838; margin-bottom: 12px; }
   .party-card .party-name { font-size: 16px; font-weight: 800; color: #2A1F14; margin-bottom: 6px; }
   .party-card .party-detail { font-size: 13px; color: #5C4A38; line-height: 1.7; }
@@ -115,7 +115,7 @@ export async function GET(req: NextRequest) {
   .items-table .desc-sub { font-size: 12px; color: #8C7B6C; margin-top: 3px; font-weight: 400; }
   /* ── Totals ── */
   .totals { border-top: 2px solid #F0E8DC; margin-top: 0; }
-  .totals-grid { display: flex; flex-direction: column; align-items: flex-end; padding: 20px 16px 0; gap: 8px; }
+  .totals-grid { display: flex; flex-direction: column; align-items: flex-end; padding: 10px 16px 0; gap: 5px; }
   .total-line { display: flex; gap: 48px; justify-content: flex-end; align-items: center; }
   .total-line .total-label { font-size: 13px; color: #8C7B6C; min-width: 120px; text-align: right; }
   .total-line .total-value { font-size: 14px; font-weight: 600; color: #2A1F14; min-width: 80px; text-align: right; }
@@ -123,12 +123,12 @@ export async function GET(req: NextRequest) {
   .total-line.grand-total .total-label { font-size: 15px; font-weight: 800; color: #2A1F14; }
   .total-line.grand-total .total-value { font-size: 18px; font-weight: 800; color: #A06838; }
   /* ── Payment info ── */
-  .payment-info { margin-top: 36px; background: #F5EBE0; border-radius: 10px; padding: 18px 22px; display: flex; gap: 32px; align-items: center; }
+  .payment-info { margin-top: 14px; background: #F5EBE0; border-radius: 10px; padding: 12px 18px; display: flex; gap: 24px; align-items: center; }
   .payment-info .pi-item { display: flex; flex-direction: column; gap: 3px; }
   .payment-info .pi-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #A06838; }
   .payment-info .pi-value { font-size: 14px; font-weight: 600; color: #2A1F14; }
   /* ── Footer ── */
-  .footer { margin-top: 48px; padding: 24px 48px; background: #FDFAF7; border-top: 2px solid #F0E8DC; }
+  .footer { margin-top: 16px; padding: 14px 36px; background: #FDFAF7; border-top: 2px solid #F0E8DC; }
   .footer-legal { font-size: 11px; color: #8C7B6C; line-height: 1.8; }
   .footer-legal strong { color: #5C4A38; }
   .footer-brand { text-align: center; margin-top: 16px; padding-top: 16px; border-top: 1px solid #EDE4D8; font-size: 11px; color: #C4A880; font-weight: 600; letter-spacing: 0.5px; }
@@ -138,11 +138,13 @@ export async function GET(req: NextRequest) {
   .btn-primary { background: #A06838; color: white; }
   .btn-secondary { background: white; color: #2A1F14; border: 1.5px solid #DDD5C8; }
   @media print {
+    @page { margin: 0; size: A4; }
     body { background: white; }
     .actions { display: none !important; }
-    .page { box-shadow: none; }
+    .page { box-shadow: none; page-break-inside: avoid; }
     .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .status-bar { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    * { page-break-inside: avoid; }
   }
 </style>
 </head>
@@ -155,8 +157,6 @@ export async function GET(req: NextRequest) {
       <div class="studio-sub">
         ${studio?.address ? `${studio.address}<br/>` : ""}
         ${studio?.postal_code ? `${studio.postal_code} ` : ""}${studio?.city || ""}
-        ${studio?.email ? `<br/>${studio.email}` : ""}
-        ${studio?.phone ? `<br/>${studio.phone}` : ""}
       </div>
     </div>
     <div class="invoice-meta">
@@ -179,21 +179,20 @@ export async function GET(req: NextRequest) {
         <div class="party-detail">
           ${studio?.address ? `${studio.address}<br/>` : ""}
           ${studio?.postal_code ? `${studio.postal_code} ` : ""}${studio?.city || ""}
-          ${studio?.email ? `<br/>${studio.email}` : ""}
-          ${studio?.phone ? `<br/>Tél : ${studio.phone}` : ""}
         </div>
       </div>
       <div class="party-card">
         <div class="party-type">Destinataire</div>
         <div class="party-name">${memberName}</div>
         <div class="party-detail">
-          ${member?.email ? `${member.email}` : ""}
+          ${(member as any)?.address ? `${(member as any).address}<br/>` : ""}
+          ${(member as any)?.postal_code ? `${(member as any).postal_code} ` : ""}${(member as any)?.city || ""}
         </div>
       </div>
     </div>
 
     <!-- Détail de la prestation -->
-    <div class="section-title">Détail de la prestation</div>
+    <div class="section-title" style="margin-bottom:8px">Détail de la prestation</div>
     <div style="border: 1.5px solid #EDE4D8; border-radius: 10px; overflow: hidden;">
       <table class="items-table">
         <thead>
