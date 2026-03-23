@@ -180,13 +180,17 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
           return;
         }
         const isFull = result.status === "waitlist";
+        // Batching : tous les state updates ensemble pour éviter le flash
         setMyBookings(p=>[...p, s.id]);
         setSessions(p=>p.map(x=>x.id===s.id?{...x,booked:x.booked+(isFull?0:1)}:x));
-        if (isFull) {
-          showToast(`Ajouté à la liste d'attente — ${s.discName}`);
-        } else {
-          showToast(`Réservé : ${s.discName} — ${s.time}`);
-        }
+        // Toast après le re-render des sessions
+        requestAnimationFrame(() => {
+          if (isFull) {
+            showToast(`Ajouté à la liste d'attente — ${s.discName}`);
+          } else {
+            showToast(`Réservé : ${s.discName} — ${s.time}`);
+          }
+        });
       } else {
         showToast(result.error || "Erreur lors de la réservation", false);
       }
@@ -759,7 +763,8 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
       `}</style>
 
       {toast && (
-        <div style={{ position:"fixed", top:20, right:20, zIndex:600, display:"flex", alignItems:"center", gap:8, padding:"10px 16px", borderRadius:10, background:toast.ok?C.ok:C.warn, color:"white", fontSize:14, fontWeight:600, boxShadow:"0 4px 16px rgba(0,0,0,.15)" }}>
+        <div style={{ position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)", zIndex:600, display:"flex", alignItems:"center", gap:8, padding:"11px 20px", borderRadius:12, background:toast.ok?C.ok:C.warn, color:"white", fontSize:14, fontWeight:600, boxShadow:"0 4px 20px rgba(0,0,0,.2)", whiteSpace:"nowrap", animation:"toastIn .2s ease-out", pointerEvents:"none" }}>
+          <style>{`@keyframes toastIn { from { opacity:0; transform:translateX(-50%) translateY(10px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`}</style>
           {toast.ok ? <IcoCheck s={16} c="white"/> : <IcoAlert2 s={16} c="white"/>}{toast.msg}
         </div>
       )}
