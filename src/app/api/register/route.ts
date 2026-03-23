@@ -46,8 +46,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Erreur lors de l'enregistrement" }, { status: 500 })
     }
 
-    // Envoyer le magic link via Supabase Admin
-    const { error: otpErr } = await db.auth.admin.generateLink({
+    // Générer le lien et l'envoyer via SendGrid (comme send-magic-link)
+    const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY
+    const { data: linkData, error: linkErr } = await db.auth.admin.generateLink({
       type: "magiclink",
       email,
       options: {
@@ -56,10 +57,31 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    if (otpErr) {
-      console.error("[register] generateLink error:", otpErr.message)
-      // Fallback: signInWithOtp via anon
+    console.log("[register] generateLink result:", linkErr?.message || "ok", "| props:", JSON.stringify(Object.keys(linkData?.properties||{})))
+    if (linkErr || !linkData?.properties) {
+      console.error("[register] generateLink error:", linkErr?.message)
       return NextResponse.json({ ok: true, fallback: true })
+    }
+
+    const actionUrl  = new URL(linkData.properties.action_link)
+    const tokenHash  = actionUrl.searchParams.get("token_hash") || (linkData.properties as any).hashed_token
+    console.log("[register] tokenHash:", tokenHash?.slice(0,20)||"NULL", "| magicLink preview:", actionUrl.href.slice(0,60))
+    const magicLink  = tokenHash
+      ? `https://fydelys.fr/auth/confirm?token_hash=${tokenHash}&type=magiclink`
+      : linkData.properties.action_link
+
+    if (SENDGRID_API_KEY) {
+      const emailRes = await fetch("https://api.sendgrid.com/v3/mail/send", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SENDGRID_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email }], subject: `Confirmez votre inscription — Fydelys` }],
+          from: { email: "noreply@fydelys.fr", name: "Fydelys" },
+          content: [{ type: "text/html", value: buildRegisterEmail({ firstName, studioName, magicLink }) }],
+        }),
+      })
+      if (!emailRes.ok) console.error("[register] SendGrid error:", await emailRes.text())
+      else console.log("[register] Email envoyé à", email)
     }
 
     console.log("[register] Inscription enregistrée pour", email, "| studio:", slug)
@@ -69,4 +91,41 @@ export async function POST(req: NextRequest) {
     console.error("[register] error:", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
+}
+
+function buildRegisterEmail({ firstName, studioName, magicLink }: { firstName: string; studioName: string; magicLink: string }) {
+  return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#F0EBE3;font-family:'Helvetica Neue',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#F0EBE3;padding:32px 16px;"><tr><td align="center">
+<table width="100%" style="max-width:540px;background:#fff;overflow:hidden;box-shadow:0 4px 24px rgba(42,31,20,.10);">
+  <tr><td style="background:linear-gradient(135deg,#2A1F14 0%,#5C3D20 100%);padding:24px 32px 18px;">
+    <div style="font-size:22px;font-weight:800;color:#F5D5A8;">Fydelys</div>
+    <div style="font-size:10px;color:rgba(255,255,255,.45);margin-top:4px;text-transform:uppercase;letter-spacing:1.5px;">Confirmation d'inscription</div>
+  </td></tr>
+  <tr><td style="background:#A06838;padding:8px 32px;">
+    <span style="font-size:12px;font-weight:700;color:#fff;">🎉 Plus qu'une étape !</span>
+  </td></tr>
+  <tr><td style="padding:28px 32px 20px;">
+    <p style="font-size:16px;color:#2A1F14;font-weight:700;margin:0 0 10px;">Bonjour ${firstName} 👋</p>
+    <p style="font-size:14px;color:#5C4A38;line-height:1.7;margin:0 0 22px;">
+      Votre espace studio <strong>${studioName}</strong> est prêt à être créé.<br/>
+      Cliquez sur le bouton ci-dessous pour confirmer et accéder à votre espace.
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
+      <tr><td align="center" style="background:#A06838;border-radius:10px;">
+        <a href="${magicLink}" style="display:inline-block;padding:13px 28px;color:#fff;text-decoration:none;font-size:14px;font-weight:700;font-family:Arial,sans-serif;">
+          Créer mon espace studio →
+        </a>
+      </td></tr>
+    </table>
+    <p style="font-size:12px;color:#8C7B6C;line-height:1.6;margin:0;">
+      Ce lien est valable <strong>24 heures</strong>. Si vous n'avez pas demandé cette inscription, ignorez cet email.
+    </p>
+  </td></tr>
+  <tr><td style="background:#FDFAF7;border-top:2px solid #F0E8DC;padding:12px 32px;text-align:center;">
+    <p style="font-size:10px;color:#B0A090;margin:0;">Fydelys — Studio Manager · <a href="https://fydelys.fr" style="color:#A06838;text-decoration:none;">fydelys.fr</a></p>
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>`
 }
