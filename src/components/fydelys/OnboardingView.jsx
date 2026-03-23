@@ -52,34 +52,26 @@ function OnboardingView({ studioName = "", onComplete }) {
     if (!validate(2)) { setStep(errors.address || errors.postal_code || errors.city ? 2 : 1); return; }
     setSaving(true);
     try {
-      const sb = createClient();
-      const { data: { user } } = await sb.auth.getUser();
-      if (!user) { showToast("Session expirée, reconnectez-vous", false); setSaving(false); return; }
-
-      const { error } = await sb.from("members")
-        .update({
-          first_name:       form.first_name.trim(),
-          last_name:        form.last_name.trim(),
-          phone:            form.phone.trim(),
-          address:          form.address.trim(),
-          postal_code:      form.postal_code.trim(),
-          city:             form.city.trim(),
-          profile_complete: true,
-          status:           "actif",
-        })
-        .eq("studio_id", studioId)
-        .eq("email", user.email);
-
-      if (error) { showToast("Erreur lors de l'enregistrement", false); setSaving(false); return; }
-
-      // Synchroniser profiles avec le même prénom/nom
-      await sb.from("profiles")
-        .update({ first_name: form.first_name.trim(), last_name: form.last_name.trim() })
-        .eq("id", user.id);
-
-      // Mettre à jour aussi le profil auth (prénom/nom)
-      await sb.auth.updateUser({ data: { first_name: form.first_name.trim(), last_name: form.last_name.trim() } });
-
+      // Utiliser l'API route (service role) pour contourner RLS
+      const res = await fetch("/api/member-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studioId,
+          first_name:   form.first_name.trim(),
+          last_name:    form.last_name.trim(),
+          phone:        form.phone.trim(),
+          address:      form.address.trim(),
+          postal_code:  form.postal_code.trim(),
+          city:         form.city.trim(),
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok || result.error) {
+        showToast("Erreur lors de l'enregistrement : " + (result.error || ""), false);
+        setSaving(false);
+        return;
+      }
       setStep(3);
     } catch (err) {
       showToast("Erreur réseau", false);
