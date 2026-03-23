@@ -63,12 +63,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, fallback: true })
     }
 
-    const actionUrl  = new URL(linkData.properties.action_link)
-    const tokenHash  = actionUrl.searchParams.get("token_hash") || (linkData.properties as any).hashed_token
-    console.log("[register] tokenHash:", tokenHash?.slice(0,20)||"NULL", "| magicLink preview:", actionUrl.href.slice(0,60))
-    const magicLink  = tokenHash
-      ? `https://fydelys.fr/auth/confirm?token_hash=${tokenHash}&type=magiclink`
-      : linkData.properties.action_link
+    // Utiliser directement action_link — Supabase redirigera vers notre callback
+    const magicLink = linkData.properties.action_link
+    console.log("[register] magicLink prêt, envoi email à", email)
 
     if (SENDGRID_API_KEY) {
       const emailRes = await fetch("https://api.sendgrid.com/v3/mail/send", {
