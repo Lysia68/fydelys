@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
 
-    const { studioId, first_name, last_name, phone, address, postal_code, city } = await req.json()
+    const { studioId, first_name, last_name, phone, birth_date, address, postal_code, city } = await req.json()
     if (!studioId) return NextResponse.json({ error: "studioId manquant" }, { status: 400 })
 
     const db = createServiceSupabase()
@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
       first_name:       first_name?.trim()     || null,
       last_name:        last_name?.trim()      || null,
       phone:            phone?.trim()          || null,
+      birth_date:       birth_date             || null,
       address:          address?.trim()        || null,
       postal_code:      postal_code?.trim()    || null,
       city:             city?.trim()           || null,

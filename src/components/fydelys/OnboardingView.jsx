@@ -19,6 +19,7 @@ function OnboardingView({ studioName = "", onComplete }) {
     first_name:   "",
     last_name:    "",
     phone:        "",
+    birth_date:   "",
     address:      "",
     postal_code:  "",
     city:         "",
@@ -33,6 +34,7 @@ function OnboardingView({ studioName = "", onComplete }) {
       if (!form.first_name.trim())  e.first_name  = "Obligatoire";
       if (!form.last_name.trim())   e.last_name   = "Obligatoire";
       if (!form.phone.trim())       e.phone       = "Obligatoire";
+      if (!form.birth_date.trim())  e.birth_date  = "Obligatoire";
     }
     if (forStep >= 2) {
       if (!form.address.trim())     e.address     = "Obligatoire";
@@ -61,6 +63,7 @@ function OnboardingView({ studioName = "", onComplete }) {
           first_name:   form.first_name.trim(),
           last_name:    form.last_name.trim(),
           phone:        form.phone.trim(),
+          birth_date:   form.birth_date || null,
           address:      form.address.trim(),
           postal_code:  form.postal_code.trim(),
           city:         form.city.trim(),
@@ -142,6 +145,10 @@ function OnboardingView({ studioName = "", onComplete }) {
               <div>
                 <Field label="Téléphone *" value={form.phone} onChange={set("phone")} placeholder="06 12 34 56 78" type="tel"/>
                 {errors.phone && <div style={{ fontSize:11, color:C.warn, marginTop:3 }}>{errors.phone}</div>}
+              </div>
+              <div>
+                <Field label="Date de naissance *" value={form.birth_date} onChange={set("birth_date")} type="date"/>
+                {errors.birth_date && <div style={{ fontSize:11, color:C.warn, marginTop:3 }}>{errors.birth_date}</div>}
               </div>
             </div>
 
