@@ -344,20 +344,32 @@ export default function LoginPage() {
     const { slugTaken, emailTaken } = await checkRes.json()
     if(slugTaken){ setRegErrors({slug:"Ce sous-domaine est déjà pris"}); setSlugStatus("taken"); setRegStep(1); setLoading(false); return }
     if(emailTaken){ setRegErrors({email:"Un compte existe déjà avec cet email"}); setEmailStatus("taken"); setRegStep(2); setLoading(false); return }
-    const {error:se}=await supabase.from("pending_registrations").upsert({
-      email:reg.email,
-      data:{studioName:reg.studioName,slug:reg.slug,city:reg.city,zip:reg.zip||null,address:reg.address||null,
-            type:reg.type,firstName:reg.firstName,lastName:reg.lastName,phone:reg.phone,
-            isCoach:reg.isCoach},
-      expires_at:new Date(Date.now()+24*3600*1000).toISOString(),
-    },{onConflict:"email"})
-    if(se){ setError("Erreur lors de l'enregistrement."); setLoading(false); return }
-    const {error}=await supabase.auth.signInWithOtp({email:reg.email,options:{
-      emailRedirectTo:`https://fydelys.fr/auth/callback?next=/dashboard&register=1`,
-      shouldCreateUser:true,
-      data:{first_name:reg.firstName,last_name:reg.lastName},
-    }})
-    if(error&&!error.message?.includes("Database error")) setError(error.message)
+    // Passer par l'API route (service role) pour contourner RLS sur pending_registrations
+    const regRes = await fetch("/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: reg.email, studioName: reg.studioName, slug: reg.slug,
+        city: reg.city, zip: reg.zip||null, address: reg.address||null,
+        type: reg.type, firstName: reg.firstName, lastName: reg.lastName,
+        phone: reg.phone, isCoach: reg.isCoach,
+      }),
+    })
+    const regResult = await regRes.json()
+    if (!regRes.ok || regResult.error) {
+      setError(regResult.error || "Erreur lors de l'enregistrement.")
+      setLoading(false)
+      return
+    }
+    // Si fallback, envoyer OTP via client anon
+    if (regResult.fallback) {
+      const {error}=await supabase.auth.signInWithOtp({email:reg.email,options:{
+        emailRedirectTo:`https://fydelys.fr/auth/callback?next=/dashboard&register=1`,
+        shouldCreateUser:true,
+        data:{first_name:reg.firstName,last_name:reg.lastName},
+      }})
+      if(error&&!error.message?.includes("Database error")) setError(error.message)
+    }
     else setRegSent(true)
     setLoading(false)
   }
