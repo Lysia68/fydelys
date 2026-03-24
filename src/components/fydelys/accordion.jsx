@@ -184,20 +184,17 @@ export function PlanningAccordion({ sess, sessId, bookings, onChangeStatus, onAd
                 <div style={{ fontSize:15, fontWeight:700, color:C.text, flex:1 }}>{b.name}</div>
                 <CreditBadge credits={b.credits} total={b.total} sub={b.sub} subPeriod={b.subPeriod}/>
               </div>
-              <div style={{ display:"flex", alignItems:"center", gap:8, paddingLeft:39 }}>
-                <span style={{ padding:"3px 10px", borderRadius:20, fontSize:13, fontWeight:600, whiteSpace:"nowrap", flexShrink:0, ...stStyle(b.st) }}>{stLbl(b.st)}</span>
+              <div style={{ display:"flex", alignItems:"center", gap:6, paddingLeft:39 }}>
+                <span style={{ padding:"3px 10px", borderRadius:20, fontSize:12, fontWeight:600, whiteSpace:"nowrap", flexShrink:0, ...stStyle(b.st) }}>{stLbl(b.st)}</span>
                 {b.phone && (
-                  <a href={`tel:${b.phone}`} title={b.phone}
-                    style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:C.textSoft, textDecoration:"none", padding:"3px 8px", borderRadius:7, border:`1px solid ${C.borderSoft}`, background:C.surface, flexShrink:0, whiteSpace:"nowrap" }}>
+                  <a href={`tel:${b.phone}`}
+                    style={{ display:"flex", alignItems:"center", gap:3, fontSize:12, color:C.textSoft, textDecoration:"none", padding:"3px 7px", borderRadius:7, border:`1px solid ${C.borderSoft}`, background:C.surface, flexShrink:0, whiteSpace:"nowrap" }}>
                     <IcoPhone s={12} c={C.textMuted}/> {b.phone}
                   </a>
                 )}
-                <div style={{ flex:1 }}/>
-                <div style={{ flexShrink:0 }}>
-                  {b.st==="waitlist"  && <button onClick={()=>onChangeStatus(b.id,sessId,"confirmed")} style={{ display:"flex",alignItems:"center",gap:5, fontSize:12, padding:"4px 12px", borderRadius:7, fontWeight:600, border:`1px solid #B8DFC4`, color:C.ok,   background:C.okBg,   cursor:"pointer", whiteSpace:"nowrap" }}><IcoCheck s={13} c={C.ok}/>Confirmer</button>}
-                  {b.st==="confirmed" && <button onClick={()=>onChangeStatus(b.id,sessId,"cancelled")} style={{ display:"flex",alignItems:"center",gap:5, fontSize:12, padding:"4px 12px", borderRadius:7, fontWeight:600, border:`1px solid #EFC8BC`, color:C.warn, background:C.warnBg, cursor:"pointer", whiteSpace:"nowrap" }}><IcoX s={13} c={C.warn}/>Annuler</button>}
-                  {b.st==="cancelled" && <button onClick={()=>onChangeStatus(b.id,sessId,"confirmed")} style={{ display:"flex",alignItems:"center",gap:5, fontSize:12, padding:"4px 12px", borderRadius:7, fontWeight:600, border:`1px solid #B8CED8`, color:C.info, background:C.infoBg, cursor:"pointer", whiteSpace:"nowrap" }}><IcoUndo s={13} c={C.info}/>Remettre</button>}
-                </div>
+                {b.st==="waitlist"  && <button onClick={()=>onChangeStatus(b.id,sessId,"confirmed")} style={{ display:"flex",alignItems:"center",gap:4, fontSize:12, padding:"3px 10px", borderRadius:7, fontWeight:600, border:`1px solid #B8DFC4`, color:C.ok,   background:C.okBg,   cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}><IcoCheck s={12} c={C.ok}/>Confirmer</button>}
+                {b.st==="confirmed" && <button onClick={()=>onChangeStatus(b.id,sessId,"cancelled")} style={{ display:"flex",alignItems:"center",gap:4, fontSize:12, padding:"3px 10px", borderRadius:7, fontWeight:600, border:`1px solid #EFC8BC`, color:C.warn, background:C.warnBg, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}><IcoX s={12} c={C.warn}/>Annuler</button>}
+                {b.st==="cancelled" && <button onClick={()=>onChangeStatus(b.id,sessId,"confirmed")} style={{ display:"flex",alignItems:"center",gap:4, fontSize:12, padding:"3px 10px", borderRadius:7, fontWeight:600, border:`1px solid #B8CED8`, color:C.info, background:C.infoBg, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}><IcoUndo s={12} c={C.info}/>Remettre</button>}
               </div>
             </div>
           ))}

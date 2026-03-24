@@ -519,8 +519,10 @@ function Planning({ isMobile }) {
     const d60 = new Date(); d60.setDate(d60.getDate() + 60);
     const fromDate = d7.toISOString().slice(0,10);
     const toDate   = d60.toISOString().slice(0,10);
-    sb.from("sessions").select("id, discipline_id, teacher, room, level, session_date, session_time, duration_min, spots, status")
-      .eq("studio_id", studioId).gte("session_date", fromDate).lte("session_date", toDate).order("session_date").order("session_time")
+    sb.from("sessions")
+      .select("id, discipline_id, teacher, room, level, session_date, session_time, duration_min, spots, status")
+      .eq("studio_id", studioId).gte("session_date", fromDate).lte("session_date", toDate)
+      .order("session_date").order("session_time")
       .then(async ({ data, error }) => {
         if (error) { setDbLoading(false); return; }
         if (!data || data.length === 0) { setSessions(SESSIONS_DEMO); setIsDemoData(true); setDbLoading(false); return; }
@@ -531,6 +533,8 @@ function Planning({ isMobile }) {
           duration: s.duration_min || 60, spots: s.spots || 12,
           status: s.status || "scheduled", booked: 0, waitlist: 0,
         }));
+        // Afficher les sessions immédiatement sans attendre les bookings
+        setSessions(mapped);
         const { data: bkData } = await sb.from("bookings")
           .select("id, session_id, member_id, status, attended, members(id, first_name, last_name, email, phone, credits, credits_total, subscription_id, subscriptions(period))")
           .in("session_id", mapped.map(s => s.id));

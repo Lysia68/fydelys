@@ -117,37 +117,51 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
 
     useEffect(() => {
       if (!studioId) return;
+      const sb = createClient();
       const today = new Date().toISOString().split("T")[0];
-      createClient().from("sessions")
-        .select("id, discipline_id, teacher, room, level, session_date, session_time, duration_min, spots, status, disciplines(name,color,icon)")
-        .eq("studio_id", studioId)
-        .in("status", ["scheduled", "cancelled"])
-        .gte("session_date", today)
-        .order("session_date").order("session_time")
-        .limit(60)
-        .then(({ data }) => {
-          if (data?.length) {
-            // Compter les bookings par session
-            createClient().from("bookings")
-              .select("session_id")
-              .in("session_id", data.map(s=>s.id))
-              .in("status", ["confirmed","waitlist"])
-              .then(({ data: bk }) => {
-                const counts = {};
-                (bk||[]).forEach(b => { counts[b.session_id] = (counts[b.session_id]||0)+1; });
-                setSessions(data.map(s => ({
-                  ...s,
-                  discName: s.disciplines?.name || "",
-                  discColor: s.disciplines?.color || C.accent,
-                  discIcon: s.disciplines?.icon || "",
-                  booked: counts[s.id] || 0,
-                  date: s.session_date,
-                  time: s.session_time?.slice(0,5) || "",
-                })));
-              });
-          } else {
-            setSessions([]);
-          }
+      const d30 = new Date(); d30.setDate(d30.getDate() + 30);
+      const toDate = d30.toISOString().slice(0,10);
+
+      // Charger sessions + bookings en parallèle
+      Promise.all([
+        sb.from("sessions")
+          .select("id, discipline_id, teacher, room, level, session_date, session_time, duration_min, spots, status, disciplines(name,color,icon)")
+          .eq("studio_id", studioId)
+          .in("status", ["scheduled", "cancelled"])
+          .gte("session_date", today)
+          .lte("session_date", toDate)
+          .order("session_date").order("session_time")
+          .limit(60),
+        sb.from("bookings")
+          .select("session_id, status")
+          .eq("member_id", me?.id || "")
+          .in("status", ["confirmed","waitlist"]),
+      ]).then(([{ data }, { data: myBk }]) => {
+        // Mettre à jour mes réservations
+        if (myBk) setMyBookings(myBk.map(b => b.session_id));
+
+        if (data?.length) {
+          // Compter les bookings par session (une seule requête)
+          sb.from("bookings")
+            .select("session_id")
+            .in("session_id", data.map(s=>s.id))
+            .in("status", ["confirmed","waitlist"])
+            .then(({ data: bk }) => {
+              const counts = {};
+              (bk||[]).forEach(b => { counts[b.session_id] = (counts[b.session_id]||0)+1; });
+              setSessions(data.map(s => ({
+                ...s,
+                discName: s.disciplines?.name || "",
+                discColor: s.disciplines?.color || C.accent,
+                discIcon: s.disciplines?.icon || "",
+                booked: counts[s.id] || 0,
+                date: s.session_date,
+                time: s.session_time?.slice(0,5) || "",
+              })));
+            });
+        } else {
+          setSessions([]);
+        }
           setLoadingSess(false);
         });
     }, [studioId]);
@@ -425,6 +439,45 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
 
   function AdhAccount() {
     const initials = me ? `${me.first_name?.[0]||""}${me.last_name?.[0]||""}`.toUpperCase() : "?";
+    const [editing, setEditing] = React.useState(false);
+    const [saving, setSaving]   = React.useState(false);
+    const [form, setForm]       = React.useState(null);
+
+    React.useEffect(() => {
+      if (me) setForm({
+        first_name:  me.first_name  || "",
+        last_name:   me.last_name   || "",
+        phone:       me.phone       || "",
+        birth_date:  me.birth_date  || "",
+        address:     me.address     || "",
+        postal_code: me.postal_code || "",
+        city:        me.city        || "",
+      });
+    }, [me?.id]);
+
+    const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+
+    const save = async () => {
+      setSaving(true);
+      try {
+        const res = await fetch("/api/member-profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ studioId, ...form }),
+        });
+        const result = await res.json();
+        if (res.ok) {
+          setMe(m => ({ ...m, ...form }));
+          setEditing(false);
+          showToast("Coordonnées mises à jour ✓");
+        } else {
+          showToast(result.error || "Erreur lors de la sauvegarde", false);
+        }
+      } catch { showToast("Erreur réseau", false); }
+      setSaving(false);
+    };
+
     if (loading) return <div style={{ padding:p, color:C.textMuted, fontSize:14 }}>Chargement…</div>;
     if (!me) return (
       <div style={{ padding:p }}>
@@ -439,23 +492,24 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
     );
     return (
       <div style={{ padding:p, maxWidth:600 }}>
+        {/* Header profil */}
         <Card style={{ marginBottom:16 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:18 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:16 }}>
             <div style={{ width:54, height:54, borderRadius:"50%", background:C.accentBg, border:`2px solid ${C.accent}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, fontWeight:700, color:C.accent }}>
               {initials}
             </div>
-            <div>
-              <div style={{ fontSize:20, fontWeight:700, color:C.text }}>{me?.first_name} {me?.last_name}</div>
-              <div style={{ fontSize:14, color:C.textSoft }}>{me?.email}</div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:18, fontWeight:700, color:C.text }}>{me?.first_name} {me?.last_name}</div>
+              <div style={{ fontSize:13, color:C.textSoft }}>{me?.email}</div>
               <Tag s={me?.status||"actif"}/>
             </div>
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
             {[
-              { l:"Crédits restants",  v:`${me?.credits||0} / ${me?.credits_total||0}`,  icon:<IcoCreditCard2 s={16} c={C.accent}/> },
-              { l:"Membre depuis",     v:me?.created_at ? new Date(me.created_at).toLocaleDateString("fr-FR") : "—", icon:<IcoCalendar2 s={16} c={C.accent}/> },
-              { l:"Séances effectuées",v:history.filter(h=>h.attended===true).length, icon:<IcoCheck s={16} c={C.ok}/> },
-              { l:"Statut",            v:me?.status||"actif",                              icon:<IcoUser2 s={16} c={C.accent}/> },
+              { l:"Crédits restants",   v:`${me?.credits||0} / ${me?.credits_total||0}`,  icon:<IcoCreditCard2 s={16} c={C.accent}/> },
+              { l:"Membre depuis",      v:me?.created_at ? new Date(me.created_at).toLocaleDateString("fr-FR") : "—", icon:<IcoCalendar2 s={16} c={C.accent}/> },
+              { l:"Séances effectuées", v:history.filter(h=>h.attended===true).length, icon:<IcoCheck s={16} c={C.ok}/> },
+              { l:"Statut",             v:me?.status||"actif", icon:<IcoUser2 s={16} c={C.accent}/> },
             ].map(k=>(
               <div key={k.l} style={{ background:C.bg, borderRadius:10, padding:"12px 14px", display:"flex", gap:10, alignItems:"center" }}>
                 {k.icon}
@@ -466,14 +520,81 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
               </div>
             ))}
           </div>
-          <button onClick={()=>{
-            const sb = createClient();
-            const today = new Date().toISOString().split("T")[0];
-            sb.from("members").select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, address, postal_code, city, profile_complete, subscription_id, subscriptions(period)").eq("id", me.id).maybeSingle().then(({data})=>{ if(data) setMe(data); });
-            sb.from("bookings").select("session_id, status, attended, sessions(session_date, session_time, discipline_id, teacher, disciplines(name,color))").eq("member_id", me.id).order("session_id",{ascending:false}).limit(50).then(({data:hist})=>{ if(hist) setHistory(hist.filter(h=>h.sessions&&h.sessions.session_date<=today)); });
-          }} style={{ fontSize:12, color:C.textMuted, background:"none", border:"none", cursor:"pointer", padding:"2px 0 0", textAlign:"right", width:"100%", display:"flex", alignItems:"center", justifyContent:"flex-end", gap:4 }}>
-            ↻ Actualiser
-          </button>
+        </Card>
+
+        {/* Coordonnées */}
+        <Card>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+            <div style={{ fontSize:15, fontWeight:700, color:C.text }}>Mes coordonnées</div>
+            {!editing
+              ? <Button sm variant="secondary" onClick={()=>setEditing(true)}>✏ Modifier</Button>
+              : <div style={{ display:"flex", gap:8 }}>
+                  <Button sm variant="secondary" onClick={()=>{ setEditing(false); setForm({ first_name:me.first_name||"" ,last_name:me.last_name||"", phone:me.phone||"", birth_date:me.birth_date||"", address:me.address||"", postal_code:me.postal_code||"", city:me.city||"" }); }}>Annuler</Button>
+                  <Button sm onClick={save} disabled={saving}>{saving ? "…" : "Enregistrer"}</Button>
+                </div>
+            }
+          </div>
+
+          {!editing ? (
+            <div style={{ display:"grid", gap:10 }}>
+              {[
+                { l:"Prénom",           v:me?.first_name },
+                { l:"Nom",              v:me?.last_name },
+                { l:"Téléphone",        v:me?.phone },
+                { l:"Date de naissance",v:me?.birth_date ? new Date(me.birth_date).toLocaleDateString("fr-FR") : null },
+                { l:"Adresse",          v:me?.address },
+                { l:"Code postal",      v:me?.postal_code },
+                { l:"Ville",            v:me?.city },
+                { l:"Email",            v:me?.email, locked:true },
+              ].filter(f=>f.v).map(f=>(
+                <div key={f.l} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 0", borderBottom:`1px solid ${C.border}` }}>
+                  <span style={{ fontSize:13, color:C.textMuted, minWidth:120 }}>{f.l}</span>
+                  <span style={{ fontSize:14, fontWeight:600, color:C.text, textAlign:"right", display:"flex", alignItems:"center", gap:6 }}>
+                    {f.v}
+                    {f.locked && <span style={{ fontSize:10, color:C.textMuted, fontWeight:400 }}>🔒</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : form && (
+            <div style={{ display:"grid", gap:12 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div>
+                  <label style={{ fontSize:12, color:C.textMuted, fontWeight:600, display:"block", marginBottom:4 }}>Prénom</label>
+                  <input value={form.first_name} onChange={set("first_name")} style={{ width:"100%", padding:"8px 10px", borderRadius:8, border:`1px solid ${C.border}`, fontSize:14, boxSizing:"border-box", outline:"none", background:C.bg }}/>
+                </div>
+                <div>
+                  <label style={{ fontSize:12, color:C.textMuted, fontWeight:600, display:"block", marginBottom:4 }}>Nom</label>
+                  <input value={form.last_name} onChange={set("last_name")} style={{ width:"100%", padding:"8px 10px", borderRadius:8, border:`1px solid ${C.border}`, fontSize:14, boxSizing:"border-box", outline:"none", background:C.bg }}/>
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize:12, color:C.textMuted, fontWeight:600, display:"block", marginBottom:4 }}>Téléphone</label>
+                <input value={form.phone} onChange={set("phone")} type="tel" style={{ width:"100%", padding:"8px 10px", borderRadius:8, border:`1px solid ${C.border}`, fontSize:14, boxSizing:"border-box", outline:"none", background:C.bg }}/>
+              </div>
+              <div>
+                <label style={{ fontSize:12, color:C.textMuted, fontWeight:600, display:"block", marginBottom:4 }}>Date de naissance</label>
+                <input value={form.birth_date} onChange={set("birth_date")} type="date" style={{ width:"100%", padding:"8px 10px", borderRadius:8, border:`1px solid ${C.border}`, fontSize:14, boxSizing:"border-box", outline:"none", background:C.bg }}/>
+              </div>
+              <div>
+                <label style={{ fontSize:12, color:C.textMuted, fontWeight:600, display:"block", marginBottom:4 }}>Adresse</label>
+                <input value={form.address} onChange={set("address")} style={{ width:"100%", padding:"8px 10px", borderRadius:8, border:`1px solid ${C.border}`, fontSize:14, boxSizing:"border-box", outline:"none", background:C.bg }}/>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 2fr", gap:10 }}>
+                <div>
+                  <label style={{ fontSize:12, color:C.textMuted, fontWeight:600, display:"block", marginBottom:4 }}>Code postal</label>
+                  <input value={form.postal_code} onChange={set("postal_code")} style={{ width:"100%", padding:"8px 10px", borderRadius:8, border:`1px solid ${C.border}`, fontSize:14, boxSizing:"border-box", outline:"none", background:C.bg }}/>
+                </div>
+                <div>
+                  <label style={{ fontSize:12, color:C.textMuted, fontWeight:600, display:"block", marginBottom:4 }}>Ville</label>
+                  <input value={form.city} onChange={set("city")} style={{ width:"100%", padding:"8px 10px", borderRadius:8, border:`1px solid ${C.border}`, fontSize:14, boxSizing:"border-box", outline:"none", background:C.bg }}/>
+                </div>
+              </div>
+              <div style={{ padding:"8px 12px", background:C.bg, borderRadius:8, fontSize:12, color:C.textMuted }}>
+                🔒 L'adresse email ne peut pas être modifiée
+              </div>
+            </div>
+          )}
         </Card>
       </div>
     );
@@ -784,7 +905,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
       `}</style>
 
       {toast && (
-        <div style={{ position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)", zIndex:600, display:"flex", alignItems:"center", gap:8, padding:"11px 20px", borderRadius:12, background:toast.ok?C.ok:C.warn, color:"white", fontSize:14, fontWeight:600, boxShadow:"0 4px 20px rgba(0,0,0,.2)", whiteSpace:"nowrap", animation:"toastIn .2s ease-out", pointerEvents:"none" }}>
+        <div style={{ position:"fixed", bottom: isMobile ? 78 : 24, left:"50%", transform:"translateX(-50%)", zIndex:600, display:"flex", alignItems:"center", gap:8, padding:"11px 20px", borderRadius:12, background:toast.ok?C.ok:C.warn, color:"white", fontSize:14, fontWeight:600, boxShadow:"0 4px 20px rgba(0,0,0,.2)", whiteSpace:"nowrap", animation:"toastIn .2s ease-out", pointerEvents:"none" }}>
           <style>{`@keyframes toastIn { from { opacity:0; transform:translateX(-50%) translateY(10px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`}</style>
           {toast.ok ? <IcoCheck s={16} c="white"/> : <IcoAlert2 s={16} c="white"/>}{toast.msg}
         </div>
@@ -881,25 +1002,28 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
           </div>
         )}
         <div style={{ flex:1, overflowY:"auto" }}>
+          <div style={{ paddingBottom: isMobile ? 62 : 0 }}>
           {page === "planning" && <AdhPlanning/>}
           {page === "account"  && <AdhAccountRefreshed/>}
           {page === "history"  && <AdhHistory/>}
           {page === "purchases" && <AdhPurchases/>}
           {page === "payment"  && <AdhPayment/>}
+          </div>
         </div>
       </div>
 
       {/* Bottom nav mobile */}
       {isMobile && (
-        <nav style={{ position:"fixed", bottom:0, left:0, right:0, background:C.surface, borderTop:`1.5px solid ${C.border}`, display:"flex", zIndex:200, height:58 }}>
+        <nav style={{ position:"fixed", bottom:0, left:0, right:0, background:C.surface, borderTop:`1px solid ${C.border}`, display:"flex", zIndex:400, height:62, boxShadow:"0 -2px 16px rgba(42,31,20,.07)" }}>
           {ADH_MOBILE_NAV.map(item=>{
             const isA = page===item.key;
             const Ico = item.icon;
             return (
               <button key={item.key} onClick={()=>setPage(item.key)}
-                style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, border:"none", background:"none", cursor:"pointer", color:isA?C.accent:C.textMuted, fontSize:10, fontWeight:isA?700:500, padding:"6px 0" }}>
-                <Ico s={20} c={isA?C.accent:C.textMuted}/>
-                {item.label}
+                style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:2, border:"none", background:"none", cursor:"pointer", color:isA?C.accent:C.textMuted, fontSize:12, fontWeight:isA?700:400, transition:"color .15s", padding:"6px 0 4px", position:"relative" }}>
+                {isA && <div style={{ position:"absolute", top:0, left:"50%", transform:"translateX(-50%)", width:20, height:2, background:C.accent, borderRadius:"0 0 2px 2px" }}/>}
+                <Ico s={22} c={isA?C.accent:C.textMuted}/>
+                <span>{item.label}</span>
               </button>
             );
           })}

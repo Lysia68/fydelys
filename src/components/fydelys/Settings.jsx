@@ -911,8 +911,7 @@ function Settings({ isMobile, onImpersonate }) {
                       </span>
                     )}
                   </div>
-                </div>
-                <div style={{ display:"flex", gap:6, flexWrap:"wrap", justifyContent:"flex-end" }}>
+                  <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:8 }}>
                   {/* Se connecter en tant que */}
                   {isAdmin && (u.role === "coach" || u.role === "adherent") && (
                     <button onClick={()=>handleImpersonate(u.role, u.id, `${u.fn||''} ${u.ln||''}`.trim())}
