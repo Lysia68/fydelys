@@ -141,8 +141,13 @@ export function PlanningAccordion({ sess, sessId, bookings, onChangeStatus, onAd
   }
 
   if (!bl.length) return (
-    <div style={{ padding:"20px", textAlign:"center", color:C.textMuted, fontSize:15, borderTop:`1px solid ${C.borderSoft}`, background:"#FDFAF7" }}>
-      Aucune réservation pour cette séance
+    <div style={{ borderTop:`1px solid ${C.borderSoft}`, background:"#FDFAF7" }}>
+      <div style={{ padding:"20px", textAlign:"center", color:C.textMuted, fontSize:15 }}>
+        Aucune réservation pour cette séance
+      </div>
+      <div style={{ padding:"8px 13px 10px", display:"flex", justifyContent:"center" }}>
+        <button onClick={()=>onAddBooking&&onAddBooking(sessId)} style={{ display:"flex",alignItems:"center",gap:6, fontSize:12, padding:"5px 12px", borderRadius:8, fontWeight:600, border:`1px solid #DFC0A0`, color:C.accentDark, background:C.accentBg, cursor:"pointer" }}><IcoUserPlus2 s={14} c={C.accentDark}/>Inscrire un adhérent</button>
+      </div>
     </div>
   );
 
