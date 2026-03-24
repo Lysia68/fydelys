@@ -27,6 +27,14 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
   const [myBookings, setMyBookings] = useState([]); // ids de sessions réservées
   const [history, setHistory] = useState([]);   // bookings passés
   const [loading, setLoading] = useState(true);
+  // Planning states — hissés ici pour éviter remontage à chaque render
+  const [sessions, setSessions] = useState([]);
+  const [loadingSess, setLoadingSess] = useState(true);
+  const [cancelDelayH, setCancelDelayH] = useState(2);
+  // Account states — hissés ici pour éviter le remontage à chaque render
+  const [accountEditing, setAccountEditing] = React.useState(false);
+  const [accountSaving, setAccountSaving] = React.useState(false);
+  const [accountForm, setAccountForm] = React.useState(null);
 
 
   useEffect(() => {
@@ -99,75 +107,69 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
     });
   }, [studioId]);
 
+  // ── Planning useEffects (hissés hors de AdhPlanning pour éviter le remontage) ─
+  useEffect(() => {
+    if (!studioId) return;
+    createClient().from("studios")
+      .select("cancel_delay_hours").eq("id", studioId).single()
+      .then(({ data }) => { if (data?.cancel_delay_hours != null) setCancelDelayH(data.cancel_delay_hours); });
+  }, [studioId]);
+
+  useEffect(() => {
+    if (!studioId) return;
+    setLoadingSess(true);
+    const sb = createClient();
+    const today = new Date().toISOString().split("T")[0];
+    const d30 = new Date(); d30.setDate(d30.getDate() + 30);
+    const toDate = d30.toISOString().slice(0,10);
+    sb.from("sessions")
+      .select("id, discipline_id, teacher, room, level, session_date, session_time, duration_min, spots, status, disciplines(name,color,icon)")
+      .eq("studio_id", studioId)
+      .in("status", ["scheduled", "cancelled"])
+      .gte("session_date", today)
+      .lte("session_date", toDate)
+      .order("session_date").order("session_time")
+      .limit(60)
+      .then(({ data, error }) => {
+        if (error || !data?.length) { setSessions([]); setLoadingSess(false); return; }
+        const sessionIds = data.map(s=>s.id);
+        sb.from("bookings")
+          .select("session_id")
+          .in("session_id", sessionIds)
+          .in("status", ["confirmed","waitlist"])
+          .then(({ data: bk }) => {
+            const counts = {};
+            (bk||[]).forEach(b => { counts[b.session_id] = (counts[b.session_id]||0)+1; });
+            setSessions(data.map(s => ({
+              ...s,
+              discName: s.disciplines?.name || "",
+              discColor: s.disciplines?.color || C.accent,
+              discIcon: s.disciplines?.icon || "",
+              booked: counts[s.id] || 0,
+              date: s.session_date,
+              time: s.session_time?.slice(0,5) || "",
+            })));
+            setLoadingSess(false);
+          })
+          .catch(() => { setSessions([]); setLoadingSess(false); });
+      })
+      .catch(() => { setSessions([]); setLoadingSess(false); });
+  }, [studioId]);
+
+  useEffect(() => {
+    if (!me?.id) return;
+    createClient().from("bookings")
+      .select("session_id, status")
+      .eq("member_id", me.id)
+      .in("status", ["confirmed","waitlist"])
+      .then(({ data }) => { if (data) setMyBookings(data.map(b => b.session_id)); })
+      .catch(() => {});
+  }, [me?.id]);
+
   // ── Planning Adhérent ───────────────────────────────────────────────────────
   function AdhPlanning() {
-    const [sessions, setSessions] = useState([]);
     const [filterDisc, setFilterDisc] = useState(0);
     const [confirmSess, setConfirmSess] = useState(null);
-    const [loadingSess, setLoadingSess] = useState(true);
-    const [cancelDelayH, setCancelDelayH] = useState(2); // délai annulation en heures
-
-    useEffect(() => {
-      if (!studioId) return;
-      // Charger le délai d'annulation du studio
-      createClient().from("studios")
-        .select("cancel_delay_hours").eq("id", studioId).single()
-        .then(({ data }) => { if (data?.cancel_delay_hours != null) setCancelDelayH(data.cancel_delay_hours); });
-    }, [studioId]);
-
-    useEffect(() => {
-      if (!studioId) return;
-      const sb = createClient();
-      const today = new Date().toISOString().split("T")[0];
-      const d30 = new Date(); d30.setDate(d30.getDate() + 30);
-      const toDate = d30.toISOString().slice(0,10);
-
-      // Charger sessions
-      sb.from("sessions")
-        .select("id, discipline_id, teacher, room, level, session_date, session_time, duration_min, spots, status, disciplines(name,color,icon)")
-        .eq("studio_id", studioId)
-        .in("status", ["scheduled", "cancelled"])
-        .gte("session_date", today)
-        .lte("session_date", toDate)
-        .order("session_date").order("session_time")
-        .limit(60)
-        .then(({ data, error }) => {
-          if (error || !data?.length) { setSessions([]); setLoadingSess(false); return; }
-          const sessionIds = data.map(s=>s.id);
-          // Compter les bookings par session
-          sb.from("bookings")
-            .select("session_id")
-            .in("session_id", sessionIds)
-            .in("status", ["confirmed","waitlist"])
-            .then(({ data: bk }) => {
-              const counts = {};
-              (bk||[]).forEach(b => { counts[b.session_id] = (counts[b.session_id]||0)+1; });
-              setSessions(data.map(s => ({
-                ...s,
-                discName: s.disciplines?.name || "",
-                discColor: s.disciplines?.color || C.accent,
-                discIcon: s.disciplines?.icon || "",
-                booked: counts[s.id] || 0,
-                date: s.session_date,
-                time: s.session_time?.slice(0,5) || "",
-              })));
-              setLoadingSess(false);
-            })
-            .catch(() => { setSessions([]); setLoadingSess(false); });
-        })
-        .catch(() => { setSessions([]); setLoadingSess(false); });
-    }, [studioId]);
-
-    // Charger mes réservations séparément quand me.id est disponible
-    useEffect(() => {
-      if (!me?.id) return;
-      createClient().from("bookings")
-        .select("session_id, status")
-        .eq("member_id", me.id)
-        .in("status", ["confirmed","waitlist"])
-        .then(({ data }) => { if (data) setMyBookings(data.map(b => b.session_id)); })
-        .catch(() => {});
-    }, [me?.id]);
 
     const grouped = sessions
       .filter(s => !filterDisc || s.discipline_id === filterDisc)
@@ -442,12 +444,15 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
 
   function AdhAccount() {
     const initials = me ? `${me.first_name?.[0]||""}${me.last_name?.[0]||""}`.toUpperCase() : "?";
-    const [editing, setEditing] = React.useState(false);
-    const [saving, setSaving]   = React.useState(false);
-    const [form, setForm]       = React.useState(null);
+    const editing = accountEditing;
+    const setEditing = setAccountEditing;
+    const saving = accountSaving;
+    const setSaving = setAccountSaving;
+    const form = accountForm;
+    const setForm = setAccountForm;
 
     React.useEffect(() => {
-      if (me) setForm({
+      if (me && !accountForm) setForm({
         first_name:  me.first_name  || "",
         last_name:   me.last_name   || "",
         phone:       me.phone       || "",
@@ -494,7 +499,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
       </div>
     );
     return (
-      <div style={{ padding:p, maxWidth:600 }}>
+      <div style={{ padding:p, maxWidth:600, width:"100%", boxSizing:"border-box" }}>
         {/* Header profil */}
         <Card style={{ marginBottom:16 }}>
           <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:16 }}>
@@ -550,9 +555,9 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
                 { l:"Ville",            v:me?.city },
                 { l:"Email",            v:me?.email, locked:true },
               ].filter(f=>f.v).map(f=>(
-                <div key={f.l} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 0", borderBottom:`1px solid ${C.border}` }}>
-                  <span style={{ fontSize:13, color:C.textMuted, minWidth:120 }}>{f.l}</span>
-                  <span style={{ fontSize:14, fontWeight:600, color:C.text, textAlign:"right", display:"flex", alignItems:"center", gap:6 }}>
+                <div key={f.l} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 0", borderBottom:`1px solid ${C.border}`, gap:8 }}>
+                  <span style={{ fontSize:13, color:C.textMuted, flexShrink:0, minWidth:90 }}>{f.l}</span>
+                  <span style={{ fontSize:14, fontWeight:600, color:C.text, textAlign:"right", display:"flex", alignItems:"center", gap:6, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>
                     {f.v}
                     {f.locked && <span style={{ fontSize:10, color:C.textMuted, fontWeight:400 }}>🔒</span>}
                   </span>
