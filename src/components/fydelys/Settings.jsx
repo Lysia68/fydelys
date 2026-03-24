@@ -945,6 +945,7 @@ function Settings({ isMobile, onImpersonate }) {
                     )
                   )}
                 </div>
+                </div>
               </div>
             </div>
           ))}
