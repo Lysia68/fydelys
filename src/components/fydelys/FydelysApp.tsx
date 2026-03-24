@@ -228,7 +228,7 @@ const PAGE_TITLES = {
           </button>
         </div>
       )}
-      <div style={{ display:"flex", minHeight:"100vh", background:C.bg, marginTop: isImpersonatingAdmin ? 38 : 0 }}>
+      <div style={{ display:"flex", minHeight:"100vh", background:C.bg, marginTop: isImpersonatingAdmin ? 38 : 0, overflowX:"hidden" }}>
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
           * { box-sizing:border-box; font-family:-apple-system,'Inter',sans-serif; }
@@ -267,7 +267,7 @@ const PAGE_TITLES = {
               {PAGE_TITLES[page]}
             </div>
           )}
-          <div style={{ flex:1, overflowY:"auto" }}>
+          <div style={{ flex:1, overflowY:"auto", overflowX:"hidden" }}>
             {page === "settings"
               ? <Settings isMobile={isMobile} onImpersonate={startImpersonate}/>
               : <Page isMobile={isMobile}/>

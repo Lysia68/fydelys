@@ -538,6 +538,8 @@ function Planning({ isMobile }) {
         const { data: bkData } = await sb.from("bookings")
           .select("id, session_id, member_id, status, attended, members(id, first_name, last_name, email, phone, credits, credits_total, subscription_id, subscriptions(period))")
           .in("session_id", mapped.map(s => s.id));
+        // Après chargement des bookings, filtrer les séances passées sans présences à valider
+        const now = new Date();
         const map = {};
         (bkData || []).forEach(b => {
           if (!map[b.session_id]) map[b.session_id] = [];
@@ -550,11 +552,21 @@ function Planning({ isMobile }) {
           });
         });
         setBookings(map);
-        setSessions(mapped.map(s => ({
+        const sessionsWithCounts = mapped.map(s => ({
           ...s,
           booked:   (map[s.id] || []).filter(b => b.st === "confirmed").length,
           waitlist: (map[s.id] || []).filter(b => b.st === "waitlist").length,
-        })));
+        }));
+        // Garder séances futures + séances passées avec présences non validées
+        const filtered = sessionsWithCounts.filter(s => {
+          const [sy,sm,sd] = s.date.split("-").map(Number);
+          const [sh,smi]   = s.time.split(":").map(Number);
+          const sessEnd = new Date(sy, sm-1, sd, sh+Math.ceil(s.duration/60), smi);
+          if (sessEnd > now) return true; // future ou en cours
+          const pending = (map[s.id] || []).some(b => b.st === "confirmed" && b.attended === null);
+          return pending; // passée mais présences à valider
+        });
+        setSessions(filtered);
         setDbLoading(false);
       });
   }, [studioId]);
