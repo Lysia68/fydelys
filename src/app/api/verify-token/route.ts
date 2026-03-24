@@ -59,7 +59,6 @@ export async function POST(request: NextRequest) {
             trial_ends_at: trialEnd.toISOString().slice(0, 10),
             plan_started_at: new Date().toISOString(),
             plan_slug: "essentiel",
-            payment_mode: "none",
           }).select().single()
 
           if (studioErr) {

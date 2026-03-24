@@ -305,7 +305,6 @@ export async function GET(request: NextRequest) {
         trial_ends_at: trialEnd.toISOString().slice(0, 10),
         plan_started_at: new Date().toISOString(),
         plan_slug: r.plan?.toLowerCase() || "essentiel",
-        payment_mode: "none",
       }).select().single()
       console.log("[auth/callback] Studio insert:", studioErr ? studioErr.message : studio?.id)
       if (studioErr) console.error("Studio insert error:", JSON.stringify(studioErr))
