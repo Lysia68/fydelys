@@ -12,7 +12,7 @@ import { OnboardingView } from "./OnboardingView";
 // ── DatePicker custom — 3 selects stylés ───────────────────────────────────
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 
-function DatePicker({ value, onChange }) {
+const DatePicker = React.memo(function DatePicker({ value, onChange }) {
   const parts = value ? value.split("-") : ["", "", ""];
   const year  = parts[0] || "";
   const month = parts[1] || "";
@@ -56,10 +56,10 @@ function DatePicker({ value, onChange }) {
       </select>
     </div>
   );
-}
+});
 
 // ── AdhAccountPanel — composant standalone (hors AdherentView pour éviter remontage) ──
-const AdhAccountPanel = React.memo(function AdhAccountPanel({ me, loading, history, p, editing, setEditing, saving, form, setForm, set, save }) {
+const AdhAccountPanel = React.memo(function AdhAccountPanel({ me, loading, history, p, editing, setEditing, saving, form, setForm, setFirst, setLast, setPhone, setBirth, setAddress, setPostal, setCity, save }) {
   const initials = me ? `${me.first_name?.[0]||""}${me.last_name?.[0]||""}`.toUpperCase() : "?";
 
   if (loading) return <div style={{ padding:p, color:C.textMuted, fontSize:14 }}>Chargement…</div>;
@@ -75,15 +75,7 @@ const AdhAccountPanel = React.memo(function AdhAccountPanel({ me, loading, histo
     </div>
   );
 
-  const inp = (k, type="text", placeholder="") => (
-    <input
-      value={form?.[k]||""}
-      onChange={e => set(k)(e)}
-      type={type}
-      placeholder={placeholder}
-      style={{ width:"100%", padding:"9px 12px", borderRadius:9, border:`1.5px solid ${C.border}`, fontSize:14, boxSizing:"border-box", outline:"none", background:"#FDFAF7", color:C.text, fontFamily:"inherit", WebkitAppearance:"none" }}
-    />
-  );
+  const inpStyle = { width:"100%", padding:"9px 12px", borderRadius:9, border:`1.5px solid ${C.border}`, fontSize:14, boxSizing:"border-box", outline:"none", background:"#FDFAF7", color:C.text, fontFamily:"inherit", WebkitAppearance:"none" };
 
   return (
     <div style={{ padding:p, maxWidth:600, width:"100%", boxSizing:"border-box" }}>
@@ -153,33 +145,33 @@ const AdhAccountPanel = React.memo(function AdhAccountPanel({ me, loading, histo
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
               <div>
                 <label style={{ fontSize:12, color:C.textMuted, fontWeight:600, display:"block", marginBottom:5 }}>Prénom</label>
-                {inp("first_name")}
+                <input value={form?.first_name||""} onChange={setFirst} style={inpStyle}/>
               </div>
               <div>
                 <label style={{ fontSize:12, color:C.textMuted, fontWeight:600, display:"block", marginBottom:5 }}>Nom</label>
-                {inp("last_name")}
+                <input value={form?.last_name||""} onChange={setLast} style={inpStyle}/>
               </div>
             </div>
             <div>
               <label style={{ fontSize:12, color:C.textMuted, fontWeight:600, display:"block", marginBottom:5 }}>Téléphone</label>
-              {inp("phone", "tel", "06 12 34 56 78")}
+              <input value={form?.phone||""} onChange={setPhone} type="tel" placeholder="06 12 34 56 78" style={inpStyle}/>
             </div>
             <div>
               <label style={{ fontSize:12, color:C.textMuted, fontWeight:600, display:"block", marginBottom:5 }}>Date de naissance</label>
-              <DatePicker value={form.birth_date||""} onChange={e => set("birth_date")(e)} />
+              <DatePicker value={form?.birth_date||""} onChange={setBirth} />
             </div>
             <div>
               <label style={{ fontSize:12, color:C.textMuted, fontWeight:600, display:"block", marginBottom:5 }}>Adresse</label>
-              {inp("address", "text", "5 rue des lilas")}
+              <input value={form?.address||""} onChange={setAddress} placeholder="5 rue des lilas" style={inpStyle}/>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 2fr", gap:10 }}>
               <div>
                 <label style={{ fontSize:12, color:C.textMuted, fontWeight:600, display:"block", marginBottom:5 }}>Code postal</label>
-                {inp("postal_code", "text", "75001")}
+                <input value={form?.postal_code||""} onChange={setPostal} placeholder="75001" style={inpStyle}/>
               </div>
               <div>
                 <label style={{ fontSize:12, color:C.textMuted, fontWeight:600, display:"block", marginBottom:5 }}>Ville</label>
-                {inp("city", "text", "Paris")}
+                <input value={form?.city||""} onChange={setCity} placeholder="Paris" style={inpStyle}/>
               </div>
             </div>
             <div style={{ padding:"8px 12px", background:C.bg, borderRadius:8, fontSize:12, color:C.textMuted }}>
@@ -234,7 +226,15 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
     }
   }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const accountSetField = React.useCallback(k => e => setAccountForm(f => ({ ...f, [k]: e.target.value })), []);
+  // Handlers stables par champ — évitent la perte de focus
+  const accountSetFirst     = React.useCallback(e => setAccountForm(f => ({ ...f, first_name:  e.target.value })), []);
+  const accountSetLast      = React.useCallback(e => setAccountForm(f => ({ ...f, last_name:   e.target.value })), []);
+  const accountSetPhone     = React.useCallback(e => setAccountForm(f => ({ ...f, phone:       e.target.value })), []);
+  const accountSetBirth     = React.useCallback(e => setAccountForm(f => ({ ...f, birth_date:  e.target.value })), []);
+  const accountSetAddress   = React.useCallback(e => setAccountForm(f => ({ ...f, address:     e.target.value })), []);
+  const accountSetPostal    = React.useCallback(e => setAccountForm(f => ({ ...f, postal_code: e.target.value })), []);
+  const accountSetCity      = React.useCallback(e => setAccountForm(f => ({ ...f, city:        e.target.value })), []);
+  const accountSetField = null; // gardé pour compatibilité
 
   const accountSave = React.useCallback(async () => {
     setAccountSaving(true);
@@ -1083,7 +1083,11 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
               editing={accountEditing} setEditing={setAccountEditing}
               saving={accountSaving}
               form={accountForm} setForm={setAccountForm}
-              set={accountSetField} save={accountSave}
+              setFirst={accountSetFirst} setLast={accountSetLast}
+              setPhone={accountSetPhone} setBirth={accountSetBirth}
+              setAddress={accountSetAddress} setPostal={accountSetPostal}
+              setCity={accountSetCity}
+              save={accountSave}
             />}
           {page === "history"  && <AdhHistory/>}
           {page === "purchases" && <AdhPurchases/>}
