@@ -64,6 +64,10 @@ export async function middleware(request: NextRequest) {
     if (typeParam) callbackUrl.searchParams.set("type", typeParam)
     const registerParam = searchParams.get("register")
     if (registerParam) callbackUrl.searchParams.set("register", registerParam)
+    const slugParam = searchParams.get("slug")
+    if (slugParam) callbackUrl.searchParams.set("slug", slugParam)
+    const tenantParam = searchParams.get("tenant")
+    if (tenantParam) callbackUrl.searchParams.set("tenant", tenantParam)
     return NextResponse.redirect(callbackUrl)
   }
 

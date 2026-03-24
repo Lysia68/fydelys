@@ -11,9 +11,6 @@ export async function GET(request: NextRequest) {
   const next         = searchParams.get("next") ?? "/dashboard"
   const isRegister   = searchParams.get("register") === "1"
   const registerSlug = searchParams.get("slug") || null
-  const urlShort = request.url.replace(/token_hash=[^&]+/, "token_hash=***")
-  console.log("[CB]", urlShort.slice(0, 200))
-  console.log("[CB] reg:", isRegister, "slug:", registerSlug, "tenant:", tenantSlug, "hash:", !!tokenHash, "code:", !!code)
   const hostname     = request.headers.get("host") || ""
 
   const isApp        = hostname === "fydelys.fr" || hostname.includes("localhost")
@@ -24,6 +21,10 @@ export async function GET(request: NextRequest) {
 
   const tokenHash    = searchParams.get("token_hash")
   const type         = searchParams.get("type")
+
+  const urlShort = request.url.replace(/token_hash=[^&]+/, "token_hash=***")
+  console.log("[CB]", urlShort.slice(0, 200))
+  console.log("[CB] reg:", isRegister, "slug:", registerSlug, "tenant:", tenantSlug, "hash:", !!tokenHash, "code:", !!code)
 
   // ── Cas 1 : ni code ni token_hash → page de confirmation ─────────────────
   if (!code && !tokenHash) {

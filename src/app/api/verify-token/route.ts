@@ -5,7 +5,7 @@ import { createServiceSupabase } from "@/lib/supabase-server"
 export const dynamic = "force-dynamic"
 
 export async function POST(request: NextRequest) {
-  const { tokenHash, type, tenantSlug, accessToken, refreshToken } = await request.json()
+  const { tokenHash, type, tenantSlug, accessToken, refreshToken, isRegister, registerSlug } = await request.json()
   if (!tokenHash && !accessToken) return NextResponse.json({ error: "token manquant" }, { status: 400 })
 
   const db = createServiceSupabase()

@@ -365,7 +365,7 @@ export default function LoginPage() {
     const {error}=await supabase.auth.signInWithOtp({
       email: reg.email,
       options:{
-        emailRedirectTo:`https://fydelys.fr/auth/callback?next=/dashboard&register=1`,
+        emailRedirectTo:`https://fydelys.fr/auth/callback?next=/dashboard&register=1&slug=${encodeURIComponent(reg.slug)}`,
         shouldCreateUser: true,
         data:{ first_name: reg.firstName, last_name: reg.lastName },
       }
