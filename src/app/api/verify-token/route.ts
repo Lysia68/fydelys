@@ -38,8 +38,58 @@ export async function POST(request: NextRequest) {
   if (!slug && user.email) {
     const { data: pending } = await db.from("pending_registrations").select("data").eq("email", user.email).maybeSingle()
     if (pending?.data) {
-      slug = (pending.data as any).slug || null
+      const r = pending.data as any
+      slug = r.slug || null
       console.log("[verify-token] slug from pending_registrations:", slug)
+
+      // Créer le studio si pas encore créé
+      if (slug) {
+        const { data: existingStudio } = await db.from("studios").select("id,slug").eq("slug", slug).maybeSingle()
+        if (!existingStudio) {
+          const trialEnd = new Date(); trialEnd.setDate(trialEnd.getDate() + 30)
+          const { data: studio, error: studioErr } = await db.from("studios").insert({
+            name: r.studioName, slug: r.slug, city: r.city,
+            postal_code: r.zip || null, address: r.address || null,
+            email: user.email, phone: r.phone || null, status: "actif",
+            billing_status: "trialing",
+            trial_ends_at: trialEnd.toISOString().slice(0, 10),
+            plan_started_at: new Date().toISOString(),
+            plan_slug: "essentiel",
+            payment_mode: "none",
+          }).select().single()
+
+          if (studioErr) {
+            console.error("[verify-token] Studio insert error:", studioErr.message)
+          } else if (studio) {
+            console.log("[verify-token] Studio créé:", studio.slug)
+            // Créer le profil admin
+            await db.from("profiles").upsert({
+              id: user.id, role: "admin", studio_id: studio.id,
+              first_name: r.firstName || "", last_name: r.lastName || "",
+              is_coach: r.isCoach || false,
+            }, { onConflict: "id" })
+            // Seed disciplines
+            await db.rpc("seed_new_tenant", { p_studio_id: studio.id, p_type: r.type || "Multi" })
+              .then(({ error: seedErr }) => {
+                if (seedErr) console.error("[verify-token] Seed error:", seedErr.message)
+                else console.log("[verify-token] Seed OK")
+              })
+            // Nettoyer pending_registrations
+            await db.from("pending_registrations").delete().eq("email", user.email)
+          }
+        } else {
+          console.log("[verify-token] Studio déjà existant:", existingStudio.slug)
+          // Vérifier que le profil existe
+          const { data: prof } = await db.from("profiles").select("id").eq("id", user.id).maybeSingle()
+          if (!prof) {
+            await db.from("profiles").upsert({
+              id: user.id, role: "admin", studio_id: existingStudio.id,
+              first_name: r.firstName || "", last_name: r.lastName || "",
+            }, { onConflict: "id" })
+          }
+          await db.from("pending_registrations").delete().eq("email", user.email)
+        }
+      }
     }
   }
 
@@ -97,6 +147,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  console.log("[verify-token] returning slug:", slug, "| profile_complete:", profileComplete)
   const res = NextResponse.json({ ok: true, slug, profile_complete: profileComplete })
   // Poser les cookies avec domain .fydelys.fr
   cookiesToSet.forEach(({ name, value, options }) => {
