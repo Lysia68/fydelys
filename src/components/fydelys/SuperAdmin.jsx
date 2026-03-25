@@ -53,8 +53,8 @@ const validateSlug = (s) => /^[a-z0-9]+$/.test(s);
 
 function TenantFormModal({ editing, setModal, showToast, setTenants, createClient, FYDELYS_PLANS }) {
   const emptyF = editing
-    ? { name:editing.name, slug:editing.slug||"", email:editing.email||"", firstName:editing.firstName||"", lastName:editing.lastName||"", phone:editing.phone||"", city:editing.city||"", zip:editing.zip||"", address:editing.address||"", plan:editing.plan||"Essentiel", type:editing.type||"Yoga", notes:editing.notes||"", isCoach:editing.isCoach||false, paymentMode:editing.paymentMode||"none" }
-    : { name:"", slug:"", email:"", firstName:"", lastName:"", phone:"", city:"", zip:"", address:"", plan:"Essentiel", type:"Yoga", notes:"", isCoach:false, paymentMode:"none" };
+    ? { name:editing.name, slug:editing.slug||"", email:editing.email||"", firstName:editing.firstName||"", lastName:editing.lastName||"", phone:editing.phone||"", city:editing.city||"", zip:editing.zip||"", address:editing.address||"", plan:editing.plan||"essentiel", type:editing.type||"Yoga", notes:editing.notes||"", isCoach:editing.isCoach||false, paymentMode:editing.paymentMode||"none" }
+    : { name:"", slug:"", email:"", firstName:"", lastName:"", phone:"", city:"", zip:"", address:"", plan:"essentiel", type:"Yoga", notes:"", isCoach:false, paymentMode:"none" };
   const [f, setF] = useState(emptyF);
   const [step, setStep] = useState(1);
   const [errors, setErrors] = useState({});
@@ -108,6 +108,7 @@ function TenantFormModal({ editing, setModal, showToast, setTenants, createClien
             phone: f.phone || null, email: f.email, notes: f.notes || null,
             payment_mode: f.paymentMode || "none",
             stripe_connect_enabled: f.paymentMode === "connect",
+            plan_slug: f.plan || "essentiel",
           },
           profile: {
             first_name: f.firstName, last_name: f.lastName,
@@ -123,6 +124,7 @@ function TenantFormModal({ editing, setModal, showToast, setTenants, createClien
         email:f.email, phone:f.phone, notes:f.notes,
         contact:`${f.firstName} ${f.lastName}`.trim(),
         firstName:f.firstName, lastName:f.lastName, isCoach:f.isCoach,
+        paymentMode: f.paymentMode, plan: f.plan,
       } : t));
       showToast(`✅ "${f.name}" mis à jour`);
     } else {
@@ -207,7 +209,7 @@ function TenantFormModal({ editing, setModal, showToast, setTenants, createClien
                 {v:"Fitness",l:"🏋 Fitness"},{v:"Méditation",l:"☯ Méditation"},{v:"Multi",l:"🌀 Multi-disciplines"}
               ]}/>
               <SelectSA label="Plan Fydelys" k="plan" value={f.plan} onChange={upd} opts={[
-                ...FYDELYS_PLANS.map(p=>({v:p.name,l:`${p.name} — ${p.price} €/mois`}))
+                ...FYDELYS_PLANS.map(p=>({v:p.id,l:`${p.name} — ${p.price} €/mois`}))
               ]}/>
             </div>
           </div>
@@ -253,7 +255,7 @@ function TenantFormModal({ editing, setModal, showToast, setTenants, createClien
                 ["Ville",        f.city],
                 ["Code postal",  f.zip],
                 ["Type",         f.type],
-                ["Plan",         f.plan],
+                ["Plan",         (FYDELYS_PLANS.find(p=>p.id===f.plan)||{}).name || f.plan],
                 ["Gérant",       `${f.firstName} ${f.lastName}`],
                 ["Email",        f.email],
                 ["Téléphone",    f.phone],
