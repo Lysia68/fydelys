@@ -441,15 +441,17 @@ export default function LoginPage() {
 
       <div style={{width:"100%",maxWidth:ctx==="superadmin"&&tab==="register"?500:400,position:"relative"}}>
 
-        {/* Logo */}
+        {/* Logo — masqué sur sous-domaine tenant */}
         <div style={{textAlign:"center",marginBottom:32}}>
-          <div style={{width:80,height:80,borderRadius:24,background:C.logo,display:"flex",alignItems:"center",
-            justifyContent:"center",margin:"0 auto 18px",
-            boxShadow:"0 4px 24px rgba(160,104,56,.16), inset 0 1px 0 rgba(255,255,255,.9), inset 0 -1px 0 rgba(160,104,56,.12)",
-            border:"1.5px solid rgba(210,180,140,.35)"}}>
-            <FleurDeLys size={50}/>
-          </div>
-          <h1 style={{fontSize:30,fontWeight:800,color:C.title,margin:"0 0 6px",letterSpacing:-0.8,lineHeight:1}}>
+          {ctx !== "tenant-login" && (
+            <div style={{width:80,height:80,borderRadius:24,background:C.logo,display:"flex",alignItems:"center",
+              justifyContent:"center",margin:"0 auto 18px",
+              boxShadow:"0 4px 24px rgba(160,104,56,.16), inset 0 1px 0 rgba(255,255,255,.9), inset 0 -1px 0 rgba(160,104,56,.12)",
+              border:"1.5px solid rgba(210,180,140,.35)"}}>
+              <FleurDeLys size={50}/>
+            </div>
+          )}
+          <h1 style={{fontSize:ctx === "tenant-login" && studioName ? 28 : 30,fontWeight:800,color:C.title,margin:"0 0 6px",letterSpacing:-0.8,lineHeight:1}}>
             {ctx === "tenant-login" && studioName
               ? studioName
               : <>Fyde<span style={{color:C.accent}}>lys</span></>
@@ -720,7 +722,12 @@ export default function LoginPage() {
           )}
         </div>
 
-        <p style={{textAlign:"center",color:C.footer,fontSize:11,marginTop:20}}>© 2026 Fydelys · Connexion 100% sécurisée</p>
+        <p style={{textAlign:"center",color:C.footer,fontSize:11,marginTop:20}}>
+          {ctx === "tenant-login"
+            ? <>Propulsé par <a href="https://fydelys.fr" target="_blank" rel="noopener noreferrer" style={{color:C.accent,textDecoration:"none",fontWeight:600}}>Fydelys.fr</a></>
+            : "© 2026 Fydelys · Connexion 100% sécurisée"
+          }
+        </p>
       </div>
     </div>
   )
