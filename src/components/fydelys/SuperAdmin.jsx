@@ -259,8 +259,7 @@ function TenantFormModal({ editing, setModal, showToast, setTenants, createClien
                 </div>
               ))}
             </div>
-            {/* Switch Stripe Connect — masqué pour le plan Essentiel */}
-            {f.plan?.toLowerCase() !== "essentiel" && (
+            {/* Switch Stripe Connect */}
             <div style={{padding:"14px 16px",background:"rgba(124,58,237,.04)",borderRadius:10,border:"1px solid rgba(124,58,237,.2)"}}>
               <div style={{fontSize:12,fontWeight:700,color:"#7C3AED",marginBottom:10,textTransform:"uppercase",letterSpacing:.5}}>⚡ Paiement en ligne</div>
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -280,7 +279,6 @@ function TenantFormModal({ editing, setModal, showToast, setTenants, createClien
                 ))}
               </div>
             </div>
-            )}
 
             {!editing&&(
               <div style={{padding:"12px 16px",background:"#FBF6EE",borderRadius:10,border:"1px solid rgba(160,104,56,.2)",fontSize:12,color:"#8C7B6C",lineHeight:1.6}}>
