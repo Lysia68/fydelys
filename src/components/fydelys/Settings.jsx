@@ -460,7 +460,7 @@ function Settings({ isMobile, onImpersonate }) {
     { key:"users",   label:"Utilisateurs", icon:<IcoTag2 s={14} c="currentColor"/> },
 
     { key:"rooms",    label:"Salles",       icon:<IcoDoor s={14} c="currentColor"/> },
-    ...(isAdmin ? [{ key:"payments", label:"Paiements", icon:<IcoEuro2 s={14} c="currentColor"/> }] : []),
+    ...(isAdmin && planName?.toLowerCase() !== "essentiel" ? [{ key:"payments", label:"Paiements", icon:<IcoEuro2 s={14} c="currentColor"/> }] : []),
     { key:"account",  label:"Mon compte",  icon:<IcoHome2 s={14} c="currentColor"/> },
   ].filter(Boolean);
 

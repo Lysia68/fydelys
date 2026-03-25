@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
       const accountData: any = {
         type: "express",
         country: "FR",
+        business_type: "individual",
         email: studio.email || undefined,
         capabilities: {
           card_payments: { requested: true },
