@@ -910,9 +910,14 @@ function Settings({ isMobile, onImpersonate }) {
                     <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:6, background:`${roleColor[u.role]||C.accent}18`, color:roleColor[u.role]||C.accent }}>
                       {roleLabel[u.role]||u.role}
                     </span>
-                    {u.confirmed === false && (
+                    {u.confirmed === false && !u.noAccount && (
                       <span style={{ fontSize:11, fontWeight:600, padding:"2px 8px", borderRadius:6, background:"#FFF3CD", color:"#856404" }}>
                         ⏳ En attente de confirmation
+                      </span>
+                    )}
+                    {u.noAccount && (
+                      <span style={{ fontSize:11, fontWeight:600, padding:"2px 8px", borderRadius:6, background:"#F0F0F0", color:"#8C7B6C" }}>
+                        📋 Sans compte (fiche uniquement)
                       </span>
                     )}
                   </div>
