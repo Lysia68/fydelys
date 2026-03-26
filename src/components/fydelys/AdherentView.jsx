@@ -20,7 +20,7 @@ function DatePicker({ value, onChange }) {
 
   // Sync depuis value externe (ex: reset)
   React.useEffect(() => {
-    const p = value ? value.split("-") : ["","",""];
+    const p = (typeof value === "string" && value) ? value.split("-") : ["","",""];
     setYear(p[0]||""); setMonth(p[1]||""); setDay(p[2]||"");
   }, [value]);
 
@@ -237,7 +237,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
   const accountSetFirst     = React.useCallback(e => setAccountForm(f => ({ ...f, first_name:  e.target.value })), []);
   const accountSetLast      = React.useCallback(e => setAccountForm(f => ({ ...f, last_name:   e.target.value })), []);
   const accountSetPhone     = React.useCallback(e => setAccountForm(f => ({ ...f, phone:       e.target.value })), []);
-  const accountSetBirth     = React.useCallback(v => setAccountForm(f => ({ ...f, birth_date:  v })), []);
+  const accountSetBirth     = React.useCallback(v => setAccountForm(f => ({ ...f, birth_date: typeof v === "string" ? v : v?.target?.value || "" })), []);
   const accountSetAddress   = React.useCallback(e => setAccountForm(f => ({ ...f, address:     e.target.value })), []);
   const accountSetPostal    = React.useCallback(e => setAccountForm(f => ({ ...f, postal_code: e.target.value })), []);
   const accountSetCity      = React.useCallback(e => setAccountForm(f => ({ ...f, city:        e.target.value })), []);
