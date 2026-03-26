@@ -587,7 +587,7 @@ function Planning({ isMobile }) {
     }
   }, [dbLoading]);
 
-  // Preview récurrence
+  // Preview récurrence — filtre les doublons avec les séances existantes
   useEffect(() => {
     if (!recMode || !recFrom || !recTo || recSlots.length === 0) { setRecPreview([]); return; }
     const from = new Date(recFrom); from.setHours(0, 0, 0, 0);
@@ -595,27 +595,32 @@ function Planning({ isMobile }) {
     const maxTo = new Date(from); maxTo.setMonth(maxTo.getMonth() + 3);
     const to = toRaw > maxTo ? maxTo : toRaw;
     if (from > to) { setRecPreview([]); return; }
+    // Index des séances existantes pour dédoublonner
+    const existingKeys = new Set(sessions.map(s => `${s.date}|${s.time}|${s.disciplineId}`));
     const generated = [];
     recSlots.forEach(slot => {
       const targetDay = DAY_NUM[slot.day];
       const cur = new Date(from);
       while (cur.getDay() !== targetDay) cur.setDate(cur.getDate() + 1);
       while (cur <= to) {
-        generated.push({
-          id: Date.now() + Math.random(),
-          disciplineId: slot.disciplineId,
-          teacher: slot.teacher || nS.teacher || "",
-          date: cur.toISOString().slice(0, 10),
-          time: slot.time, duration: slot.duration || 60,
-          spots: nS.spots || 12, level: nS.level || "Tous niveaux", room: nS.room || "Studio A",
-          booked: 0, waitlist: 0,
-        });
+        const date = cur.toISOString().slice(0, 10);
+        const key = `${date}|${slot.time}|${slot.disciplineId}`;
+        if (!existingKeys.has(key)) {
+          generated.push({
+            id: Date.now() + Math.random(),
+            disciplineId: slot.disciplineId,
+            teacher: slot.teacher || nS.teacher || "",
+            date, time: slot.time, duration: slot.duration || 60,
+            spots: nS.spots || 12, level: nS.level || "Tous niveaux", room: nS.room || "Studio A",
+            booked: 0, waitlist: 0,
+          });
+        }
         cur.setDate(cur.getDate() + 7);
       }
     });
     generated.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
     setRecPreview(generated);
-  }, [recMode, recFrom, recTo, recSlots, nS.teacher, nS.spots, nS.level, nS.room]);
+  }, [recMode, recFrom, recTo, recSlots, nS.teacher, nS.spots, nS.level, nS.room, sessions]);
 
   const filtered = filterDiscs.length
     ? sessions.filter(s => filterDiscs.includes(String(s.disciplineId)))
@@ -709,9 +714,6 @@ function Planning({ isMobile }) {
 
   const addRecurringSessions = async () => {
     if (!recPreview.length || !studioId) return;
-    setSessions(prev => [...prev, ...recPreview]);
-    setShowAdd(false); setRecMode(false);
-    setRecFrom(""); setRecTo(""); setRecSlots([]); setRecPreview([]);
     const rows = recPreview.map(s => ({
       studio_id: studioId, discipline_id: s.disciplineId || null,
       teacher: s.teacher || "", room: s.room || "Studio A", level: s.level || "Tous niveaux",
@@ -719,9 +721,19 @@ function Planning({ isMobile }) {
       duration_min: parseInt(s.duration) || 60, spots: parseInt(s.spots) || 12,
       status: "scheduled",
     }));
-    const { error } = await createClient().from("sessions").insert(rows);
-    if (error) console.error("insert recurring", error);
-    else if (isDemoData) { setSessions(recPreview); setIsDemoData(false); }
+    const { data: inserted, error } = await createClient().from("sessions").insert(rows).select("*");
+    if (error) { console.error("insert recurring", error); showPlanToast("Erreur lors de la création", false); return; }
+    // Ajouter les séances insérées (avec vrais IDs) à l'UI
+    const newSessions = (inserted || []).map(s => ({
+      id: s.id, disciplineId: s.discipline_id, teacher: s.teacher, room: s.room, level: s.level,
+      date: s.session_date, time: s.session_time, duration: s.duration_min, spots: s.spots,
+      status: s.status, booked: 0, waitlist: 0,
+    }));
+    if (isDemoData) { setSessions(newSessions); setIsDemoData(false); }
+    else setSessions(prev => [...prev, ...newSessions]);
+    setShowAdd(false); setRecMode(false);
+    setRecFrom(""); setRecTo(""); setRecSlots([]); setRecPreview([]);
+    showPlanToast(`${newSessions.length} séance${newSessions.length > 1 ? "s créées" : " créée"}`, true);
   };
 
   const handleChangeStatus = async (bid, sid, ns) => {
