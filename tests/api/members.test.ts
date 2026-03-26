@@ -102,22 +102,23 @@ describe("PATCH /api/members", () => {
   })
 
   it("creates member_payments when subscription is assigned", async () => {
-    // Current member (no subscription)
+    // Current member (no subscription) — 1st .single()
     mockDb._chain.single.mockResolvedValueOnce({
       data: { subscription_id: null, studio_id: "s1", first_name: "Test", last_name: "User" },
       error: null,
     })
-    // Update succeeds
-    mockDb._chain.eq.mockReturnValue(mockDb._chain)
-    mockDb._chain.update.mockReturnValue(mockDb._chain)
-    mockDb._chain.eq.mockResolvedValueOnce({ error: null })
-    // Subscription lookup
+    // Subscription lookup — 2nd .single()
     mockDb._chain.single.mockResolvedValueOnce({
       data: { name: "Mensuel illimité", price: 89, period: "mois", credits: null },
       error: null,
     })
+    // .eq() calls: 1st (member select) → chain, 2nd (update) → resolves, 3rd (sub select) → chain
+    mockDb._chain.eq
+      .mockReturnValueOnce(mockDb._chain)
+      .mockResolvedValueOnce({ error: null })
+      .mockReturnValueOnce(mockDb._chain)
     // Insert payment
-    mockDb._chain.insert.mockResolvedValueOnce({ error: null })
+    mockDb._chain.insert.mockReturnValueOnce({ error: null })
 
     const { PATCH } = await import("@/app/api/members/route")
     const req = createMockRequest("https://fydelys.fr/api/members", {
