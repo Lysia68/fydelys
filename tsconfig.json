@@ -26,7 +26,8 @@
         "./src/*"
       ]
     },
-    "checkJs": false
+    "checkJs": false,
+    "target": "ES2017"
   },
   "include": [
     "next-env.d.ts",
