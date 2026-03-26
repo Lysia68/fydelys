@@ -280,14 +280,14 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
       const targetUid = impersonateUserId || user.id;
       let member = null;
       const { data: byUid } = await sb.from("members")
-        .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, address, postal_code, city, profession, profile_complete, subscription_id, subscriptions(period)")
+        .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, birth_date, address, postal_code, city, profession, profile_complete, subscription_id, subscriptions(period)")
         .eq("studio_id", studioId).eq("auth_user_id", targetUid).maybeSingle();
       member = byUid;
 
       // Fallback email uniquement pour l'user réel (pas l'impersonate)
       if (!member && !impersonateUserId && user.email) {
         const { data: byEmail } = await sb.from("members")
-          .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, address, postal_code, city, profession, profile_complete, subscription_id, subscriptions(period)")
+          .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, birth_date, address, postal_code, city, profession, profile_complete, subscription_id, subscriptions(period)")
           .eq("studio_id", studioId).eq("email", user.email).maybeSingle();
         member = byEmail;
         if (member) {
@@ -305,7 +305,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
         window.history.replaceState({}, "", window.location.pathname);
         setTimeout(async () => {
           const { data: fresh } = await sb.from("members")
-            .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, address, postal_code, city, profession, profile_complete, subscription_id, subscriptions(period)")
+            .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, birth_date, address, postal_code, city, profession, profile_complete, subscription_id, subscriptions(period)")
             .eq("id", member.id).maybeSingle();
           if (fresh) setMe(fresh);
         }, 2000);
@@ -654,7 +654,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
       const sb = createClient();
       // Recharger credits + statut
       sb.from("members")
-        .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, address, postal_code, city, profession, profile_complete, subscription_id, subscriptions(period)")
+        .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, birth_date, address, postal_code, city, profession, profile_complete, subscription_id, subscriptions(period)")
         .eq("id", me.id).maybeSingle()
         .then(({ data }) => { if (data) setMe(data); });
       // Recharger historique pour avoir les présences à jour
