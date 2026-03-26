@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase";
 import { AppCtx } from "./context";
 import { C } from "./theme";
 import { IcoUser2, IcoCheck, IcoAlert2 } from "./icons";
-import { Button, Field } from "./ui";
+import { Button, Field, formatPhone, formatPostalCode, formatName } from "./ui";
 
 function OnboardingView({ studioName = "", onComplete }) {
   const { studioId } = useContext(AppCtx);
@@ -134,16 +134,16 @@ function OnboardingView({ studioName = "", onComplete }) {
             <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
                 <div>
-                  <Field label="Prénom *" value={form.first_name} onChange={set("first_name")} placeholder="Sophie"/>
+                  <Field label="Prénom *" value={form.first_name} onChange={v => setForm(f => ({ ...f, first_name: formatName(v) }))} placeholder="Sophie"/>
                   {errors.first_name && <div style={{ fontSize:11, color:C.warn, marginTop:3 }}>{errors.first_name}</div>}
                 </div>
                 <div>
-                  <Field label="Nom *" value={form.last_name} onChange={set("last_name")} placeholder="Martin"/>
+                  <Field label="Nom *" value={form.last_name} onChange={v => setForm(f => ({ ...f, last_name: v.toUpperCase() }))} placeholder="Martin"/>
                   {errors.last_name && <div style={{ fontSize:11, color:C.warn, marginTop:3 }}>{errors.last_name}</div>}
                 </div>
               </div>
               <div>
-                <Field label="Téléphone *" value={form.phone} onChange={set("phone")} placeholder="06 12 34 56 78" type="tel"/>
+                <Field label="Téléphone *" value={form.phone} onChange={v => setForm(f => ({ ...f, phone: formatPhone(v) }))} placeholder="06 12 34 56 78" type="tel"/>
                 {errors.phone && <div style={{ fontSize:11, color:C.warn, marginTop:3 }}>{errors.phone}</div>}
               </div>
               <div>
@@ -178,7 +178,7 @@ function OnboardingView({ studioName = "", onComplete }) {
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"140px 1fr", gap:12 }}>
                 <div>
-                  <Field label="Code postal *" value={form.postal_code} onChange={set("postal_code")} placeholder="75001"/>
+                  <Field label="Code postal *" value={form.postal_code} onChange={v => setForm(f => ({ ...f, postal_code: formatPostalCode(v) }))} placeholder="75001"/>
                   {errors.postal_code && <div style={{ fontSize:11, color:C.warn, marginTop:3 }}>{errors.postal_code}</div>}
                 </div>
                 <div>

@@ -243,4 +243,29 @@ function CreditBadge({ credits, total, sub, subPeriod }) {
   );
 }
 
-export { ConfirmModal, Tag, Pill, Button, FieldLabel, Field, Card, SectionHead, DateLabel, SessionRow, MemberRow, KpiCard, EmptyState, DemoBanner, creditColor, CreditBadge };
+/** Formate un code postal français : 5 chiffres max */
+function formatPostalCode(raw) {
+  return raw.replace(/\D/g, "").slice(0, 5);
+}
+
+/** Capitalise la première lettre de chaque mot (prénom/nom) */
+function formatName(raw) {
+  return raw.replace(/\b\w/g, c => c.toUpperCase());
+}
+
+/** Formate un numéro français en "06 12 34 56 78" à la saisie */
+function formatPhone(raw) {
+  // Garder uniquement les chiffres et le + initial
+  let digits = raw.replace(/[^\d+]/g, "");
+  // Convertir +33 → 0
+  if (digits.startsWith("+33")) digits = "0" + digits.slice(3);
+  else if (digits.startsWith("33") && digits.length > 2) digits = "0" + digits.slice(2);
+  // Garder max 10 chiffres
+  digits = digits.replace(/\D/g, "").slice(0, 10);
+  // Grouper par paires : 06 12 34 56 78
+  const parts = [];
+  for (let i = 0; i < digits.length; i += 2) parts.push(digits.slice(i, i + 2));
+  return parts.join(" ");
+}
+
+export { ConfirmModal, Tag, Pill, Button, FieldLabel, Field, Card, SectionHead, DateLabel, SessionRow, MemberRow, KpiCard, EmptyState, DemoBanner, creditColor, CreditBadge, formatPhone, formatPostalCode, formatName };

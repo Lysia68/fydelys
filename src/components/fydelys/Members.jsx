@@ -7,7 +7,7 @@ import { AppCtx } from "./context";
 import { C } from "./theme";
 import { MEMBERS_DEMO, SUBSCRIPTIONS_DEMO, SESSIONS_DEMO, BOOKINGS_DEMO, SUBSCRIPTIONS_INIT } from "./demoData";
 import { IcoUserPlus2, IcoMail, IcoUser2, IcoCalendar2, IcoX, IcoCheck, IcoTag2, IcoSearch } from "./icons";
-import { Card, SectionHead, Button, Field, FieldLabel, Tag, Pill, MemberRow, DemoBanner, EmptyState, CreditBadge } from "./ui";
+import { Card, SectionHead, Button, Field, FieldLabel, Tag, Pill, MemberRow, DemoBanner, EmptyState, CreditBadge, formatPhone, formatPostalCode, formatName } from "./ui";
 
 
 const EMPTY_FORM = {
@@ -37,8 +37,8 @@ function MemberForm({ value, onChange, errors={}, isMobile }) {
       <div>
         {sec("👤","Identité")}
         <div style={cols(3)}>
-          <div>{lbl("Prénom",true)}<input value={value.firstName} onChange={e=>onChange({...value,firstName:e.target.value})} placeholder="Prénom" style={inp(errors.firstName)}/>{err("firstName")}</div>
-          <div>{lbl("Nom",true)}<input value={value.lastName} onChange={e=>onChange({...value,lastName:e.target.value})} placeholder="Nom" style={inp(errors.lastName)}/>{err("lastName")}</div>
+          <div>{lbl("Prénom",true)}<input value={value.firstName} onChange={e=>onChange({...value,firstName:formatName(e.target.value)})} placeholder="Prénom" style={inp(errors.firstName)}/>{err("firstName")}</div>
+          <div>{lbl("Nom",true)}<input value={value.lastName} onChange={e=>onChange({...value,lastName:e.target.value.toUpperCase()})} placeholder="Nom" style={inp(errors.lastName)}/>{err("lastName")}</div>
           <div>{lbl("Date de naissance",true)}<BirthDatePicker value={value.birthDate} onChange={v=>onChange({...value,birthDate:v})} error={errors.birthDate}/>{err("birthDate")}</div>
         </div>
       </div>
@@ -46,7 +46,7 @@ function MemberForm({ value, onChange, errors={}, isMobile }) {
         {sec("📬","Contact")}
         <div style={cols(2)}>
           <div>{lbl("Email",true)}<input value={value.email} onChange={e=>onChange({...value,email:e.target.value})} placeholder="email@exemple.com" type="email" style={inp(errors.email)}/>{err("email")}</div>
-          <div>{lbl("Téléphone")}<input value={value.phone} onChange={e=>onChange({...value,phone:e.target.value})} placeholder="06 00 00 00 00" type="tel" style={inp()}/></div>
+          <div>{lbl("Téléphone")}<input value={value.phone} onChange={e=>onChange({...value,phone:formatPhone(e.target.value)})} placeholder="06 00 00 00 00" type="tel" style={inp()}/></div>
         </div>
       </div>
       <div>
@@ -54,7 +54,7 @@ function MemberForm({ value, onChange, errors={}, isMobile }) {
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           <div>{lbl("Rue")}<input value={value.address} onChange={e=>onChange({...value,address:e.target.value})} placeholder="12 rue des Lilas" style={inp()}/></div>
           <div style={cols(2)}>
-            <div>{lbl("Code postal")}<input value={value.postalCode} onChange={e=>onChange({...value,postalCode:e.target.value})} placeholder="75000" maxLength={10} style={inp()}/></div>
+            <div>{lbl("Code postal")}<input value={value.postalCode} onChange={e=>onChange({...value,postalCode:formatPostalCode(e.target.value)})} placeholder="75000" style={inp()}/></div>
             <div>{lbl("Ville")}<input value={value.city} onChange={e=>onChange({...value,city:e.target.value})} placeholder="Paris" style={inp()}/></div>
           </div>
           <div>{lbl("Profession")}<input value={value.profession||""} onChange={e=>onChange({...value,profession:e.target.value})} placeholder="Ex : Ingénieur, Enseignant, Retraité…" style={inp()}/></div>

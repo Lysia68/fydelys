@@ -6,7 +6,7 @@ import { AppCtx } from "./context";
 import { C } from "./theme";
 import { DISCIPLINES, SUBSCRIPTIONS_INIT, ADH_NAV_KEYS } from "./demoData";
 import { IcoCalendar2, IcoUser2, IcoChevron, IcoCreditCard2, IcoCheck, IcoX, IcoAlert2, IcoTag2, IcoUsers2, IcoBarChart2, IcoActivity, IcoHeart, IcoStar, IcoZap } from "./icons";
-import { Card, SectionHead, Button, Tag, Pill, EmptyState, DateLabel, Field, SessionRow } from "./ui";
+import { Card, SectionHead, Button, Tag, Pill, EmptyState, DateLabel, Field, SessionRow, formatPhone, formatPostalCode, formatName } from "./ui";
 import { OnboardingView } from "./OnboardingView";
 
 // ── DatePicker custom — 3 selects stylés ───────────────────────────────────
@@ -234,12 +234,12 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
   }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handlers stables par champ — évitent la perte de focus
-  const accountSetFirst     = React.useCallback(e => setAccountForm(f => ({ ...f, first_name:  e.target.value })), []);
-  const accountSetLast      = React.useCallback(e => setAccountForm(f => ({ ...f, last_name:   e.target.value })), []);
-  const accountSetPhone     = React.useCallback(e => setAccountForm(f => ({ ...f, phone:       e.target.value })), []);
+  const accountSetFirst     = React.useCallback(e => setAccountForm(f => ({ ...f, first_name:  formatName(e.target.value) })), []);
+  const accountSetLast      = React.useCallback(e => setAccountForm(f => ({ ...f, last_name:   e.target.value.toUpperCase() })), []);
+  const accountSetPhone     = React.useCallback(e => setAccountForm(f => ({ ...f, phone: formatPhone(e.target.value) })), []);
   const accountSetBirth     = React.useCallback(v => setAccountForm(f => ({ ...f, birth_date: typeof v === "string" ? v : v?.target?.value || "" })), []);
   const accountSetAddress   = React.useCallback(e => setAccountForm(f => ({ ...f, address:     e.target.value })), []);
-  const accountSetPostal    = React.useCallback(e => setAccountForm(f => ({ ...f, postal_code: e.target.value })), []);
+  const accountSetPostal    = React.useCallback(e => setAccountForm(f => ({ ...f, postal_code: formatPostalCode(e.target.value) })), []);
   const accountSetCity      = React.useCallback(e => setAccountForm(f => ({ ...f, city:        e.target.value })), []);
   const accountSetProfession = React.useCallback(e => setAccountForm(f => ({ ...f, profession: e.target.value })), []);
   const accountSetField = null; // gardé pour compatibilité
