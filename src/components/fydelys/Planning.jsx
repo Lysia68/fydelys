@@ -724,12 +724,23 @@ function Planning({ isMobile }) {
     else if (isDemoData) { setSessions(recPreview); setIsDemoData(false); }
   };
 
-  const handleChangeStatus = (bid, sid, ns) => {
+  const handleChangeStatus = async (bid, sid, ns) => {
     setBookings(prev => {
       const nb = { ...prev };
       nb[sid] = (nb[sid] || []).map(b => b.id === bid ? { ...b, st: ns } : b);
       return nb;
     });
+    const { error } = await createClient().from("bookings").update({ status: ns }).eq("id", bid);
+    if (error) {
+      console.error("update booking status", error);
+      // Rollback UI
+      setBookings(prev => {
+        const nb = { ...prev };
+        const old = ns === "cancelled" ? "confirmed" : ns === "confirmed" ? "cancelled" : "waitlist";
+        nb[sid] = (nb[sid] || []).map(b => b.id === bid ? { ...b, st: old } : b);
+        return nb;
+      });
+    }
   };
 
   const handleSendReminder = async sessId => {
