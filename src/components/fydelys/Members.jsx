@@ -570,7 +570,7 @@ function Members({ isMobile }) {
               <button onClick={()=>{setEditMode(false);setNMErrors({});}} style={{background:"none",border:`1.5px solid ${C.border}`,borderRadius:8,padding:"5px 8px",cursor:"pointer"}}><IcoX s={14} c={C.textSoft}/></button>
             </div>
             <MemberForm value={editForm} onChange={setEditForm} errors={nMErrors} isMobile={isMobile}/>
-            <div style={{display:"flex",gap:10,marginTop:20,position:"sticky",bottom:0,background:C.surface,padding:"12px 0 0",borderTop:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",gap:10,marginTop:20,padding:"12px 0 0",borderTop:`1px solid ${C.border}`}}>
               <Button variant="primary" onClick={saveEdit} style={{flex:1}}>Enregistrer</Button>
               <Button variant="ghost" onClick={()=>{setEditMode(false);setNMErrors({});}}>Annuler</Button>
             </div>
