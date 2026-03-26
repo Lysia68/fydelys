@@ -82,12 +82,12 @@ const IcoInvite = () => (
 )
 
 const FEATURES = [
-  { Icon: IcoCalendar, title: "Planning intelligent",  desc: "Créez vos séances, gérez créneaux et récurrences. Vos coachs et adhérents voient leur planning mis à jour en temps réel." },
-  { Icon: IcoMembers,  title: "Gestion des membres",   desc: "Fiches adhérents complètes, crédits, abonnements et historique de présence — tout pour un suivi vraiment personnalisé." },
-  { Icon: IcoPayment,  title: "Paiements intégrés",    desc: "Encaissez abonnements et séances sans friction. Stripe sécurise chaque transaction, vous gardez le contrôle." },
-  { Icon: IcoDomain,   title: "Votre espace dédié",    desc: "Un sous-domaine à votre image — nom.fydelys.fr. Vos coachs et membres s'y connectent directement, sans app à installer." },
-  { Icon: IcoChart,    title: "Tableaux de bord",      desc: "Chiffre d'affaires, taux de remplissage, tendances. Pilotez votre studio avec des données claires et actionnables." },
-  { Icon: IcoInvite,   title: "Invitations & rôles",   desc: "Invitez vos coachs par email, définissez leurs disciplines. Vos adhérents s'inscrivent librement depuis votre URL." },
+  { Icon: IcoCalendar, title: "Planning et réservations",  desc: "Planifiez vos cours en quelques clics, générez des séances récurrentes et gérez les inscriptions. Vos adhérents réservent en ligne, les listes d'attente se gèrent automatiquement." },
+  { Icon: IcoMembers,  title: "Suivi de vos adhérents",    desc: "Fiches complètes avec coordonnées, profession, crédits restants et historique. Gérez les abonnements, gelez un compte temporairement, invitez des accompagnants." },
+  { Icon: IcoPayment,  title: "Paiements et abonnements",  desc: "Carnets de séances, forfaits mensuels ou cours à l'unité. Vos adhérents paient en ligne via Stripe, vous suivez les encaissements et relancez les impayés." },
+  { Icon: IcoDomain,   title: "Votre site à votre nom",    desc: "Votre studio a sa propre adresse — votre-nom.fydelys.fr. Vos adhérents s'y connectent sans mot de passe, vos coachs y voient leurs séances. Activez votre page vitrine gratuite." },
+  { Icon: IcoChart,    title: "Votre activité en un coup d'oeil", desc: "Adhérents actifs, taux de remplissage, chiffre d'affaires, alertes. Exportez vos données en CSV pour votre comptable." },
+  { Icon: IcoInvite,   title: "Votre équipe, vos règles",  desc: "Invitez vos coachs par email, attribuez-leur des disciplines. Chacun voit son planning et ses inscrits. Vos adhérents recoivent rappels par email et SMS avant chaque cours." },
 ]
 
 const DISCIPLINES = [
@@ -507,9 +507,9 @@ export default function LandingPage() {
       {/* ── FEATURES ── */}
       <section id="fonctionnalites" className="sec" style={{background:"var(--bg2)"}}>
         <div className="inner">
-          <div className="sec-tag">✦ Fonctionnalités</div>
-          <h2 className="sec-h">Tout ce dont vous avez besoin</h2>
-          <p className="sec-sub" style={{maxWidth:480}}>Une solution complète conçue pour les gérants de studios de bien-être exigeants.</p>
+          <div className="sec-tag">Ce que Fydelys fait pour vous</div>
+          <h2 className="sec-h">Gérez votre studio, pas la paperasse</h2>
+          <p className="sec-sub" style={{maxWidth:520}}>Planning, inscriptions, paiements, rappels automatiques — tout est centralisé pour que vous puissiez vous concentrer sur vos cours.</p>
           <div className="feat-grid">
             {FEATURES.map((f, i) => (
               <div key={i} className="feat-card">
