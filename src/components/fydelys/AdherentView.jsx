@@ -60,7 +60,7 @@ function DatePicker({ value, onChange }) {
 }
 
 // ── AdhAccountPanel — composant standalone (hors AdherentView pour éviter remontage) ──
-const AdhAccountPanel = React.memo(function AdhAccountPanel({ me, loading, history, p, editing, setEditing, saving, form, setForm, setFirst, setLast, setPhone, setBirth, setAddress, setPostal, setCity, save }) {
+const AdhAccountPanel = React.memo(function AdhAccountPanel({ me, loading, history, p, editing, setEditing, saving, form, setForm, setFirst, setLast, setPhone, setBirth, setAddress, setPostal, setCity, setProfession, save }) {
   const initials = me ? `${me.first_name?.[0]||""}${me.last_name?.[0]||""}`.toUpperCase() : "?";
 
   if (loading) return <div style={{ padding:p, color:C.textMuted, fontSize:14 }}>Chargement…</div>;
@@ -178,7 +178,7 @@ const AdhAccountPanel = React.memo(function AdhAccountPanel({ me, loading, histo
             </div>
             <div>
               <label style={{ fontSize:12, color:C.textMuted, fontWeight:600, display:"block", marginBottom:5 }}>Profession</label>
-              <input value={form?.profession||""} onChange={e=>setForm(f=>({...f,profession:e.target.value}))} placeholder="Ex : Ingénieur, Enseignant…" style={inpStyle}/>
+              <input value={form?.profession||""} onChange={setProfession} placeholder="Ex : Ingénieur, Enseignant…" style={inpStyle}/>
             </div>
             <div style={{ padding:"8px 12px", background:C.bg, borderRadius:8, fontSize:12, color:C.textMuted }}>
               L'adresse email ne peut pas être modifiée
@@ -237,7 +237,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
   const accountSetFirst     = React.useCallback(e => setAccountForm(f => ({ ...f, first_name:  e.target.value })), []);
   const accountSetLast      = React.useCallback(e => setAccountForm(f => ({ ...f, last_name:   e.target.value })), []);
   const accountSetPhone     = React.useCallback(e => setAccountForm(f => ({ ...f, phone:       e.target.value })), []);
-  const accountSetBirth     = React.useCallback(e => setAccountForm(f => ({ ...f, birth_date:  e.target.value })), []);
+  const accountSetBirth     = React.useCallback(v => setAccountForm(f => ({ ...f, birth_date:  v })), []);
   const accountSetAddress   = React.useCallback(e => setAccountForm(f => ({ ...f, address:     e.target.value })), []);
   const accountSetPostal    = React.useCallback(e => setAccountForm(f => ({ ...f, postal_code: e.target.value })), []);
   const accountSetCity      = React.useCallback(e => setAccountForm(f => ({ ...f, city:        e.target.value })), []);
@@ -676,7 +676,11 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
       editing={accountEditing} setEditing={setAccountEditing}
       saving={accountSaving}
       form={accountForm} setForm={setAccountForm}
-      set={accountSetField} save={accountSave}
+      setFirst={accountSetFirst} setLast={accountSetLast}
+      setPhone={accountSetPhone} setBirth={accountSetBirth}
+      setAddress={accountSetAddress} setPostal={accountSetPostal}
+      setCity={accountSetCity} setProfession={accountSetProfession}
+      save={accountSave}
     />;
   }
 
@@ -1093,7 +1097,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
               setFirst={accountSetFirst} setLast={accountSetLast}
               setPhone={accountSetPhone} setBirth={accountSetBirth}
               setAddress={accountSetAddress} setPostal={accountSetPostal}
-              setCity={accountSetCity}
+              setCity={accountSetCity} setProfession={accountSetProfession}
               save={accountSave}
             />}
           {page === "history"  && <AdhHistory/>}
