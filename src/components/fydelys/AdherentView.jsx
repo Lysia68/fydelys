@@ -387,14 +387,20 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
   }, [studioId]);
 
   useEffect(() => {
-    if (!me?.id) return;
-    createClient().from("bookings")
-      .select("session_id, status")
-      .eq("member_id", me.id)
-      .in("status", ["confirmed","waitlist"])
-      .then(({ data }) => { if (data) setMyBookings(data.map(b => b.session_id)); })
-      .catch(() => {});
-  }, [me?.id]);
+    if (!me?.id || !studioId) return;
+    // Passer par l'API pour éviter les problèmes RLS quand admin visualise un adhérent
+    fetch(`/api/bookings?memberId=${me.id}&studioId=${studioId}`)
+      .then(r => r.json())
+      .then(data => { if (data.bookings) setMyBookings(data.bookings.map(b => b.session_id)); })
+      .catch(() => {
+        // Fallback client direct
+        createClient().from("bookings")
+          .select("session_id, status")
+          .eq("member_id", me.id)
+          .in("status", ["confirmed","waitlist"])
+          .then(({ data }) => { if (data) setMyBookings(data.map(b => b.session_id)); });
+      });
+  }, [me?.id, studioId]);
 
   // ── Planning Adhérent ───────────────────────────────────────────────────────
   function AdhPlanning() {

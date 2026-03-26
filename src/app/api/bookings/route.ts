@@ -5,6 +5,21 @@ import { sendEmail } from "@/lib/email"
 
 export const dynamic = "force-dynamic"
 
+// GET /api/bookings?memberId=xxx&studioId=xxx — liste les bookings actifs d'un membre
+export async function GET(req: NextRequest) {
+  const memberId = req.nextUrl.searchParams.get("memberId")
+  const studioId = req.nextUrl.searchParams.get("studioId")
+  if (!memberId || !studioId) return NextResponse.json({ error: "memberId et studioId requis" }, { status: 400 })
+
+  const db = createServiceSupabase()
+  const { data } = await db.from("bookings")
+    .select("id, session_id, status")
+    .eq("member_id", memberId)
+    .in("status", ["confirmed", "waitlist"])
+
+  return NextResponse.json({ bookings: data || [] })
+}
+
 // POST /api/bookings — crée une réservation (membre ou invité) et envoie les emails de confirmation
 export async function POST(req: NextRequest) {
   try {
