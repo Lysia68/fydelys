@@ -59,7 +59,7 @@ export default function CGU() {
       <p>Les données créées par l'utilisateur (planning, fiches membres, etc.) restent sa propriété. Lysia s'engage à ne pas les exploiter à d'autres fins que la fourniture du service.</p>
 
       <h2>9. Limitation de responsabilité</h2>
-      <p>La responsabilité de Lysia est limitée aux dommages directs causés par une faute de sa part. En aucun cas Lysia ne saurait être tenue responsable des dommages indirects, pertes d'exploitation ou manque à gagner.</p>
+      <p>La responsabilité de Lysia est limitée aux dommages directs causés par une faute prouvée de sa part. La responsabilité financière totale de Lysia, toutes causes confondues, ne pourra en aucun cas excéder le montant des sommes effectivement versées par le Client au cours du mois précédant l'événement à l'origine du dommage (soit un maximum d'un mois d'abonnement). En aucun cas Lysia ne saurait être tenue responsable des dommages indirects, pertes d'exploitation, pertes de données, manque à gagner ou atteinte à l'image, quand bien même elle aurait été informée de la possibilité de tels dommages.</p>
 
       <h2>10. Modification des CGU</h2>
       <p>Lysia SAS se réserve le droit de modifier les présentes CGU à tout moment. Les utilisateurs seront informés par email de toute modification substantielle. La poursuite de l'utilisation du service vaut acceptation des nouvelles CGU.</p>

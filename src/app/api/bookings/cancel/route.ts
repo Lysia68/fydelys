@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
 import { sendEmail } from "@/lib/email"
 import { sendSMS, smsConfirmation } from "@/lib/sms"
+import { checkAuth } from "@/lib/auth-check"
 
 export const dynamic = "force-dynamic"
 
 // POST /api/bookings/cancel — annule un booking + promeut le 1er en waitlist
 export async function POST(req: NextRequest) {
   try {
+    const auth = await checkAuth(req)
+    if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+
     const { bookingId, sessionId, memberId } = await req.json()
     if (!bookingId && !sessionId) {
       return NextResponse.json({ error: "bookingId ou sessionId requis" }, { status: 400 })

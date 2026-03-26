@@ -118,19 +118,21 @@ function Dashboard({ isMobile }) {
         let bkMap = {};
         if (sessionIds.length > 0) {
           const { data: bkData } = await sb.from("bookings")
-            .select("session_id, status, attended, member_id, members(first_name, last_name, email, phone)")
+            .select("session_id, status, attended, member_id, guest_name, host_member_id, members(first_name, last_name, email, phone)")
             .in("session_id", sessionIds);
           (bkData || []).forEach(b => {
             if (!bkMap[b.session_id]) bkMap[b.session_id] = [];
+            const isGuest = !!b.guest_name;
             bkMap[b.session_id].push({
               id: b.member_id,
               st: b.status,
               attended: b.attended,
               fn: b.members?.first_name || "",
               ln: b.members?.last_name  || "",
-              name: `${b.members?.first_name||""} ${b.members?.last_name||""}`.trim() || "—",
+              name: isGuest ? `${b.guest_name} (invité)` : `${b.members?.first_name||""} ${b.members?.last_name||""}`.trim() || "—",
               email: b.members?.email   || "",
               phone: b.members?.phone   || "",
+              isGuest, hostMemberId: b.host_member_id || null,
             });
           });
         }

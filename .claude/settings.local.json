@@ -3,7 +3,10 @@
     "allow": [
       "Bash(npx vitest:*)",
       "Bash(grep -n \"address\\\\|postal_code\\\\|city\\\\|birth_date\\\\|profession\\\\|frozen_until\\\\|profile_complete\" /c/Users/Bernard/Fydelys_v6/fydelys/supabase/migrations/*.sql)",
-      "Bash(node scripts/import-members.mjs)"
+      "Bash(node scripts/import-members.mjs)",
+      "Bash(grep -r \"member_payments\\\\|reminder_logs\" /c/Users/Bernard/Fydelys_v6/fydelys --include=*.sql --include=*.ts --include=*.tsx)",
+      "Bash(grep -r \"from.*member_payments\\\\|from.*reminder_logs\" /c/Users/Bernard/Fydelys_v6/fydelys/src --include=*.ts --include=*.tsx)",
+      "Bash(grep -rn \"create table\\\\|CREATE TABLE\\\\|member_payments\\\\|reminder_logs\" /c/Users/Bernard/Fydelys_v6/fydelys --include=*.ts --include=*.tsx --include=*.sql)"
     ]
   }
 }

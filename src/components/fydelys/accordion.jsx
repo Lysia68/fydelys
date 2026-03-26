@@ -103,19 +103,22 @@ export function PlanningAccordion({ sess, sessId, bookings, onChangeStatus, onAd
 
       // Déduction crédits : présent → -1 crédit / annulation présence → +1 crédit
       const booking = conf.find(b => b.id === bookingId);
+      // Pour un invité, déduire le crédit du membre hôte
+      const creditMemberId = booking?.hostMemberId || booking?.memberId;
       // Abonnements récurrents (mois/trimestre/année) = crédits illimités, pas de déduction
       const UNLIMITED_PERIODS = ["mois", "trimestre", "année", "annuel", "annee", "monthly", "yearly"];
       const isUnlimited = booking?.subPeriod && UNLIMITED_PERIODS.includes(booking.subPeriod.toLowerCase());
 
-      if (!isUnlimited && booking?.memberId && booking?.credits !== null && booking?.credits !== undefined) {
+      if (!isUnlimited && creditMemberId) {
+        // Charger les crédits actuels du membre (hôte ou direct)
+        const { data: memberData } = await sb.from("members").select("credits").eq("id", creditMemberId).single();
+        const currentCredits = memberData?.credits ?? 0;
         if (val === true && prevVal !== true) {
-          // Marquer présent → déduire 1 crédit si credits > 0
-          if (booking.credits > 0) {
-            await sb.from("members").update({ credits: booking.credits - 1 }).eq("id", booking.memberId);
+          if (currentCredits > 0) {
+            await sb.from("members").update({ credits: currentCredits - 1 }).eq("id", creditMemberId);
           }
         } else if (val !== true && prevVal === true) {
-          // Annuler présence → restituer 1 crédit
-          await sb.from("members").update({ credits: booking.credits + 1 }).eq("id", booking.memberId);
+          await sb.from("members").update({ credits: currentCredits + 1 }).eq("id", creditMemberId);
         }
       }
     }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
+import { checkAuth } from "@/lib/auth-check"
 
 export const dynamic = "force-dynamic"
 
@@ -13,6 +14,9 @@ export async function GET(req: NextRequest) {
   if (!memberId && !(coachName && studioId)) {
     return NextResponse.json({ error: "memberId ou (coachName + studioId) requis" }, { status: 400 })
   }
+
+  const auth = await checkAuth(req, studioId || undefined)
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
   const db = createServiceSupabase()
   const today = new Date().toISOString().slice(0, 10)

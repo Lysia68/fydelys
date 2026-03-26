@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
+import { checkAuth } from "@/lib/auth-check"
 
 export const dynamic = "force-dynamic"
 
@@ -11,6 +12,9 @@ export async function GET(req: NextRequest) {
   if (!type || !studioId) {
     return NextResponse.json({ error: "type et studioId requis" }, { status: 400 })
   }
+
+  const auth = await checkAuth(req, studioId)
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
   const db = createServiceSupabase()
 

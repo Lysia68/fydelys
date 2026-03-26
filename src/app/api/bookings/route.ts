@@ -5,15 +5,37 @@ import { sendEmail } from "@/lib/email"
 
 export const dynamic = "force-dynamic"
 
-// POST /api/bookings — crée une réservation et envoie les emails de confirmation
+// POST /api/bookings — crée une réservation (membre ou invité) et envoie les emails de confirmation
 export async function POST(req: NextRequest) {
   try {
-    const { sessionId, memberId, studioId } = await req.json()
-    if (!sessionId || !memberId || !studioId)
-      return NextResponse.json({ error: "sessionId, memberId, studioId requis" }, { status: 400 })
+    const body = await req.json()
+    const { sessionId, memberId, studioId, guestName, hostMemberId } = body
+    const isGuest = !!guestName && !!hostMemberId
+
+    if (!sessionId || !studioId || (!memberId && !isGuest))
+      return NextResponse.json({ error: "sessionId, studioId et (memberId ou guestName+hostMemberId) requis" }, { status: 400 })
 
     const db = createServiceSupabase()
 
+    // ── Guest booking ─────────────────────────────────────────────────
+    if (isGuest) {
+      // Compter les inscrits confirmés vs spots
+      const [{ data: sess }, { count: confirmedCount }] = await Promise.all([
+        db.from("sessions").select("spots").eq("id", sessionId).single(),
+        db.from("bookings").select("id", { count: "exact", head: true }).eq("session_id", sessionId).eq("status", "confirmed"),
+      ])
+      const isFull = (confirmedCount || 0) >= (sess?.spots || 999)
+      const status = isFull ? "waitlist" : "confirmed"
+
+      const { data: booking, error } = await db.from("bookings")
+        .insert({ session_id: sessionId, member_id: null, status, guest_name: guestName, host_member_id: hostMemberId })
+        .select("id").single()
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+      return NextResponse.json({ ok: true, bookingId: booking.id, status, guest: true })
+    }
+
+    // ── Regular member booking ────────────────────────────────────────
     // Vérifier doublon
     const { data: existing } = await db.from("bookings")
       .select("id, status").eq("session_id", sessionId).eq("member_id", memberId)

@@ -263,15 +263,32 @@ function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onCh
   );
 }
 
-// ── Modale inscrire adhérent ─────────────────────────────────────────────────
+// ── Modale inscrire adhérent ou invité ───────────────────────────────────────
 function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSessions, onClose }) {
+  const [mode, setMode] = useState("member"); // "member" | "guest"
   const [q, setQ] = useState("");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(null);
   const inp = useRef(null);
+  // Guest form
+  const [guestName, setGuestName] = useState("");
+  const [hostId, setHostId] = useState(null);
+  const [hostName, setHostName] = useState("");
+  const [hostSearch, setHostSearch] = useState("");
+  const [hostResults, setHostResults] = useState([]);
+  const [savedGuests, setSavedGuests] = useState([]); // invités enregistrés du membre hôte
+  const [saveGuest, setSaveGuest] = useState(true); // sauvegarder le nouvel invité
 
   useEffect(() => { setTimeout(() => inp.current?.focus(), 80); }, []);
+
+  // Charger les invités enregistrés quand un hôte est sélectionné
+  useEffect(() => {
+    if (!hostId) { setSavedGuests([]); return; }
+    createClient().from("member_guests").select("id, name, phone")
+      .eq("member_id", hostId).order("name")
+      .then(({ data }) => setSavedGuests(data || []));
+  }, [hostId]);
 
   async function search(v) {
     setQ(v);
@@ -283,7 +300,6 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
       .or(`first_name.ilike.%${v}%,last_name.ilike.%${v}%,email.ilike.%${v}%`)
       .limit(8);
     if (!data || data.length === 0) {
-      // Fallback API route si RLS bloque
       try {
         const res = await fetch(`/api/members?studioId=${studioId}&search=${encodeURIComponent(v)}`);
         const json = await res.json();
@@ -293,6 +309,17 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
       setResults(data);
     }
     setLoading(false);
+  }
+
+  async function searchHost(v) {
+    setHostSearch(v);
+    if (!v || v.length < 2) { setHostResults([]); return; }
+    const { data } = await createClient().from("members")
+      .select("id, first_name, last_name, email")
+      .eq("studio_id", studioId)
+      .or(`first_name.ilike.%${v}%,last_name.ilike.%${v}%,email.ilike.%${v}%`)
+      .limit(6);
+    setHostResults(data || []);
   }
 
   async function confirm(member) {
@@ -317,6 +344,35 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
     }
   }
 
+  async function confirmGuest(name) {
+    const finalName = (name || guestName).trim();
+    if (!finalName || !hostId) return;
+    const res = await fetch("/api/bookings", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ sessionId: sessId, studioId, guestName: finalName, hostMemberId: hostId }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      // Sauvegarder l'invité si c'est un nouveau et que la case est cochée
+      if (saveGuest && !savedGuests.some(g => g.name.toLowerCase() === finalName.toLowerCase())) {
+        createClient().from("member_guests").insert({ member_id: hostId, studio_id: studioId, name: finalName })
+          .then(() => setSavedGuests(prev => [...prev, { id: Date.now(), name: finalName }]));
+      }
+      const nb = { id: data.bookingId, memberId: null, st: data.status, attended: null,
+        name: `${finalName} (invité)`,
+        email: "", phone: "", isGuest: true, hostMemberId: hostId };
+      setBookings(prev => ({ ...prev, [sessId]: [...(prev[sessId] || []), nb] }));
+      setSessions(prev => prev.map(s => s.id === sessId ? { ...s, booked: s.booked + (data.status === "confirmed" ? 1 : 0) } : s));
+      setDone(data.status);
+    }
+  }
+
+  const tabStyle = (active) => ({
+    flex: 1, padding: "8px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer",
+    background: active ? C.accent : "transparent", color: active ? "#fff" : C.textMuted,
+  });
+
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
       onClick={onClose}>
@@ -324,45 +380,128 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
         onClick={e => e.stopPropagation()}>
         {done ? (
           <div style={{ textAlign: "center", padding: "12px 0" }}>
-            <div style={{ fontSize: 36, marginBottom: 10 }}>{done === "already" ? "⚠️" : done === "confirmed" ? "✅" : "⏳"}</div>
+            <div style={{ fontSize: 36, marginBottom: 10 }}>{done === "already" ? "⚠" : done === "confirmed" ? "OK" : "..."}</div>
             <div style={{ fontSize: 16, fontWeight: 800, color: C.text, marginBottom: 6 }}>
               {done === "already" ? "Déjà inscrit" : done === "confirmed" ? "Inscrit avec succès" : "Ajouté en liste d'attente"}
             </div>
             <div style={{ fontSize: 13, color: C.textSoft, marginBottom: 18 }}>
-              {done === "already" ? "Cet adhérent est déjà inscrit à cette séance." : done === "confirmed" ? "La réservation est confirmée." : "La séance est complète, l'adhérent est en attente."}
+              {done === "already" ? "Cet adhérent est déjà inscrit à cette séance." : done === "confirmed" ? "La réservation est confirmée." : "La séance est complète, en attente."}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => { setDone(null); setQ(""); setResults([]); }} style={{ flex: 1, padding: "9px", borderRadius: 9, border: `1px solid ${C.border}`, background: C.surfaceWarm, color: C.textSoft, fontSize: 14, cursor: "pointer", fontWeight: 600 }}>Inscrire un autre</button>
+              <button onClick={() => { setDone(null); setQ(""); setResults([]); setGuestName(""); setHostId(null); setHostName(""); setHostSearch(""); setHostResults([]); }} style={{ flex: 1, padding: "9px", borderRadius: 9, border: `1px solid ${C.border}`, background: C.surfaceWarm, color: C.textSoft, fontSize: 14, cursor: "pointer", fontWeight: 600 }}>Inscrire un autre</button>
               <button onClick={onClose} style={{ flex: 1, padding: "9px", borderRadius: 9, border: "none", background: C.accent, color: "#fff", fontSize: 14, cursor: "pointer", fontWeight: 700 }}>Fermer</button>
             </div>
           </div>
         ) : (
           <>
-            <div style={{ fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 4 }}>Inscrire un adhérent</div>
-            <div style={{ fontSize: 13, color: C.textSoft, marginBottom: 16 }}>Recherchez par nom ou email</div>
-            <div style={{ position: "relative", marginBottom: 10 }}>
-              <input ref={inp} placeholder="Nom, prénom ou email…" value={q} onChange={e => search(e.target.value)}
-                style={{ width: "100%", padding: "10px 36px 10px 14px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#FDFAF7" }} />
-              {loading && <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 16 }}>⏳</span>}
-              {q && !loading && <span onClick={() => { setQ(""); setResults([]); }} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 16, cursor: "pointer", color: C.textMuted }}>✕</span>}
+            {/* Tabs : Adhérent / Invité */}
+            <div style={{ display: "flex", gap: 4, background: C.bg, borderRadius: 10, padding: 3, marginBottom: 16 }}>
+              <button style={tabStyle(mode === "member")} onClick={() => setMode("member")}>Adhérent</button>
+              <button style={tabStyle(mode === "guest")} onClick={() => setMode("guest")}>Invité d'un membre</button>
             </div>
-            {results.length > 0 && (
-              <div style={{ borderRadius: 10, border: `1px solid ${C.borderSoft}`, overflow: "hidden", marginBottom: 10 }}>
-                {results.map(m => (
-                  <div key={m.id} onClick={() => confirm(m)}
-                    style={{ padding: "10px 14px", cursor: "pointer", borderBottom: `1px solid ${C.borderSoft}`, transition: "background .1s" }}
-                    onMouseEnter={e => e.currentTarget.style.background = C.accentBg}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.first_name} {m.last_name}</div>
-                    <div style={{ fontSize: 12, color: C.textMuted }}>{m.email}{m.phone ? " · " + m.phone : ""}</div>
+
+            {mode === "member" ? (
+              <>
+                <div style={{ fontSize: 13, color: C.textSoft, marginBottom: 12 }}>Recherchez par nom ou email</div>
+                <div style={{ position: "relative", marginBottom: 10 }}>
+                  <input ref={inp} placeholder="Nom, prénom ou email…" value={q} onChange={e => search(e.target.value)}
+                    style={{ width: "100%", padding: "10px 36px 10px 14px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#FDFAF7" }} />
+                  {loading && <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 16 }}>...</span>}
+                  {q && !loading && <span onClick={() => { setQ(""); setResults([]); }} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 16, cursor: "pointer", color: C.textMuted }}>x</span>}
+                </div>
+                {results.length > 0 && (
+                  <div style={{ borderRadius: 10, border: `1px solid ${C.borderSoft}`, overflow: "hidden", marginBottom: 10 }}>
+                    {results.map(m => (
+                      <div key={m.id} onClick={() => confirm(m)}
+                        style={{ padding: "10px 14px", cursor: "pointer", borderBottom: `1px solid ${C.borderSoft}`, transition: "background .1s" }}
+                        onMouseEnter={e => e.currentTarget.style.background = C.accentBg}
+                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.first_name} {m.last_name}</div>
+                        <div style={{ fontSize: 12, color: C.textMuted }}>{m.email}{m.phone ? " · " + m.phone : ""}</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )}
+                {q.length >= 2 && !loading && results.length === 0 && (
+                  <div style={{ fontSize: 13, color: C.textMuted, textAlign: "center", padding: "14px 0" }}>Aucun adhérent trouvé</div>
+                )}
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 13, color: C.textSoft, marginBottom: 12 }}>L'invité accompagne un membre. Le crédit sera déduit du membre hôte.</div>
+
+                {/* 1. Membre hôte d'abord */}
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: .8, marginBottom: 5 }}>Membre hôte * <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(crédit déduit)</span></div>
+                  {hostId ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 9, border: `1.5px solid ${C.accent}`, background: C.accentBg }}>
+                      <div style={{ flex: 1, fontSize: 14, fontWeight: 700, color: C.accent }}>{hostName}</div>
+                      <button onClick={() => { setHostId(null); setHostName(""); setHostSearch(""); setSavedGuests([]); }} style={{ background: "none", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 14 }}>x</button>
+                    </div>
+                  ) : (
+                    <>
+                      <input value={hostSearch} onChange={e => searchHost(e.target.value)} placeholder="Rechercher le membre hôte…"
+                        style={{ width: "100%", padding: "10px 14px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#FDFAF7" }} />
+                      {hostResults.length > 0 && (
+                        <div style={{ borderRadius: 10, border: `1px solid ${C.borderSoft}`, overflow: "hidden", marginTop: 6 }}>
+                          {hostResults.map(m => (
+                            <div key={m.id} onClick={() => { setHostId(m.id); setHostName(`${m.first_name} ${m.last_name}`.trim()); setHostSearch(""); setHostResults([]); }}
+                              style={{ padding: "8px 14px", cursor: "pointer", borderBottom: `1px solid ${C.borderSoft}`, transition: "background .1s" }}
+                              onMouseEnter={e => e.currentTarget.style.background = C.accentBg}
+                              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{m.first_name} {m.last_name}</div>
+                              <div style={{ fontSize: 11, color: C.textMuted }}>{m.email}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* 2. Invités enregistrés (quick pick) */}
+                {hostId && savedGuests.length > 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: .8, marginBottom: 6 }}>Invités de {hostName.split(" ")[0]}</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {savedGuests.map(g => (
+                        <button key={g.id} onClick={() => confirmGuest(g.name)}
+                          style={{ padding: "7px 14px", borderRadius: 20, border: `1.5px solid ${C.accent}40`, background: C.accentBg, color: C.accent, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                          {g.name}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.textMuted, marginTop: 6 }}>Cliquez pour inscrire directement</div>
+                  </div>
+                )}
+
+                {/* 3. Ou saisir un nouvel invité */}
+                {hostId && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: .8, marginBottom: 5 }}>
+                      {savedGuests.length > 0 ? "Ou ajouter un nouvel invité" : "Nom de l'invité *"}
+                    </div>
+                    <input value={guestName} onChange={e => setGuestName(e.target.value)} placeholder="Prénom Nom"
+                      style={{ width: "100%", padding: "10px 14px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#FDFAF7" }} />
+                    {guestName.trim() && (
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, fontSize: 12, color: C.textSoft, cursor: "pointer" }}>
+                        <input type="checkbox" checked={saveGuest} onChange={e => setSaveGuest(e.target.checked)}
+                          style={{ accentColor: C.accent, width: 16, height: 16 }} />
+                        Mémoriser cet invité pour {hostName.split(" ")[0]}
+                      </label>
+                    )}
+                  </div>
+                )}
+
+                {hostId && guestName.trim() && (
+                  <button onClick={() => confirmGuest()}
+                    style={{ width: "100%", padding: "10px", borderRadius: 9, border: "none", background: C.accent, color: "#fff", fontSize: 14, cursor: "pointer", fontWeight: 700 }}>
+                    Inscrire {guestName.trim()}
+                  </button>
+                )}
+              </>
             )}
-            {q.length >= 2 && !loading && results.length === 0 && (
-              <div style={{ fontSize: 13, color: C.textMuted, textAlign: "center", padding: "14px 0" }}>Aucun adhérent trouvé</div>
-            )}
-            <button onClick={onClose} style={{ marginTop: 6, width: "100%", padding: "9px", borderRadius: 9, border: `1px solid ${C.border}`, background: "transparent", color: C.textSoft, fontSize: 14, cursor: "pointer" }}>Annuler</button>
+            <button onClick={onClose} style={{ marginTop: 8, width: "100%", padding: "9px", borderRadius: 9, border: `1px solid ${C.border}`, background: "transparent", color: C.textSoft, fontSize: 14, cursor: "pointer" }}>Annuler</button>
           </>
         )}
       </div>
@@ -543,19 +682,21 @@ function Planning({ isMobile }) {
           status: s.status || "scheduled", booked: 0, waitlist: 0,
         }));
         const { data: bkData } = await sb.from("bookings")
-          .select("id, session_id, member_id, status, attended, members(id, first_name, last_name, email, phone, credits, credits_total, subscription_id, subscriptions(period))")
+          .select("id, session_id, member_id, status, attended, guest_name, host_member_id, members(id, first_name, last_name, email, phone, credits, credits_total, subscription_id, subscriptions(period))")
           .in("session_id", mapped.map(s => s.id));
         // Après chargement des bookings, filtrer les séances passées sans présences à valider
         const now = new Date();
         const map = {};
         (bkData || []).forEach(b => {
           if (!map[b.session_id]) map[b.session_id] = [];
+          const isGuest = !!b.guest_name;
           map[b.session_id].push({
             id: b.id, memberId: b.member_id, st: b.status, attended: b.attended ?? null,
-            name: b.members ? `${b.members.first_name || ""} ${b.members.last_name || ""}`.trim() : "—",
+            name: isGuest ? `${b.guest_name} (invité)` : b.members ? `${b.members.first_name || ""} ${b.members.last_name || ""}`.trim() : "—",
             email: b.members?.email || "", phone: b.members?.phone || "",
             credits: b.members?.credits ?? null, total: b.members?.credits_total ?? null,
             subPeriod: b.members?.subscriptions?.period || null,
+            isGuest, hostMemberId: b.host_member_id || null,
           });
         });
         setBookings(map);

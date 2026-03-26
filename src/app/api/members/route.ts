@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
+import { checkAuth } from "@/lib/auth-check"
 
 export const dynamic = "force-dynamic"
 
@@ -7,6 +8,9 @@ export const dynamic = "force-dynamic"
 export async function GET(request: NextRequest) {
   const studioId = request.nextUrl.searchParams.get("studioId")
   if (!studioId) return NextResponse.json({ error: "studioId requis" }, { status: 400 })
+
+  const auth = await checkAuth(request, studioId)
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
   const search = request.nextUrl.searchParams.get("search")
   const db = createServiceSupabase()
@@ -37,6 +41,9 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { studioId, ...payload } = body
   if (!studioId) return NextResponse.json({ error: "studioId requis" }, { status: 400 })
+
+  const auth = await checkAuth(request, studioId)
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
   const db = createServiceSupabase()
   const { data: existing } = await db.from("members")
@@ -78,6 +85,9 @@ export async function POST(request: NextRequest) {
 
 // PATCH /api/members → mettre à jour un membre
 export async function PATCH(request: NextRequest) {
+  const auth = await checkAuth(request)
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+
   const { id, ...updates } = await request.json()
   if (!id) return NextResponse.json({ error: "id requis" }, { status: 400 })
 
@@ -141,10 +151,16 @@ export async function PATCH(request: NextRequest) {
 
 // DELETE /api/members?id=xxx
 export async function DELETE(request: NextRequest) {
+  const auth = await checkAuth(request)
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+
   const id = request.nextUrl.searchParams.get("id")
   if (!id) return NextResponse.json({ error: "id requis" }, { status: 400 })
 
   const db = createServiceSupabase()
+  // Vérifier que le membre appartient au studio du caller
+  const { data: member } = await db.from("members").select("studio_id").eq("id", id).single()
+  if (!member || member.studio_id !== auth.studioId) return NextResponse.json({ error: "Accès refusé" }, { status: 403 })
   const { error } = await db.from("members").delete().eq("id", id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

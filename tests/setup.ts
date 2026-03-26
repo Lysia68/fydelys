@@ -69,5 +69,14 @@ vi.mock("next/headers", () => ({
   })),
 }))
 
+// ── Mock @/lib/auth-check ────────────────────────────────────────
+vi.mock("@/lib/auth-check", () => ({
+  checkAuth: vi.fn(() => ({
+    user: { id: "test-uid", email: "test@test.com" },
+    profile: { studio_id: "studio-123", role: "admin" },
+    studioId: "studio-123",
+  })),
+}))
+
 // ── Export for test access ─────────────────────────────────────────
 export { mockDb }
