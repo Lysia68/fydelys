@@ -100,7 +100,7 @@ export function Historique({ isMobile }) {
     setExpandedId(id);
     if (bookings[id]) return;
     const { data } = await createClient().from("bookings")
-      .select("id, status, attended, members(first_name, last_name, email)")
+      .select("id, status, attended, members!bookings_member_id_fkey(first_name, last_name, email)")
       .eq("session_id", id).eq("status", "confirmed").order("created_at");
     if (data) setBookings(prev => ({ ...prev, [id]: data }));
   }

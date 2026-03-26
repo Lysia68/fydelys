@@ -695,7 +695,7 @@ function Planning({ isMobile }) {
           console.error("[Planning] API bookings failed, fallback client", e);
           // Fallback client direct si API échoue
           const { data } = await sb.from("bookings")
-            .select("id, session_id, member_id, status, attended, guest_name, host_member_id, members(id, first_name, last_name, email, phone, credits, credits_total, subscription_id, subscriptions(period))")
+            .select("id, session_id, member_id, status, attended, guest_name, host_member_id, members!bookings_member_id_fkey(id, first_name, last_name, email, phone, credits, credits_total, subscription_id, subscriptions(period))")
             .in("session_id", mapped.map(s => s.id));
           bkData = data || [];
         }
@@ -918,7 +918,7 @@ function Planning({ isMobile }) {
         // Recharger les bookings de cette session
         const sb = createClient();
         const { data: fresh } = await sb.from("bookings")
-          .select("id, member_id, status, members(first_name, last_name, email, phone)")
+          .select("id, member_id, status, members!bookings_member_id_fkey(first_name, last_name, email, phone)")
           .eq("session_id", sid);
         if (fresh) {
           setBookings(prev => ({

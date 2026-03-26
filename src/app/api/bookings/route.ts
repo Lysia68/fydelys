@@ -32,9 +32,9 @@ export async function GET(req: NextRequest) {
       .in("session_id", ids)
     console.log("[GET bookings] ids:", ids.length, "simple result:", simple?.length, "error:", simpleErr?.message || "none")
     if (simple?.length) {
-      // Query complète avec joins
+      // Query complète — spécifier la FK pour désambiguïser (member_id vs host_member_id)
       const { data, error } = await db.from("bookings")
-        .select("id, session_id, member_id, status, attended, guest_name, host_member_id, members(id, first_name, last_name, email, phone, credits, credits_total, subscription_id, subscriptions(period))")
+        .select("id, session_id, member_id, status, attended, guest_name, host_member_id, members!bookings_member_id_fkey(id, first_name, last_name, email, phone, credits, credits_total, subscription_id, subscriptions(period))")
         .in("session_id", ids)
       console.log("[GET bookings] full result:", data?.length, "error:", error?.message || "none")
       return NextResponse.json({ bookings: data || [] })

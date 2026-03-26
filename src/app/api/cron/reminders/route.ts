@@ -96,7 +96,7 @@ export async function GET(request: Request) {
       // Charger les inscrits confirmés avec email
       const { data: bookings } = await db
         .from("bookings")
-        .select("member_id, members(first_name, last_name, email, phone, sms_opt_in)")
+        .select("member_id, members!bookings_member_id_fkey(first_name, last_name, email, phone, sms_opt_in)")
         .eq("session_id", sess.id)
         .eq("status", "confirmed")
 

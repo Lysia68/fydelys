@@ -95,7 +95,7 @@ async function promoteWaitlist(db: any, sessionId: string): Promise<{ memberName
 
   // Trouver le 1er en waitlist (FIFO par date de création)
   const { data: waitlisted } = await db.from("bookings")
-    .select("id, member_id, members(first_name, last_name, email, phone, sms_opt_in, credits, credits_total, subscription_id, subscriptions(period))")
+    .select("id, member_id, members!bookings_member_id_fkey(first_name, last_name, email, phone, sms_opt_in, credits, credits_total, subscription_id, subscriptions(period))")
     .eq("session_id", sessionId).eq("status", "waitlist")
     .order("created_at", { ascending: true })
     .limit(1)

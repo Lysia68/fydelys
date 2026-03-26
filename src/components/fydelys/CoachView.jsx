@@ -69,7 +69,7 @@ function CoachView({ onSwitch, isMobile, coachName = MY_COACH_NAME, coachDiscipl
         // Charger les bookings pour ces séances
         const ids = mapped.map(s => s.id);
         const { data: bkData } = await sb.from("bookings")
-          .select("session_id, status, members(first_name, last_name, email, phone)")
+          .select("session_id, status, members!bookings_member_id_fkey(first_name, last_name, email, phone)")
           .in("session_id", ids);
 
         const bkMap = {};
