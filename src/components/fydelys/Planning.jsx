@@ -881,8 +881,9 @@ function Planning({ isMobile }) {
       date: s.session_date, time: s.session_time?.slice(0,5) || s.session_time, duration: s.duration_min, spots: s.spots,
       status: s.status, booked: 0, waitlist: 0,
     }));
-    if (isDemoData) { setSessions(newSessions); setIsDemoData(false); }
-    else setSessions(prev => [...prev, ...newSessions]);
+    const sort = arr => [...arr].sort((a,b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+    if (isDemoData) { setSessions(sort(newSessions)); setIsDemoData(false); }
+    else setSessions(prev => sort([...prev, ...newSessions]));
     setShowAdd(false); setRecMode(false);
     setRecFrom(""); setRecTo(""); setRecSlots([]); setRecPreview([]);
     showPlanToast(`${newSessions.length} séance${newSessions.length > 1 ? "s créées" : " créée"}`, true);
