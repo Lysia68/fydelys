@@ -196,6 +196,7 @@ function SR({ label, k, opts, value, onChange }:SRProps) {
 export default function LoginPage() {
   const [ctx, setCtx]           = useState<Ctx>("tenant-login")
   const [studioName, setStudioName] = useState("")
+  const [studioLoading, setStudioLoading] = useState(false)
   const [tab, setTab]           = useState<"login"|"register">("login")
   const [email, setEmail]       = useState("")
   const [loading, setLoading]   = useState(false)
@@ -222,16 +223,22 @@ export default function LoginPage() {
     const saved = localStorage.getItem("fydelys_last_email")
     if (saved) setEmail(saved)
     const h = window.location.hostname
-    if(h==="fydelys.fr"||h==="localhost"||h.startsWith("localhost:")) {
+    const isRoot = h==="fydelys.fr"||h==="localhost"||h.startsWith("localhost:")
+    if(isRoot) {
       setCtx("superadmin")
       // Si ?tab=register dans l'URL → créer studio directement
       const tabParam = new URLSearchParams(window.location.search).get("tab")
       if (tabParam === "register") { setTab("register") }
       else { setTab("login") }  // Par défaut : connexion directe, pas les 2 CTA
     } else {
-      const m = h.match(/^([a-z0-9-]+)\.fydelys\.fr/)
-      if(m) supabase.from("studios").select("name").eq("slug",m[1]).single()
-        .then(({data})=>{ if(data) setStudioName(data.name) })
+      const m = h.match(/^([a-z0-9-]+)\.(?:fydelys\.fr|localhost(?::\d+)?)/)
+      if(m) {
+        setStudioLoading(true)
+        fetch(`/api/studio-public?slug=${encodeURIComponent(m[1])}`)
+          .then(r=>r.json())
+          .then(({studio})=>{ if(studio?.name) setStudioName(studio.name) })
+          .finally(()=>setStudioLoading(false))
+      }
     }
     // Afficher message si redirect depuis callback avec erreur
     const params = new URLSearchParams(window.location.search)
@@ -455,16 +462,19 @@ export default function LoginPage() {
             {ctx === "tenant-login" && studioName
               ? (() => {
                   const name = studioName.charAt(0).toUpperCase() + studioName.slice(1)
-                  // Première moitié en couleur sombre, dernière syllabe en accent (comme Fyde+lys)
                   const splitAt = Math.max(1, Math.ceil(name.length * 0.6))
                   return <>{name.slice(0, splitAt)}<span style={{color:C.accent}}>{name.slice(splitAt)}</span></>
                 })()
-              : <>Fyde<span style={{color:C.accent}}>lys</span></>
+              : ctx === "tenant-login" && studioLoading
+                ? <span style={{opacity:0}}>.</span>
+                : <>Fyde<span style={{color:C.accent}}>lys</span></>
             }
           </h1>
           <p style={{color:C.sub,fontSize:13,margin:0,fontWeight:500}}>
             {ctx==="superadmin" ? "Plateforme de gestion · Studios & Bien-être"
-             : studioName ? "Votre espace membre" : "Gestion de studio · Yoga & Bien-être"}
+             : studioName ? "Votre espace membre"
+             : studioLoading ? "\u00A0"
+             : "Gestion de studio · Yoga & Bien-être"}
           </p>
         </div>
 
