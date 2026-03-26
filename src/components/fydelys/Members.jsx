@@ -448,7 +448,16 @@ function Members({ isMobile }) {
     const birthdayFmt=m.birthDate?new Date(m.birthDate+"T12:00:00").toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"}):null;
     const infoRow=(ico,lbl,val)=>val?<div style={{display:"flex",alignItems:"flex-start",gap:8}}><span style={{fontSize:14,flexShrink:0,marginTop:1}}>{ico}</span><div><div style={{fontSize:11,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:.5}}>{lbl}</div><div style={{fontSize:13,color:C.text,fontWeight:500}}>{val}</div></div></div>:null;
     return (
-      <Card style={{marginTop:16,borderTop:`3px solid ${C.accent}`}}>
+      <div onClick={e=>{if(e.target===e.currentTarget)setSelected(null)}}
+        style={{position:"fixed",inset:0,background:"rgba(42,31,20,.4)",zIndex:500,display:"flex",justifyContent:isMobile?"center":"flex-end",alignItems:isMobile?"flex-end":"stretch",padding:isMobile?0:0}}>
+        <div style={{
+          background:C.surface,width:isMobile?"100%":480,maxHeight:isMobile?"90vh":"100vh",
+          overflowY:"auto",boxShadow:"-8px 0 40px rgba(42,31,20,.15)",
+          borderRadius:isMobile?"16px 16px 0 0":0,
+          animation:"slideIn .2s ease",
+        }}>
+          <style>{`@keyframes slideIn { from { transform: translate${isMobile?"Y(40px)":"X(40px)"}; opacity:0; } to { transform: none; opacity:1; } }`}</style>
+          <div style={{padding:isMobile?20:28}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
           <div style={{display:"flex",alignItems:"center",gap:14}}>
             <div style={{width:48,height:48,borderRadius:"50%",background:C.accentBg,border:`1.5px solid #DFC0A0`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,fontWeight:700,color:C.accent}}>{m.avatar}</div>
@@ -458,15 +467,15 @@ function Members({ isMobile }) {
                 <span style={{display:"flex",alignItems:"center",gap:4}}><IcoMail s={13} c={C.textMuted}/>{m.email}</span>
                 {m.phone&&<span style={{display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:13}}>📞</span>{m.phone}</span>}
               </div>
-              {m.profileComplete===false&&<div style={{fontSize:11,color:C.warn,fontWeight:600,marginTop:3}}>⚠ Profil non complété</div>}
+              {m.profileComplete===false&&<div style={{fontSize:11,color:C.warn,fontWeight:600,marginTop:3}}>Profil non complété</div>}
             </div>
           </div>
           <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>startEdit(m)} style={{fontSize:12,padding:"6px 12px",borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.textMid,cursor:"pointer",fontWeight:600}}>✏ Modifier</button>
+            <button onClick={()=>startEdit(m)} style={{fontSize:12,padding:"6px 12px",borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,color:C.textMid,cursor:"pointer",fontWeight:600}}>Modifier</button>
             <button onClick={()=>setSelected(null)} style={{background:"none",border:`1.5px solid ${C.border}`,borderRadius:8,padding:"5px 8px",cursor:"pointer",display:"flex",alignItems:"center"}}><IcoX s={16} c={C.textSoft}/></button>
           </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:`repeat(${isMobile?2:4},1fr)`,gap:10,marginBottom:14}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginBottom:14}}>
           {[["Abonnement",m.subscription],["Statut",m.status],["Membre depuis",m.joined?new Date(m.joined).toLocaleDateString("fr-FR"):"—"],["Crédits",m.credits>0?`${m.credits} séances`:"Illimité"]].map(([l,v])=>(
             <div key={l} style={{background:C.bg,borderRadius:8,padding:"11px 13px",border:`1.5px solid ${C.border}`}}>
               <div style={{fontSize:11,fontWeight:700,color:C.textMuted,textTransform:"uppercase",marginBottom:3}}>{l}</div>
@@ -474,11 +483,10 @@ function Members({ isMobile }) {
             </div>
           ))}
         </div>
-        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10,marginBottom:16,background:C.bg,borderRadius:10,padding:"14px 16px",border:`1px solid ${C.borderSoft}`}}>
+        <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16,background:C.bg,borderRadius:10,padding:"14px 16px",border:`1px solid ${C.borderSoft}`}}>
           {infoRow("🎂","Date de naissance",birthdayFmt)}
           {infoRow("📍","Adresse",adresseFull||null)}
           {infoRow("💼","Profession",m.profession||null)}
-
         </div>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           <Button variant="primary" sm onClick={()=>setModal({type:"email",member:m})}><span style={{display:"flex",alignItems:"center",gap:5}}><IcoMail s={13} c="white"/>Envoyer un email</span></Button>
@@ -508,7 +516,9 @@ function Members({ isMobile }) {
             Abonnement gelé jusqu'au {new Date(m.frozenUntil).toLocaleDateString("fr-FR")} — l'adhérent ne peut pas réserver de séances
           </div>
         )}
-      </Card>
+          </div>
+        </div>
+      </div>
     );
   };
 
@@ -573,8 +583,8 @@ function Members({ isMobile }) {
         ) : (
           <Card noPad>{filtered.map(m=><MemberRow key={m.id} m={m} onSelect={m=>setSelected(selected?.id===m.id?null:m)} selected={selected?.id===m.id}/>)}</Card>
         )}
-        {selected && !editMode && <MemberDetail/>}
       </div>
+      {selected && !editMode && <MemberDetail/>}
     </div>
   );
 }
