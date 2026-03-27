@@ -98,6 +98,17 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL(`https://fydelys.fr/dashboard`, request.url))
     }
 
+    // Bloquer les adhérents suspendus ou supprimés
+    if (profile?.role === "adherent" && profile.studio_id) {
+      const { data: memberCheck } = await supabase.from("members")
+        .select("status, deleted_at").eq("studio_id", profile.studio_id).eq("auth_user_id", user.id).maybeSingle()
+      if (memberCheck?.deleted_at || memberCheck?.status === "suspendu") {
+        const errType = memberCheck?.deleted_at ? "compte_supprime" : "compte_suspendu"
+        await supabase.auth.signOut()
+        return NextResponse.redirect(new URL(`/login?error=${errType}`, request.url))
+      }
+    }
+
     // ── Billing guard : vérifier l'accès du studio ──────────────────────────
     // (uniquement pour les admins sur pages protégées, hors /billing lui-même)
     if (profile?.role === "admin" && !pathname.startsWith("/billing")) {

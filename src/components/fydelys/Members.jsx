@@ -80,6 +80,7 @@ function Members({ isMobile }) {
   const [editForm, setEditForm]     = useState(null);
   const [modal, setModal]           = useState(null);
   const [toast, setToast]           = useState(null);
+  const [confirmModal, setConfirmModal] = useState(null); // {title, message, onConfirm, danger?, inputLabel?, inputDefault?}
   const p = isMobile ? 12 : 28;
 
   const showToast = (msg, ok=true) => { setToast({msg,ok}); setTimeout(()=>setToast(null),3500); };
@@ -198,12 +199,22 @@ function Members({ isMobile }) {
     const today = new Date().toISOString().slice(0,10);
     const { count } = await sb.from("bookings").select("id", { count:"exact", head:true })
       .eq("member_id", id).eq("status", "confirmed").gte("session_date", today);
-    if (count && count > 0) {
-      if (!window.confirm(`Cet adhérent a ${count} réservation${count>1?"s":""}  future${count>1?"s":""}. Supprimer quand même ?`)) return;
-    }
-    setMembers(prev=>prev.filter(m=>m.id!==id)); setSelected(null);
-    await fetch(`/api/members?id=${id}`, { method:"DELETE" });
-    showToast("Adhérent supprimé");
+    const m = members.find(x=>x.id===id);
+    const name = m ? `${m.firstName} ${m.lastName}` : "cet adhérent";
+    const msg = count && count > 0
+      ? `${name} a ${count} réservation${count>1?"s":""} future${count>1?"s":""}. L'historique sera conservé mais le compte sera désactivé.`
+      : `Supprimer ${name} ? L'historique sera conservé mais le compte sera désactivé.`;
+    setConfirmModal({
+      title: "Supprimer l'adhérent",
+      message: msg,
+      danger: true,
+      onConfirm: async () => {
+        setMembers(prev=>prev.filter(x=>x.id!==id)); setSelected(null);
+        await fetch(`/api/members?id=${id}`, { method:"DELETE" });
+        showToast("Adhérent supprimé");
+        setConfirmModal(null);
+      },
+    });
   };
 
   const Modal = ({children}) => (
@@ -520,12 +531,19 @@ function Members({ isMobile }) {
               {actionBtn(<><IcoCalendar2 s={13} c={C.textMid}/> Historique</>, ()=>setModal({type:"history",member:m}))}
               {actionBtn(<>🎁 Offrir séances</>, ()=>setModal({type:"gift",member:m}))}
               {m.status !== "suspendu"
-                ? actionBtn(<>⏸ Suspendre</>, async()=>{
-                    if (!window.confirm(`Suspendre ${m.firstName} ${m.lastName} ?`)) return;
-                    await createClient().from("members").update({status:"suspendu"}).eq("id",m.id);
-                    setMembers(prev=>prev.map(x=>x.id===m.id?{...x,status:"suspendu"}:x));
-                    setSelected(prev=>prev?{...prev,status:"suspendu"}:prev);
-                    showToast("Adhérent suspendu");
+                ? actionBtn(<>⏸ Suspendre</>, ()=>{
+                    setConfirmModal({
+                      title: "Suspendre l'adhérent",
+                      message: `Suspendre ${m.firstName} ${m.lastName} ? Le membre ne pourra plus se connecter.`,
+                      danger: true,
+                      onConfirm: async () => {
+                        await createClient().from("members").update({status:"suspendu"}).eq("id",m.id);
+                        setMembers(prev=>prev.map(x=>x.id===m.id?{...x,status:"suspendu"}:x));
+                        setSelected(prev=>prev?{...prev,status:"suspendu"}:prev);
+                        showToast("Adhérent suspendu");
+                        setConfirmModal(null);
+                      },
+                    });
                   })
                 : actionBtn(<>▶ Réactiver</>, async()=>{
                     await createClient().from("members").update({status:"actif"}).eq("id",m.id);
@@ -543,12 +561,20 @@ function Members({ isMobile }) {
                     setToast({msg:"Abonnement dégelé",ok:true}); setTimeout(()=>setToast(null),3000);
                   })
                 : actionBtn(<>&#10052; Geler</>, ()=>{
-                    const until = prompt("Geler jusqu'au (AAAA-MM-JJ) :", new Date(Date.now()+30*86400000).toISOString().slice(0,10));
-                    if (!until || !/^\d{4}-\d{2}-\d{2}$/.test(until)) return;
-                    createClient().from("members").update({frozen_until:until}).eq("id",m.id).then(()=>{
-                      setMembers(prev=>prev.map(x=>x.id===m.id?{...x,frozenUntil:until}:x));
-                      setSelected(prev=>prev?{...prev,frozenUntil:until}:prev);
-                      setToast({msg:`Gelé jusqu'au ${new Date(until).toLocaleDateString("fr-FR")}`,ok:true}); setTimeout(()=>setToast(null),3000);
+                    setConfirmModal({
+                      title: "Geler l'abonnement",
+                      message: `Geler l'abonnement de ${m.firstName} ${m.lastName} jusqu'à quelle date ?`,
+                      inputLabel: "Date de fin (AAAA-MM-JJ)",
+                      inputDefault: new Date(Date.now()+30*86400000).toISOString().slice(0,10),
+                      onConfirm: async (val) => {
+                        const until = val?.trim();
+                        if (!until || !/^\d{4}-\d{2}-\d{2}$/.test(until)) return;
+                        await createClient().from("members").update({frozen_until:until}).eq("id",m.id);
+                        setMembers(prev=>prev.map(x=>x.id===m.id?{...x,frozenUntil:until}:x));
+                        setSelected(prev=>prev?{...prev,frozenUntil:until}:prev);
+                        setToast({msg:`Gelé jusqu'au ${new Date(until).toLocaleDateString("fr-FR")}`,ok:true}); setTimeout(()=>setToast(null),3000);
+                        setConfirmModal(null);
+                      },
                     });
                   })
               }
@@ -570,6 +596,39 @@ function Members({ isMobile }) {
       {modal?.type==="subscription" && <SubscriptionModal/>}
       {modal?.type==="history"      && <HistoryModal/>}
       {modal?.type==="gift"         && <GiftModal/>}
+
+      {/* Confirm modal (remplace window.confirm/prompt) */}
+      {confirmModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(42,31,20,.5)",zIndex:1100,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}
+          onClick={()=>setConfirmModal(null)}>
+          <div style={{background:C.surface,borderRadius:16,padding:24,width:"100%",maxWidth:380,boxShadow:"0 16px 48px rgba(0,0,0,.2)"}}
+            onClick={e=>e.stopPropagation()}>
+            <div style={{fontSize:16,fontWeight:800,color:C.text,marginBottom:8}}>{confirmModal.title}</div>
+            <div style={{fontSize:14,color:C.textMid,lineHeight:1.5,marginBottom:confirmModal.inputLabel?12:20}}>{confirmModal.message}</div>
+            {confirmModal.inputLabel && (
+              <div style={{marginBottom:20}}>
+                <div style={{fontSize:12,fontWeight:600,color:C.textSoft,marginBottom:4}}>{confirmModal.inputLabel}</div>
+                <input id="confirm-input" type="date" defaultValue={confirmModal.inputDefault||""}
+                  style={{width:"100%",padding:"9px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,fontSize:14,outline:"none",boxSizing:"border-box",background:"#FDFAF7",color:C.text}}/>
+              </div>
+            )}
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+              <button onClick={()=>setConfirmModal(null)}
+                style={{padding:"9px 18px",borderRadius:9,border:`1.5px solid ${C.border}`,background:C.surface,color:C.textMid,fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                Annuler
+              </button>
+              <button onClick={()=>{
+                  const val = confirmModal.inputLabel ? document.getElementById("confirm-input")?.value : null;
+                  confirmModal.onConfirm(val);
+                }}
+                style={{padding:"9px 18px",borderRadius:9,border:"none",
+                  background:confirmModal.danger?"#A85030":C.accent,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Modifier */}
       {editMode && editForm && (

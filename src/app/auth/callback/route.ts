@@ -234,13 +234,26 @@ export async function GET(request: NextRequest) {
         .select("status, deleted_at").eq("studio_id", studio.id).eq("email", userEmail).maybeSingle()
       if (memberCheck?.deleted_at) {
         console.log("[auth/callback] Member deleted — blocking login for", userEmail)
-        response.headers.set("Location", `https://${tenantSlug}.fydelys.fr/login?error=compte_supprime`)
-        return response
+        await supabase.auth.signOut()
+        const blockedRes = NextResponse.redirect(new URL(`/login?error=compte_supprime`, `https://${tenantSlug}.fydelys.fr`))
+        blockedRes.cookies.delete({ name: "sb-access-token", path: "/", domain: ".fydelys.fr" })
+        blockedRes.cookies.delete({ name: "sb-refresh-token", path: "/", domain: ".fydelys.fr" })
+        // Supprimer tous les cookies supabase
+        request.cookies.getAll().forEach(c => {
+          if (c.name.startsWith("sb-")) blockedRes.cookies.delete({ name: c.name, path: "/", domain: ".fydelys.fr" })
+        })
+        return blockedRes
       }
       if (memberCheck?.status === "suspendu") {
         console.log("[auth/callback] Member suspended — blocking login for", userEmail)
-        response.headers.set("Location", `https://${tenantSlug}.fydelys.fr/login?error=compte_suspendu`)
-        return response
+        await supabase.auth.signOut()
+        const blockedRes = NextResponse.redirect(new URL(`/login?error=compte_suspendu`, `https://${tenantSlug}.fydelys.fr`))
+        blockedRes.cookies.delete({ name: "sb-access-token", path: "/", domain: ".fydelys.fr" })
+        blockedRes.cookies.delete({ name: "sb-refresh-token", path: "/", domain: ".fydelys.fr" })
+        request.cookies.getAll().forEach(c => {
+          if (c.name.startsWith("sb-")) blockedRes.cookies.delete({ name: c.name, path: "/", domain: ".fydelys.fr" })
+        })
+        return blockedRes
       }
 
       const { data: invite } = await db.from("invitations")
