@@ -135,6 +135,32 @@ export async function POST(req: NextRequest) {
       console.log(`[bookings] Crédit déduit — membre ${memberId} : ${memberCredits?.credits} → ${(memberCredits?.credits ?? 1) - 1}`)
     }
 
+    // Email admin "cours complet" si cette inscription remplit la séance
+    if (status === "confirmed") {
+      const { count: newCount } = await db.from("bookings").select("id", { count: "exact", head: true })
+        .eq("session_id", sessionId).eq("status", "confirmed")
+      const spots = sess.spots || 999
+      if ((newCount || 0) >= spots) {
+        const [{ data: studioFull }, { data: sessFull }] = await Promise.all([
+          db.from("studios").select("name, slug, email").eq("id", studioId).maybeSingle(),
+          db.from("sessions").select("session_date, session_time, teacher, disciplines(name, icon)").eq("id", sessionId).single(),
+        ])
+        if (studioFull?.email) {
+          const disc = (sessFull as any)?.disciplines
+          const discName = disc?.name || "Séance"
+          const discIcon = disc?.icon || ""
+          const sessDate = new Date(sessFull.session_date).toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long" })
+          const sessTime = sessFull.session_time?.slice(0, 5) || ""
+          sendEmail({
+            to: studioFull.email,
+            subject: `Cours complet — ${discName} ${sessDate} a ${sessTime}`,
+            html: buildFullSessionEmail({ studio: studioFull, sess: sessFull, sessDate, sessTime, discName, discIcon, spots, count: newCount || spots }),
+            fromName: studioFull.name,
+          })
+        }
+      }
+    }
+
     // Répondre immédiatement — notifications en arrière-plan (fire-and-forget)
     const response = NextResponse.json({ ok: true, bookingId: booking.id, status })
 
@@ -172,21 +198,6 @@ export async function POST(req: NextRequest) {
               html: buildAdminNotifEmail({ studio, sess, sessDate, sessTime, discName, discIcon, memberName, status }),
               fromName: studio.name,
             }))
-          }
-
-          // Email admin "cours complet" si cette inscription remplit la séance
-          if (status === "confirmed" && studio.email) {
-            const { count: newCount } = await db.from("bookings").select("id", { count: "exact", head: true })
-              .eq("session_id", sessionId).eq("status", "confirmed")
-            const spots = sess.spots || 999
-            if ((newCount || 0) >= spots) {
-              emails.push(sendEmail({
-                to: studio.email,
-                subject: `Cours complet — ${discName} ${sessDate} a ${sessTime}`,
-                html: buildFullSessionEmail({ studio, sess, sessDate, sessTime, discName, discIcon, spots, count: newCount || spots }),
-                fromName: studio.name,
-              }))
-            }
           }
 
           Promise.allSettled(emails)
