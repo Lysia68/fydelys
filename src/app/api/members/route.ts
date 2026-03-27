@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
 import { checkAuth } from "@/lib/auth-check"
+import { checkPlanLimit } from "@/lib/plan-limits"
 
 export const dynamic = "force-dynamic"
 
@@ -44,6 +45,10 @@ export async function POST(request: NextRequest) {
 
   const auth = await checkAuth(request, studioId)
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+
+  // Vérifier limite du plan
+  const limit = await checkPlanLimit(studioId, "add_member")
+  if (!limit.ok) return NextResponse.json({ error: limit.error, limit: true }, { status: 403 })
 
   const db = createServiceSupabase()
   const { data: existing } = await db.from("members")

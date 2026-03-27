@@ -93,9 +93,14 @@ function DisciplinesPage({ isMobile }) {
   const dbAddDisc = async (disc) => {
     if (!ctxStudioId) return null;
     try {
-      const { data } = await createClient().from("disciplines")
-        .insert({ studio_id:ctxStudioId, name:disc.name, icon:disc.icon, color:disc.color||C.accent, slots:[] }).select().single();
-      return data;
+      const res = await fetch("/api/disciplines", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studioId: ctxStudioId, name: disc.name, icon: disc.icon, color: disc.color || C.accent, slots: [] }),
+      });
+      const data = await res.json();
+      if (data.limit) { showToast(data.error, false); return null; }
+      if (!res.ok) { showToast(data.error || "Erreur", false); return null; }
+      return data.discipline;
     } catch(e) { console.error("add disc", e); return null; }
   };
 

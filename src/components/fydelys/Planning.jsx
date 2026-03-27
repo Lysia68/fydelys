@@ -269,6 +269,7 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
   const [q, setQ] = useState("");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(null);
   const inp = useRef(null);
   // Guest form
@@ -324,15 +325,17 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
 
   async function confirm(member) {
     const sess = sessions.find(s => s.id === sessId);
-    if (!sess || !member) return;
+    if (!sess || !member || confirming) return;
     const already = (bookings[sessId] || []).some(b => b.memberId === member.id && b.st !== "cancelled");
     if (already) { setDone("already"); return; }
+    setConfirming(true);
     const res = await fetch("/api/bookings", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({ sessionId: sessId, memberId: member.id, studioId }),
     });
     const data = await res.json();
+    setConfirming(false);
     if (data.already) { setDone("already"); return; }
     if (data.ok) {
       const nb = { id: data.bookingId, memberId: member.id, st: data.status, attended: null,
@@ -346,15 +349,16 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
 
   async function confirmGuest(name) {
     const finalName = (name || guestName).trim();
-    if (!finalName || !hostId) return;
+    if (!finalName || !hostId || confirming) return;
+    setConfirming(true);
     const res = await fetch("/api/bookings", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({ sessionId: sessId, studioId, guestName: finalName, hostMemberId: hostId }),
     });
     const data = await res.json();
+    setConfirming(false);
     if (data.ok) {
-      // Sauvegarder l'invité si c'est un nouveau et que la case est cochée
       if (saveGuest && !savedGuests.some(g => g.name.toLowerCase() === finalName.toLowerCase())) {
         createClient().from("member_guests").insert({ member_id: hostId, studio_id: studioId, name: finalName })
           .then(() => setSavedGuests(prev => [...prev, { id: Date.now(), name: finalName }]));
@@ -400,7 +404,15 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
               <button style={tabStyle(mode === "guest")} onClick={() => setMode("guest")}>Invité d'un membre</button>
             </div>
 
-            {mode === "member" ? (
+            {confirming && (
+              <div style={{ textAlign:"center", padding:"24px 0" }}>
+                <div style={{ width:32, height:32, border:`3px solid ${C.border}`, borderTopColor:C.accent, borderRadius:"50%", animation:"spin .6s linear infinite", margin:"0 auto 12px" }}/>
+                <div style={{ fontSize:14, color:C.textSoft, fontWeight:600 }}>Inscription en cours...</div>
+                <style>{`@keyframes spin { to { transform:rotate(360deg); } }`}</style>
+              </div>
+            )}
+
+            {!confirming && mode === "member" ? (
               <>
                 <div style={{ fontSize: 13, color: C.textSoft, marginBottom: 12 }}>Recherchez par nom ou email</div>
                 <div style={{ position: "relative", marginBottom: 10 }}>
@@ -501,7 +513,7 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
                 )}
               </>
             )}
-            <button onClick={onClose} style={{ marginTop: 8, width: "100%", padding: "9px", borderRadius: 9, border: `1px solid ${C.border}`, background: "transparent", color: C.textSoft, fontSize: 14, cursor: "pointer" }}>Annuler</button>
+            {!confirming && <button onClick={onClose} style={{ marginTop: 8, width: "100%", padding: "9px", borderRadius: 9, border: `1px solid ${C.border}`, background: "transparent", color: C.textSoft, fontSize: 14, cursor: "pointer" }}>Annuler</button>}
           </>
         )}
       </div>

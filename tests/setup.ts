@@ -78,5 +78,12 @@ vi.mock("@/lib/auth-check", () => ({
   })),
 }))
 
+// ── Mock @/lib/plan-limits ───────────────────────────────────────
+vi.mock("@/lib/plan-limits", () => ({
+  checkPlanLimit: vi.fn(() => ({ ok: true })),
+  getPlanLimits: vi.fn(() => ({ maxMembers: 50, maxCoaches: 2, maxDisciplines: 3, features: [], planName: "Standard", planSlug: "standard" })),
+  getStudioCounts: vi.fn(() => ({ members: 0, coaches: 0, disciplines: 0 })),
+}))
+
 // ── Export for test access ─────────────────────────────────────────
 export { mockDb }

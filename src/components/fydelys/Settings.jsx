@@ -146,7 +146,8 @@ function Settings({ isMobile, onImpersonate }) {
   const realRole = userRole || "admin";
   const [currentRole, setCurrentRole] = useState(realRole);
   // ── Données studio depuis Supabase
-  const [studioForm, setStudioForm] = useState({ name:"", address:"", city:"", postal_code:"", phone:"", email:"", website:"", cancel_delay_hours:12, booking_days_ahead:7, waitlist_max:10, timezone:"Europe/Paris", reminder_hours_default:24, description:"", cover_photo_url:"", accent_color:"#B07848", public_page_enabled:false, sms_enabled:false });
+  const [studioForm, setStudioForm] = useState({ name:"", address:"", city:"", postal_code:"", phone:"", email:"", website:"", cancel_delay_hours:12, booking_days_ahead:7, waitlist_max:10, timezone:"Europe/Paris", reminder_hours_default:24, description:"", cover_photo_url:"", accent_color:"#B07848", public_page_enabled:false, sms_enabled:false, sms_credits_balance:0 });
+  const [smsBuying, setSmsBuying] = useState(false);
   const [studioSaving, setStudioSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [studioToast, setStudioToast] = useState(null);
@@ -155,7 +156,7 @@ function Settings({ isMobile, onImpersonate }) {
   React.useEffect(() => {
     if (!studioId) return;
     createClient().from("studios")
-      .select("name, address, city, postal_code, phone, email, website, cancel_delay_hours, booking_days_ahead, waitlist_max, timezone, reminder_hours_default, description, cover_photo_url, accent_color, slug, public_page_enabled, sms_enabled")
+      .select("name, address, city, postal_code, phone, email, website, cancel_delay_hours, booking_days_ahead, waitlist_max, timezone, reminder_hours_default, description, cover_photo_url, accent_color, slug, public_page_enabled, sms_enabled, sms_credits_balance")
       .eq("id", studioId).single()
       .then(({ data }) => {
         if (data) setStudioForm({
@@ -177,6 +178,7 @@ function Settings({ isMobile, onImpersonate }) {
           slug: data.slug || "",
           public_page_enabled: data.public_page_enabled ?? false,
           sms_enabled: data.sms_enabled ?? false,
+          sms_credits_balance: data.sms_credits_balance ?? 0,
         });
       });
   }, [studioId]);
@@ -600,6 +602,61 @@ function Settings({ isMobile, onImpersonate }) {
                 <div style={{ position:"absolute", top:3, left:studioForm.sms_enabled?20:3, width:16, height:16, borderRadius:"50%", background:"#fff", transition:"left .2s" }}/>
               </div>
             </div>
+
+            {/* Solde SMS + Quota + Achat */}
+            {studioForm.sms_enabled && (
+              <div style={{ margin:"12px 18px 0", padding:14, background:"#F8FFF8", border:"1.5px solid #B8DFC4", borderRadius:10 }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:700, color:"#065F46" }}>Crédits SMS restants</div>
+                    <div style={{ fontSize:22, fontWeight:800, color:studioForm.sms_credits_balance > 0 ? "#065F46" : "#A85030" }}>{studioForm.sms_credits_balance}</div>
+                  </div>
+                  <div style={{ fontSize:11, color:C.textMuted, textAlign:"right", lineHeight:1.5 }}>
+                    Quota mensuel inclus dans votre plan<br/>
+                    Rechargé automatiquement le 1er du mois<br/>
+                    {studioForm.sms_credits_balance <= 0 && <span style={{ color:"#A85030", fontWeight:700 }}>SMS bloqués — solde à 0</span>}
+                  </div>
+                </div>
+
+                {/* Quotas par plan */}
+                <div style={{ background:"#fff", borderRadius:8, padding:"10px 12px", marginBottom:12, border:`1px solid #B8DFC4` }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, textTransform:"uppercase", letterSpacing:.8, marginBottom:6 }}>Quota mensuel par plan</div>
+                  <div style={{ display:"flex", gap:12, fontSize:12 }}>
+                    {[["Essentiel","50"],["Standard","200"],["Pro","500"]].map(([p,q])=>(
+                      <span key={p} style={{ color:C.text }}><strong>{p}</strong> : {q} SMS</span>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, textTransform:"uppercase", letterSpacing:.8, marginBottom:8 }}>Acheter des crédits supplémentaires</div>
+                <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                  {[
+                    { id:"sms_100", label:"100 SMS", price:"8 €" },
+                    { id:"sms_500", label:"500 SMS", price:"35 €" },
+                    { id:"sms_1000", label:"1000 SMS", price:"60 €" },
+                  ].map(pack => (
+                    <button key={pack.id} disabled={smsBuying}
+                      onClick={async () => {
+                        setSmsBuying(true);
+                        try {
+                          const res = await fetch("/api/stripe/sms-credits", {
+                            method:"POST", headers:{"Content-Type":"application/json"},
+                            body: JSON.stringify({ studioId, packId: pack.id }),
+                          });
+                          const data = await res.json();
+                          if (data.url) window.location.href = data.url;
+                          else showToast(data.error || "Erreur", false);
+                        } catch { showToast("Erreur réseau", false); }
+                        setSmsBuying(false);
+                      }}
+                      style={{ padding:"8px 14px", borderRadius:8, border:`1.5px solid #B8DFC4`, background:"#fff", cursor:smsBuying?"wait":"pointer", fontSize:13, fontWeight:600, color:"#065F46" }}>
+                      {pack.label} — {pack.price}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ fontSize:11, color:C.textMuted, marginTop:8 }}>Les crédits achetés s'ajoutent au quota et ne sont pas perdus au reset mensuel.</div>
+              </div>
+            )}
           </div>
           <div style={{ padding:"0 18px 16px", borderTop:`1px solid ${C.borderSoft}`, paddingTop:16 }}>
             <div style={{ fontSize:11, fontWeight:800, color:C.accent, textTransform:"uppercase", letterSpacing:.6, marginBottom:12 }}>🔔 Notifications</div>

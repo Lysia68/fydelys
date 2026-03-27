@@ -172,7 +172,7 @@ function Members({ isMobile }) {
     const json = await res.json();
     if (!res.ok) {
       setMembers(prev=>prev.filter(m=>m.id!==tempId));
-      showToast(json.error==="EMAIL_EXISTS" ? "Email déjà utilisé dans ce studio ✕" : "Erreur : "+(json.error||"impossible de créer"), false);
+      showToast(json.limit ? json.error : json.error==="EMAIL_EXISTS" ? "Email déjà utilisé dans ce studio" : "Erreur : "+(json.error||"impossible de créer"), false);
     } else if (json.id) { setMembers(prev=>prev.map(m=>m.id===tempId?{...m,id:json.id}:m)); showToast("Adhérent créé — invitation envoyée par email ✓"); }
   };
 

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
 import { sendEmail } from "@/lib/email"
 import { createServerClient } from "@supabase/ssr"
+import { checkPlanLimit } from "@/lib/plan-limits"
 
 export const dynamic = "force-dynamic"
 
@@ -47,6 +48,10 @@ export async function POST(request: NextRequest) {
   if (!studio) {
     return NextResponse.json({ error: "Studio introuvable" }, { status: 404 })
   }
+
+  // Vérifier limite du plan
+  const limit = await checkPlanLimit(studioIdToUse, "add_coach")
+  if (!limit.ok) return NextResponse.json({ error: limit.error, limit: true }, { status: 403 })
 
   const studioName = studio.name || "Votre studio"
   const studioSlug = studio.slug
