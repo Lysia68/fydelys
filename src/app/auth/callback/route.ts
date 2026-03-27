@@ -229,6 +229,20 @@ export async function GET(request: NextRequest) {
       .from("studios").select("id").eq("slug", tenantSlug).single()
 
     if (studio) {
+      // Bloquer le login si membre suspendu ou supprimé
+      const { data: memberCheck } = await db.from("members")
+        .select("status, deleted_at").eq("studio_id", studio.id).eq("email", userEmail).maybeSingle()
+      if (memberCheck?.deleted_at) {
+        console.log("[auth/callback] Member deleted — blocking login for", userEmail)
+        response.headers.set("Location", `https://${tenantSlug}.fydelys.fr/login?error=compte_supprime`)
+        return response
+      }
+      if (memberCheck?.status === "suspendu") {
+        console.log("[auth/callback] Member suspended — blocking login for", userEmail)
+        response.headers.set("Location", `https://${tenantSlug}.fydelys.fr/login?error=compte_suspendu`)
+        return response
+      }
+
       const { data: invite } = await db.from("invitations")
         .select("role").eq("email", userEmail).eq("studio_id", studio.id)
         .eq("used", false).single()

@@ -41,10 +41,10 @@ export async function GET(request: NextRequest) {
     discMap[l.profile_id].push(l.discipline_id)
   })
 
-  // Si all=true (Settings), retourner tous les profils sauf superadmin. Sinon uniquement les coachs (Planning dropdown)
+  // Si all=true (Settings), retourner admin/coach (pas les adhérents, gérés dans l'onglet Adhérents)
   const allParam = request.nextUrl.searchParams.get("all")
   const profilesFiltered = allParam === "true"
-    ? (profiles || []).filter((p: any) => p.role !== "superadmin")
+    ? (profiles || []).filter((p: any) => p.role !== "superadmin" && p.role !== "adherent")
     : (profiles || []).filter((p: any) => p.is_coach || p.role === "coach")
 
   const coaches = profilesFiltered.map((p: any) => {
@@ -65,21 +65,7 @@ export async function GET(request: NextRequest) {
     }
   })
 
-  // Membres avec auth_user_id mais sans profil dans profiles (adherents sans compte app complet)
-  const orphanMembers = (members || [])
-    .filter((m: any) => m.auth_user_id && !profileIdSet.has(m.auth_user_id))
-    .map((m: any) => ({
-      id: m.auth_user_id,
-      fn: m.first_name || "",
-      ln: m.last_name  || "",
-      email: m.email   || authMap[m.auth_user_id]?.email || "",
-      role: "adherent",
-      is_coach: false,
-      disciplines: [],
-      confirmed: authMap[m.auth_user_id]?.confirmed !== false,
-    }))
-
-  return NextResponse.json({ coaches: [...coaches, ...orphanMembers], invites: invites || [] })
+  return NextResponse.json({ coaches, invites: invites || [] })
 }
 
 // POST /api/team → sauvegarder disciplines d'un coach

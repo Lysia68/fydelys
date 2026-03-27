@@ -519,6 +519,22 @@ function Members({ isMobile }) {
               {actionBtn(<><IcoTag2 s={13} c={C.textMid}/> Abonnement</>, ()=>setModal({type:"subscription",member:m}))}
               {actionBtn(<><IcoCalendar2 s={13} c={C.textMid}/> Historique</>, ()=>setModal({type:"history",member:m}))}
               {actionBtn(<>🎁 Offrir séances</>, ()=>setModal({type:"gift",member:m}))}
+              {m.status !== "suspendu"
+                ? actionBtn(<>⏸ Suspendre</>, async()=>{
+                    if (!window.confirm(`Suspendre ${m.firstName} ${m.lastName} ?`)) return;
+                    await createClient().from("members").update({status:"suspendu"}).eq("id",m.id);
+                    setMembers(prev=>prev.map(x=>x.id===m.id?{...x,status:"suspendu"}:x));
+                    setSelected(prev=>prev?{...prev,status:"suspendu"}:prev);
+                    showToast("Adhérent suspendu");
+                  })
+                : actionBtn(<>▶ Réactiver</>, async()=>{
+                    await createClient().from("members").update({status:"actif"}).eq("id",m.id);
+                    setMembers(prev=>prev.map(x=>x.id===m.id?{...x,status:"actif"}:x));
+                    setSelected(prev=>prev?{...prev,status:"actif"}:prev);
+                    showToast("Adhérent réactivé");
+                  })
+              }
+              {actionBtn(<><IcoX s={13} c="#A85030"/> Supprimer</>, ()=>deleteMember(m.id))}
               {isFrozen
                 ? actionBtn(<>&#10052; Dégeler</>, async()=>{
                     await createClient().from("members").update({frozen_until:null}).eq("id",m.id);

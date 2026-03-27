@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
     query = query
       .select("id, first_name, last_name, email, phone")
       .eq("studio_id", studioId)
+      .is("deleted_at", null)
       .or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%`)
       .limit(8)
   } else {
@@ -29,6 +30,7 @@ export async function GET(request: NextRequest) {
     query = query
       .select("id, first_name, last_name, email, phone, address, postal_code, city, birth_date, status, credits, credits_total, joined_at, next_payment, notes, subscription_id, profile_complete, profession, subscriptions(name)")
       .eq("studio_id", studioId)
+      .is("deleted_at", null)
       .order("last_name")
   }
 
@@ -166,7 +168,9 @@ export async function DELETE(request: NextRequest) {
   // Vérifier que le membre appartient au studio du caller
   const { data: member } = await db.from("members").select("studio_id").eq("id", id).single()
   if (!member || member.studio_id !== auth.studioId) return NextResponse.json({ error: "Accès refusé" }, { status: 403 })
-  const { error } = await db.from("members").delete().eq("id", id)
+
+  // Soft delete : marquer deleted_at au lieu de supprimer (historique préservé)
+  const { error } = await db.from("members").update({ deleted_at: new Date().toISOString(), status: "suspendu" }).eq("id", id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })

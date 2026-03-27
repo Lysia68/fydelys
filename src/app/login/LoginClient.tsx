@@ -234,6 +234,10 @@ export default function LoginPage({ initialStudioName }: { initialStudioName?: s
     const errParam = params.get("error")
     if(errParam === "lien_expire") {
       setError("Ce lien de connexion a expiré ou a déjà été utilisé. Entrez votre email pour recevoir un nouveau lien.")
+    } else if(errParam === "compte_suspendu") {
+      setError("Votre compte a été suspendu. Contactez votre studio pour plus d'informations.")
+    } else if(errParam === "compte_supprime") {
+      setError("Ce compte n'existe plus. Contactez votre studio pour plus d'informations.")
     } else if(errParam) {
       setError("Erreur de connexion. Veuillez réessayer.")
     }

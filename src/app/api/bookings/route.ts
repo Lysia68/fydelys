@@ -95,16 +95,13 @@ export async function POST(req: NextRequest) {
     const creditsOk   = hasCredits && (memberCredits.credits ?? 0) > 0
 
     // Si le studio utilise les paiements, vérifier que le membre peut réserver
+    // Les crédits sont déduits à la validation des présences, pas à la réservation
     if (paymentMode !== "none") {
       if (isUnlimited) {
         // Abonnement mensuel/illimité → OK
       } else if (creditsOk) {
         // A des crédits → OK
-      } else if (hasCredits && (memberCredits.credits ?? 0) <= 0) {
-        // Crédits épuisés
-        return NextResponse.json({ error: "Abonnement ou crédit requis pour réserver" }, { status: 402 })
       } else {
-        // Aucun abonnement ni crédits
         return NextResponse.json({ error: "Abonnement ou crédit requis pour réserver" }, { status: 402 })
       }
     }
@@ -127,13 +124,7 @@ export async function POST(req: NextRequest) {
       .insert({ session_id: sessionId, member_id: memberId, status }).select().single()
     if (bookErr || !booking) return NextResponse.json({ error: bookErr?.message }, { status: 500 })
 
-    // Décrémenter les crédits si applicable (pas liste d'attente, pas abonnement illimité)
-    if (status === "confirmed" && hasCredits && !isUnlimited) {
-      await db.from("members").update({
-        credits: Math.max(0, (memberCredits?.credits ?? 1) - 1)
-      }).eq("id", memberId)
-      console.log(`[bookings] Crédit déduit — membre ${memberId} : ${memberCredits?.credits} → ${(memberCredits?.credits ?? 1) - 1}`)
-    }
+    // Crédits déduits à la validation des présences (accordion.jsx), pas à la réservation
 
     // Email admin "cours complet" si cette inscription remplit la séance
     if (status === "confirmed") {
