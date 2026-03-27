@@ -26,47 +26,43 @@ export async function POST(req: NextRequest) {
   let event: Stripe.Event | null = null
   let usedSecret = "none"
 
-  const secrets: { label: string; value: string }[] = [
-    { label: "STRIPE_CONNECT_WEBHOOK_SECRET", value: process.env.STRIPE_CONNECT_WEBHOOK_SECRET || "" },
-    { label: "STRIPE_WEBHOOK_SECRET",          value: process.env.STRIPE_WEBHOOK_SECRET || "" },
-  ].filter(s => s.value)
-
-  L.info(`Tentative vérification signature — ${secrets.length} secret(s) globaux disponibles`)
-
-  for (const s of secrets) {
-    try {
-      event = stripe.webhooks.constructEvent(body, sig, s.value)
-      usedSecret = s.label
-      L.ok(`Signature vérifiée avec ${s.label}`)
-      break
-    } catch (e: any) {
-      L.warn(`Échec signature avec ${s.label} — ${e.message}`)
-    }
-  }
-
-  // Fallback : secret webhook propre au studio (mode direct)
-  if (!event) {
-    try {
-      const parsed = JSON.parse(body)
-      const studioId = parsed?.data?.object?.metadata?.studioId
-      L.info(`Fallback secret studio — studioId metadata: ${studioId || "absent"}`)
-      if (studioId) {
-        const { data: studio } = await db.from("studios")
-          .select("stripe_webhook_secret").eq("id", studioId).maybeSingle()
-        const studioSecret = (studio as any)?.stripe_webhook_secret
-        if (studioSecret) {
-          try {
-            event = stripe.webhooks.constructEvent(body, sig, studioSecret)
-            usedSecret = `studio:${studioId}`
-            L.ok(`Signature vérifiée avec secret studio ${studioId}`)
-          } catch (e: any) {
-            L.err(`Échec signature secret studio — ${e.message}`)
-          }
-        } else {
-          L.warn(`Aucun stripe_webhook_secret trouvé pour studio ${studioId}`)
+  // ── 1) Essayer d'abord le secret studio en base (mode direct) ────
+  try {
+    const parsed = JSON.parse(body)
+    const studioId = parsed?.data?.object?.metadata?.studioId
+    if (studioId) {
+      const { data: studio } = await db.from("studios")
+        .select("stripe_webhook_secret").eq("id", studioId).maybeSingle()
+      const studioSecret = (studio as any)?.stripe_webhook_secret
+      if (studioSecret) {
+        try {
+          event = stripe.webhooks.constructEvent(body, sig, studioSecret)
+          usedSecret = `studio:${studioId}`
+          L.ok(`Signature vérifiée avec secret studio ${studioId}`)
+        } catch (e: any) {
+          L.warn(`Échec signature secret studio ${studioId} — ${e.message}`)
         }
       }
-    } catch { /* ignore parse errors */ }
+    }
+  } catch { /* ignore parse errors */ }
+
+  // ── 2) Fallback : secrets globaux (Connect / platform) ───────────
+  if (!event) {
+    const secrets: { label: string; value: string }[] = [
+      { label: "STRIPE_CONNECT_WEBHOOK_SECRET", value: process.env.STRIPE_CONNECT_WEBHOOK_SECRET || "" },
+      { label: "STRIPE_WEBHOOK_SECRET",          value: process.env.STRIPE_WEBHOOK_SECRET || "" },
+    ].filter(s => s.value)
+
+    for (const s of secrets) {
+      try {
+        event = stripe.webhooks.constructEvent(body, sig, s.value)
+        usedSecret = s.label
+        L.ok(`Signature vérifiée avec ${s.label}`)
+        break
+      } catch (e: any) {
+        L.warn(`Échec signature avec ${s.label} — ${e.message}`)
+      }
+    }
   }
 
   if (!event) {

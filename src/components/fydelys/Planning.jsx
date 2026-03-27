@@ -481,8 +481,8 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
                         <div key={m.id} onClick={() => alreadyBooked ? null : toggleSelect(m)}
                           style={{ padding: "10px 14px", cursor: alreadyBooked ? "default" : "pointer", borderBottom: `1px solid ${C.borderSoft}`, transition: "background .1s",
                             background: isSel ? C.accentBg : alreadyBooked ? "#FAFAF8" : "transparent", opacity: alreadyBooked ? 0.5 : 1,
-                            display:"flex", alignItems:"center", gap:10 }}>
-                          <div style={{ width:18, height:18, borderRadius:4, border:`1.5px solid ${isSel ? C.accent : alreadyBooked ? C.border : C.border}`, background:isSel ? C.accent : "transparent", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                            display:"flex", alignItems:"center", gap:10, userSelect:"none", outline:"none" }}>
+                          <div style={{ width:18, height:18, borderRadius:4, border:`1.5px solid ${isSel ? C.accent : C.border}`, background:isSel ? C.accent : "transparent", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, pointerEvents:"none" }}>
                             {isSel && <span style={{ color:"#fff", fontSize:12, fontWeight:700 }}>✓</span>}
                           </div>
                           <div style={{ flex:1, minWidth:0 }}>
