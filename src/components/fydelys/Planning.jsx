@@ -274,6 +274,7 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
   const [loading, setLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(null);
+  const [selected, setSelected] = useState([]); // multi-select members
   const inp = useRef(null);
   // Guest form
   const [guestName, setGuestName] = useState("");
@@ -326,11 +327,46 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
     setHostResults(data || []);
   }
 
+  function toggleSelect(member) {
+    const already = (bookings[sessId] || []).some(b => b.memberId === member.id && b.st !== "cancelled");
+    if (already) return; // déjà inscrit
+    setSelected(prev => prev.some(m => m.id === member.id) ? prev.filter(m => m.id !== member.id) : [...prev, member]);
+  }
+
+  async function confirmSelected() {
+    const toBook = selected.length > 0 ? selected : [];
+    if (!toBook.length || confirming) return;
+    setConfirming(true);
+    let booked = 0;
+    const newBookings = [];
+    for (const member of toBook) {
+      const res = await fetch("/api/bookings", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ sessionId: sessId, memberId: member.id, studioId, force: true }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        booked += data.status === "confirmed" ? 1 : 0;
+        newBookings.push({ id: data.bookingId, memberId: member.id, st: data.status, attended: null,
+          name: `${member.first_name || ""} ${member.last_name || ""}`.trim(),
+          email: member.email || "", phone: member.phone || "" });
+      }
+    }
+    if (newBookings.length > 0) {
+      setBookings(prev => ({ ...prev, [sessId]: [...(prev[sessId] || []), ...newBookings] }));
+      setSessions(prev => prev.map(s => s.id === sessId ? { ...s, booked: s.booked + booked } : s));
+    }
+    setConfirming(false);
+    setDone(newBookings.length > 0 ? `${newBookings.length} inscrit${newBookings.length > 1 ? "s" : ""}` : "already");
+  }
+
+  // Raccourci : clic direct si pas encore en mode multi-select
   async function confirm(member) {
-    const sess = sessions.find(s => s.id === sessId);
-    if (!sess || !member || confirming) return;
+    if (confirming) return;
     const already = (bookings[sessId] || []).some(b => b.memberId === member.id && b.st !== "cancelled");
     if (already) { setDone("already"); return; }
+    setSelected([member]);
     setConfirming(true);
     const res = await fetch("/api/bookings", {
       method: "POST",
@@ -348,6 +384,7 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
       setSessions(prev => prev.map(s => s.id === sessId ? { ...s, booked: s.booked + (data.status === "confirmed" ? 1 : 0) } : s));
       setDone(data.status);
     }
+    setSelected([]);
   }
 
   async function confirmGuest(name) {
@@ -389,13 +426,13 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
           <div style={{ textAlign: "center", padding: "12px 0" }}>
             <div style={{ fontSize: 36, marginBottom: 10 }}>{done === "already" ? "⚠" : done === "confirmed" ? "OK" : "..."}</div>
             <div style={{ fontSize: 16, fontWeight: 800, color: C.text, marginBottom: 6 }}>
-              {done === "already" ? "Déjà inscrit" : done === "confirmed" ? "Inscrit avec succès" : "Ajouté en liste d'attente"}
+              {done === "already" ? "Déjà inscrit" : done === "confirmed" ? "Inscrit avec succès" : done?.includes("inscrit") ? done : "Ajouté en liste d'attente"}
             </div>
             <div style={{ fontSize: 13, color: C.textSoft, marginBottom: 18 }}>
-              {done === "already" ? "Cet adhérent est déjà inscrit à cette séance." : done === "confirmed" ? "La réservation est confirmée." : "La séance est complète, en attente."}
+              {done === "already" ? "Cet adhérent est déjà inscrit à cette séance." : done === "confirmed" ? "La réservation est confirmée." : done?.includes("inscrit") ? "Les réservations sont confirmées." : "La séance est complète, en attente."}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => { setDone(null); setQ(""); setResults([]); setGuestName(""); setHostId(null); setHostName(""); setHostSearch(""); setHostResults([]); }} style={{ flex: 1, padding: "9px", borderRadius: 9, border: `1px solid ${C.border}`, background: C.surfaceWarm, color: C.textSoft, fontSize: 14, cursor: "pointer", fontWeight: 600 }}>Inscrire un autre</button>
+              <button onClick={() => { setDone(null); setQ(""); setResults([]); setSelected([]); setGuestName(""); setHostId(null); setHostName(""); setHostSearch(""); setHostResults([]); }} style={{ flex: 1, padding: "9px", borderRadius: 9, border: `1px solid ${C.border}`, background: C.surfaceWarm, color: C.textSoft, fontSize: 14, cursor: "pointer", fontWeight: 600 }}>Inscrire un autre</button>
               <button onClick={onClose} style={{ flex: 1, padding: "9px", borderRadius: 9, border: "none", background: C.accent, color: "#fff", fontSize: 14, cursor: "pointer", fontWeight: 700 }}>Fermer</button>
             </div>
           </div>
@@ -424,18 +461,44 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
                   {loading && <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 16 }}>...</span>}
                   {q && !loading && <span onClick={() => { setQ(""); setResults([]); }} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 16, cursor: "pointer", color: C.textMuted }}>x</span>}
                 </div>
-                {results.length > 0 && (
-                  <div style={{ borderRadius: 10, border: `1px solid ${C.borderSoft}`, overflow: "hidden", marginBottom: 10 }}>
-                    {results.map(m => (
-                      <div key={m.id} onClick={() => confirm(m)}
-                        style={{ padding: "10px 14px", cursor: "pointer", borderBottom: `1px solid ${C.borderSoft}`, transition: "background .1s" }}
-                        onMouseEnter={e => e.currentTarget.style.background = C.accentBg}
-                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.first_name} {m.last_name}</div>
-                        <div style={{ fontSize: 12, color: C.textMuted }}>{m.email}{m.phone ? " · " + m.phone : ""}</div>
-                      </div>
+                {/* Sélection en cours */}
+                {selected.length > 0 && (
+                  <div style={{ marginBottom: 10, display:"flex", flexWrap:"wrap", gap:6 }}>
+                    {selected.map(m => (
+                      <span key={m.id} style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"4px 10px", borderRadius:20, background:C.accentBg, border:`1px solid ${C.accent}40`, fontSize:12, fontWeight:600, color:C.accent }}>
+                        {m.first_name} {m.last_name}
+                        <span onClick={()=>setSelected(prev=>prev.filter(x=>x.id!==m.id))} style={{ cursor:"pointer", fontSize:14, lineHeight:1 }}>x</span>
+                      </span>
                     ))}
                   </div>
+                )}
+                {results.length > 0 && (
+                  <div style={{ borderRadius: 10, border: `1px solid ${C.borderSoft}`, overflow: "hidden", marginBottom: 10, maxHeight:240, overflowY:"auto" }}>
+                    {results.map(m => {
+                      const isSel = selected.some(s => s.id === m.id);
+                      const alreadyBooked = (bookings[sessId] || []).some(b => b.memberId === m.id && b.st !== "cancelled");
+                      return (
+                        <div key={m.id} onClick={() => alreadyBooked ? null : toggleSelect(m)}
+                          style={{ padding: "10px 14px", cursor: alreadyBooked ? "default" : "pointer", borderBottom: `1px solid ${C.borderSoft}`, transition: "background .1s",
+                            background: isSel ? C.accentBg : alreadyBooked ? "#FAFAF8" : "transparent", opacity: alreadyBooked ? 0.5 : 1,
+                            display:"flex", alignItems:"center", gap:10 }}>
+                          <div style={{ width:18, height:18, borderRadius:4, border:`1.5px solid ${isSel ? C.accent : alreadyBooked ? C.border : C.border}`, background:isSel ? C.accent : "transparent", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                            {isSel && <span style={{ color:"#fff", fontSize:12, fontWeight:700 }}>✓</span>}
+                          </div>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{m.first_name} {m.last_name}</div>
+                            <div style={{ fontSize: 12, color: C.textMuted }}>{m.email}{m.phone ? " · " + m.phone : ""}{alreadyBooked ? " · déjà inscrit" : ""}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {selected.length > 1 && (
+                  <button onClick={confirmSelected}
+                    style={{ width:"100%", padding:"10px", borderRadius:9, border:"none", background:C.accent, color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer", marginBottom:8 }}>
+                    Inscrire {selected.length} adhérents
+                  </button>
                 )}
                 {q.length >= 2 && !loading && results.length === 0 && (
                   <div style={{ fontSize: 13, color: C.textMuted, textAlign: "center", padding: "14px 0" }}>Aucun adhérent trouvé</div>
