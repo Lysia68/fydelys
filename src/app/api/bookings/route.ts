@@ -130,71 +130,66 @@ export async function POST(req: NextRequest) {
       console.log(`[bookings] Crédit déduit — membre ${memberId} : ${memberCredits?.credits} → ${(memberCredits?.credits ?? 1) - 1}`)
     }
 
-    // Charger les infos nécessaires pour les emails
-    const [{ data: member, error: mErr }, { data: studio, error: sErr }] = await Promise.all([
-      db.from("members").select("first_name, last_name, email, phone, sms_opt_in").eq("id", memberId).maybeSingle(),
-      db.from("studios").select("id, name, slug, email, reminder_hours_default, sms_enabled, payment_mode").eq("id", studioId).maybeSingle(),
-    ])
+    // Répondre immédiatement — notifications en arrière-plan (fire-and-forget)
+    const response = NextResponse.json({ ok: true, bookingId: booking.id, status })
 
-    console.log(`[BK] send:${!!(process.env.SENDGRID_API_KEY&&member?.email&&studio)} SG:${!!process.env.SENDGRID_API_KEY} M:${!!member?.email} S:${!!studio} sE:${sErr?.message||"ok"}`)
+    // Notifications asynchrones (ne bloquent pas la réponse)
+    ;(async () => {
+      try {
+        const [{ data: member }, { data: studio }] = await Promise.all([
+          db.from("members").select("first_name, last_name, email, phone, sms_opt_in").eq("id", memberId).maybeSingle(),
+          db.from("studios").select("id, name, slug, email, sms_enabled").eq("id", studioId).maybeSingle(),
+        ])
 
-    if (process.env.SENDGRID_API_KEY && member?.email && studio) {
-      const disc = (sess as any).disciplines
-      const discName = disc?.name || "Séance"
-      const discIcon = disc?.icon || "🧘"
-      const sessDate = new Date(sess.session_date).toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long" })
-      const sessTime = sess.session_time?.slice(0, 5) || ""
-      const memberName = `${member.first_name || ""} ${member.last_name || ""}`.trim()
-      const firstName  = member.first_name || memberName
+        if (process.env.SENDGRID_API_KEY && member?.email && studio) {
+          const disc = (sess as any).disciplines
+          const discName = disc?.name || "Séance"
+          const discIcon = disc?.icon || ""
+          const sessDate = new Date(sess.session_date).toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long" })
+          const sessTime = sess.session_time?.slice(0, 5) || ""
+          const memberName = `${member.first_name || ""} ${member.last_name || ""}`.trim()
+          const firstName  = member.first_name || memberName
 
-      await Promise.allSettled([
-        // 1. Email au membre
-        sendEmail({
-          to: member.email,
-          subject: status === "waitlist"
-            ? `Liste d'attente — ${discName} chez ${studio.name}`
-            : `Réservation confirmée — ${discName} chez ${studio.name}`,
-          html: buildConfirmationEmail({ studio, sess, sessDate, sessTime, discName, discIcon, member: { name: memberName }, firstName, status }),
-          fromName: studio.name,
-        }),
-        // 2. Email à l'admin du studio
-        studio.email && sendEmail({
-          to: studio.email,
-          subject: `Nouvelle inscription — ${memberName} · ${discName} ${sessDate}`,
-          html: buildAdminNotifEmail({ studio, sess, sessDate, sessTime, discName, discIcon, memberName, status }),
-          fromName: studio.name,
-        }),
-      ])
-    }
-
-    // Envoyer SMS si activé + crédits disponibles
-    if (studio?.sms_enabled && member?.phone && member.sms_opt_in !== false) {
-      // Vérifier solde crédits
-      const { data: studioCredits } = await db.from("studios")
-        .select("sms_credits_balance").eq("id", studioId).single()
-      const balance = studioCredits?.sms_credits_balance ?? 0
-
-      if (balance > 0) {
-        const sessDate = new Date(sess.session_date).toLocaleDateString("fr-FR", { weekday:"short", day:"numeric", month:"short" })
-        const sessTime = sess.session_time?.slice(0, 5) || ""
-        const disc     = (sess as any).disciplines
-        const discName = disc?.name || "Séance"
-        const body = status === "waitlist"
-          ? smsWaitlist({ studioName: studio.name, discName, sessDate, sessTime })
-          : smsConfirmation({ studioName: studio.name, discName, sessDate, sessTime })
-        const smsResult = await sendSMS({ to: member.phone, body })
-        if (smsResult.ok) {
-          // Décrémenter le solde
-          await db.from("studios").update({
-            sms_credits_balance: balance - 1
-          }).eq("id", studioId)
+          Promise.allSettled([
+            sendEmail({
+              to: member.email,
+              subject: status === "waitlist"
+                ? `Liste d'attente — ${discName} chez ${studio.name}`
+                : `Réservation confirmée — ${discName} chez ${studio.name}`,
+              html: buildConfirmationEmail({ studio, sess, sessDate, sessTime, discName, discIcon, member: { name: memberName }, firstName, status }),
+              fromName: studio.name,
+            }),
+            studio.email && sendEmail({
+              to: studio.email,
+              subject: `Nouvelle inscription — ${memberName} · ${discName} ${sessDate}`,
+              html: buildAdminNotifEmail({ studio, sess, sessDate, sessTime, discName, discIcon, memberName, status }),
+              fromName: studio.name,
+            }),
+          ])
         }
-      } else {
-        console.log(`[SMS] Studio ${studioId} — solde insuffisant (${balance} crédits)`)
-      }
-    }
 
-    return NextResponse.json({ ok: true, bookingId: booking.id, status })
+        if (studio?.sms_enabled && member?.phone && member.sms_opt_in !== false) {
+          const { data: studioCredits } = await db.from("studios")
+            .select("sms_credits_balance").eq("id", studioId).single()
+          const balance = studioCredits?.sms_credits_balance ?? 0
+          if (balance > 0) {
+            const sessDate = new Date(sess.session_date).toLocaleDateString("fr-FR", { weekday:"short", day:"numeric", month:"short" })
+            const sessTime = sess.session_time?.slice(0, 5) || ""
+            const disc     = (sess as any).disciplines
+            const discName = disc?.name || "Séance"
+            const body = status === "waitlist"
+              ? smsWaitlist({ studioName: studio.name, discName, sessDate, sessTime })
+              : smsConfirmation({ studioName: studio.name, discName, sessDate, sessTime })
+            const smsResult = await sendSMS({ to: member.phone, body })
+            if (smsResult.ok) {
+              await db.from("studios").update({ sms_credits_balance: balance - 1 }).eq("id", studioId)
+            }
+          }
+        }
+      } catch (e: any) { console.error("[bookings] notification error:", e.message) }
+    })()
+
+    return response
   } catch (err: any) {
     console.error("POST /api/bookings error:", err?.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

@@ -40,6 +40,9 @@ const PAGE_TITLES = {
 };
   const [sharedStudioId, setSharedStudioId] = useState(propStudioId || null);
   const [dynamicMembersCount, setDynamicMembersCount] = useState<number|null>(null);
+  const [dynamicBillingStatus, setDynamicBillingStatus] = useState<string|null>(null);
+  const [dynamicPlanName, setDynamicPlanName] = useState<string|null>(null);
+  const [dynamicTrialEndsAt, setDynamicTrialEndsAt] = useState<string|null>(null);
   useEffect(() => {
     // propStudioId arrive en async depuis layout — on le sync dès qu'il est disponible
     if (propStudioId) { setSharedStudioId(propStudioId); return; }
@@ -91,6 +94,9 @@ const PAGE_TITLES = {
     setImpersonating(null);
     setSharedStudioId(propStudioId || null);
     setImpersonatedStudioName("");
+    setDynamicBillingStatus(null);
+    setDynamicPlanName(null);
+    setDynamicTrialEndsAt(null);
   }, [impersonating, propStudioId]);
 
   const startImpersonateStudio = React.useCallback(async (studioSlugTarget) => {
@@ -106,6 +112,11 @@ const PAGE_TITLES = {
         setImpersonatedStudioName(target.name || studioSlugTarget);
         const count = (memberCounts || {})[target.id] ?? null;
         setDynamicMembersCount(count !== null ? Number(count) : null);
+        // Charger billing_status et plan_slug pour l'impersonation
+        if (target.billing_status) setDynamicBillingStatus(target.billing_status);
+        if (target.plan_slug) setDynamicPlanName(target.plan_slug);
+        if (target.trial_ends_at) setDynamicTrialEndsAt(target.trial_ends_at);
+        else setDynamicTrialEndsAt(null);
       }
     } catch(e) { console.error("impersonate studioId load error", e); }
   }, []);
@@ -168,11 +179,14 @@ const PAGE_TITLES = {
 
   // ── ALL HOOKS MUST BE BEFORE CONDITIONAL RETURNS ──────────────────────────
 
-  const trialDaysLeft = trialEndsAt
-    ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / 86400000))
+  const activeBillingStatus = dynamicBillingStatus || billingStatus;
+  const activeTrialEndsAt = dynamicTrialEndsAt !== null ? dynamicTrialEndsAt : trialEndsAt;
+  const activePlan = dynamicPlanName || planName;
+  const trialDaysLeft = activeTrialEndsAt
+    ? Math.max(0, Math.ceil((new Date(activeTrialEndsAt).getTime() - Date.now()) / 86400000))
     : 0;
-  const showTrialBanner   = billingStatus === "trialing" && trialDaysLeft <= 7;
-  const showPastDueBanner = billingStatus === "past_due";
+  const showTrialBanner   = activeBillingStatus === "trialing" && trialDaysLeft <= 7;
+  const showPastDueBanner = activeBillingStatus === "past_due";
 
   // ── CONDITIONAL RENDERS (after all hooks) ─────────────────────────────────
   if (role === "superadmin") return <SuperAdminView onSwitch={setRole} isMobile={isMobile} onSignOut={onSignOut} onImpersonateStudio={startImpersonateStudio}/>;
@@ -240,9 +254,9 @@ const PAGE_TITLES = {
           ::-webkit-scrollbar-thumb { background:#D0C4B8; border-radius:3px; }
           ::-webkit-scrollbar-track { background:transparent; }
         `}</style>
-        {!isMobile && <Sidebar active={page} onNav={handleNav} studioName={activeStudioName} planName={planName} membersCount={dynamicMembersCount !== null ? dynamicMembersCount : membersCount} userName={userName} userRole={userRole} trialEndsAt={trialEndsAt} billingStatus={billingStatus}/>}
+        {!isMobile && <Sidebar active={page} onNav={handleNav} studioName={activeStudioName} planName={dynamicPlanName||planName} membersCount={dynamicMembersCount !== null ? dynamicMembersCount : membersCount} userName={userName} userRole={userRole} trialEndsAt={dynamicTrialEndsAt!==null?dynamicTrialEndsAt:trialEndsAt} billingStatus={dynamicBillingStatus||billingStatus}/>}
         <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, paddingBottom:isMobile?62:0 }}>
-          <TopBar title={PAGE_TITLES[page]} isMobile={isMobile} onSignOut={onSignOut} isSuperAdmin={initialRole==="superadmin" && !isImpersonatingAdmin} studioName={activeStudioName} billingStatus={billingStatus} planName={planName}/>
+          <TopBar title={PAGE_TITLES[page]} isMobile={isMobile} onSignOut={onSignOut} isSuperAdmin={initialRole==="superadmin" && !isImpersonatingAdmin} studioName={activeStudioName} billingStatus={dynamicBillingStatus||billingStatus} planName={dynamicPlanName||planName}/>
           {showTrialBanner && (
             <div style={{ background:trialDaysLeft<=3?"#F5EAE6":"#FDF4E3", borderBottom:`1px solid ${trialDaysLeft<=3?"#F5C2B5":"rgba(196,146,42,.25)"}`, padding:"10px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
               <div style={{ fontSize:13, color:trialDaysLeft<=3?"#A85030":"#C4922A", fontWeight:600 }}>
