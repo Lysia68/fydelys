@@ -295,7 +295,7 @@ function Members({ isMobile, onImpersonate }) {
       setMembers(prev=>prev.map(m => m.id===modal.member.id ? {...m, subscriptionId:subId||null, subscription:newSub} : m));
       setSelected(prev=>prev?.id===modal.member.id ? {...prev, subscriptionId:subId||null, subscription:newSub} : prev);
       setModal(null);
-      showToast("Formule mise à jour ✓");
+      showToast("Pack mise à jour ✓");
     } else { showToast("Erreur lors de la sauvegarde",false); setModal(prev => ({...prev, saving:false})); }
   };
 
@@ -303,18 +303,18 @@ function Members({ isMobile, onImpersonate }) {
     const subId = modal.subId ?? (modal.member.subscriptionId || "");
     const payMode = modal.paymentMode ?? "";
     return <Modal>
-      <ModalHeader title={`Formule — ${modal.member.firstName} ${modal.member.lastName}`} onClose={()=>setModal(null)}/>
+      <ModalHeader title={`Pack — ${modal.member.firstName} ${modal.member.lastName}`} onClose={()=>setModal(null)}/>
       <div style={{marginBottom:16}}>
-        <div style={{fontSize:12,color:C.textMuted,fontWeight:600,marginBottom:8,textTransform:"uppercase"}}>Formule actuel</div>
+        <div style={{fontSize:12,color:C.textMuted,fontWeight:600,marginBottom:8,textTransform:"uppercase"}}>Pack actuel</div>
         <div style={{padding:"10px 14px",background:C.accentBg,borderRadius:8,fontSize:15,fontWeight:700,color:C.accentDark}}>
           {modal.member.subscription||"—"}
         </div>
       </div>
       <div style={{marginBottom:14}}>
-        <FieldLabel>Nouvelle formule</FieldLabel>
+        <FieldLabel>Nouvelle pack</FieldLabel>
         <select value={subId} onChange={e=>setModal(prev=>({...prev, subId:e.target.value}))}
           style={{width:"100%",padding:"9px 12px",border:`1.5px solid ${C.border}`,borderRadius:8,fontSize:13,color:C.text,background:C.surfaceWarm,outline:"none"}}>
-          <option value="">— Aucune formule —</option>
+          <option value="">— Aucune pack —</option>
           {subscriptionsList.map(s=><option key={s.id} value={s.id}>{s.name}{s.price ? ` — ${s.price} €` : ""}</option>)}
         </select>
       </div>
@@ -548,7 +548,7 @@ function Members({ isMobile, onImpersonate }) {
 
             {/* KPIs */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-              {[["Formule",m.subscription],["Statut",m.status],["Membre depuis",m.joined?new Date(m.joined).toLocaleDateString("fr-FR"):"—"],["Crédits",`${m.credits} séance${m.credits!==1?"s":""}`]].map(([l,v])=>(
+              {[["Pack",m.subscription],["Statut",m.status],["Membre depuis",m.joined?new Date(m.joined).toLocaleDateString("fr-FR"):"—"],["Crédits",`${m.credits} séance${m.credits!==1?"s":""}`]].map(([l,v])=>(
                 <div key={l} style={{background:l==="Crédits"&&m.credits===0?"#FDE8E8":C.bg,borderRadius:8,padding:"10px 12px",border:`1px solid ${l==="Crédits"&&m.credits===0?"#F5C2C2":C.border}`}}>
                   <div style={{fontSize:10,fontWeight:700,color:C.textMuted,textTransform:"uppercase",marginBottom:2}}>{l}</div>
                   <div style={{fontSize:14,fontWeight:600,color:l==="Crédits"&&m.credits===0?"#C43A3A":C.text,textTransform:"capitalize"}}>{v}</div>
@@ -575,7 +575,17 @@ function Members({ isMobile, onImpersonate }) {
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               {onImpersonate && actionBtn(<>👁 Vue membre</>, ()=>onImpersonate("adherent", m.id, `${m.firstName} ${m.lastName}`.trim()), true)}
               {actionBtn(<><IcoMail s={13} c={onImpersonate?"currentColor":"white"}/> Email</>, ()=>setModal({type:"email",member:m}), !onImpersonate)}
-              {actionBtn(<><IcoTag2 s={13} c={C.textMid}/> Formule</>, ()=>setModal({type:"subscription",member:m}))}
+              {actionBtn(<>🔗 Renvoyer lien</>, async()=>{
+                try {
+                  const res = await fetch("/api/send-magic-link", {
+                    method:"POST", headers:{"Content-Type":"application/json"},
+                    body: JSON.stringify({ email: m.email, tenantSlug: window.location.hostname.split(".")[0] }),
+                  });
+                  if (res.ok) showToast(`Lien de connexion envoyé à ${m.email}`);
+                  else showToast("Erreur lors de l'envoi", false);
+                } catch { showToast("Erreur réseau", false); }
+              })}
+              {actionBtn(<><IcoTag2 s={13} c={C.textMid}/> Pack</>, ()=>setModal({type:"subscription",member:m}))}
               {actionBtn(<><IcoCalendar2 s={13} c={C.textMid}/> Historique</>, ()=>setModal({type:"history",member:m}))}
               {actionBtn(<>🎁 Offrir séances</>, ()=>setModal({type:"gift",member:m}))}
               {m.status !== "suspendu"
@@ -606,12 +616,12 @@ function Members({ isMobile, onImpersonate }) {
                     await createClient().from("members").update({frozen_until:null}).eq("id",m.id);
                     setMembers(prev=>prev.map(x=>x.id===m.id?{...x,frozenUntil:null}:x));
                     setSelected(prev=>prev?{...prev,frozenUntil:null}:prev);
-                    setToast({msg:"Formule dégelé",ok:true}); setTimeout(()=>setToast(null),3000);
+                    setToast({msg:"Pack dégelé",ok:true}); setTimeout(()=>setToast(null),3000);
                   })
                 : actionBtn(<>&#10052; Geler</>, ()=>{
                     setConfirmModal({
-                      title: "Geler la formule",
-                      message: `Geler la formule de ${m.firstName} ${m.lastName} jusqu'à quelle date ?`,
+                      title: "Geler la pack",
+                      message: `Geler la pack de ${m.firstName} ${m.lastName} jusqu'à quelle date ?`,
                       inputLabel: "Date de fin (AAAA-MM-JJ)",
                       inputDefault: new Date(Date.now()+30*86400000).toISOString().slice(0,10),
                       onConfirm: async (val) => {
