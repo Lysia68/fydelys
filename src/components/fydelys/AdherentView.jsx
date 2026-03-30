@@ -985,7 +985,9 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
   // Si le membre a un vrai nom, on ne force pas l'onboarding même si profile_complete est null
   // Onboarding requis si profile_complete n'est pas explicitement true
   // Une fois profile_complete = true sauvegardé en base, le F5 ne revient plus sur l'onboarding
-  const needsOnboarding = !loading && me && me.profile_complete !== true
+  // Pas d'onboarding si le profil est déjà rempli (import SQL) — vérifier nom + email
+  const hasRealProfile = me && me.first_name && me.last_name && me.first_name !== "Nouveau" && me.last_name !== "Membre"
+  const needsOnboarding = !loading && me && me.profile_complete !== true && !hasRealProfile
   if (needsOnboarding) {
     return (
       <OnboardingView
