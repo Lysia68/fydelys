@@ -18,19 +18,21 @@ export async function GET(request: Request) {
   const today = new Date()
   const mm = String(today.getMonth() + 1).padStart(2, "0")
   const dd = String(today.getDate()).padStart(2, "0")
-  const todayMD = `${mm}-${dd}` // ex: "03-13"
+  const todayMD = `${mm}-${dd}` // ex: "03-30"
 
-  // Charger tous les membres dont l'anniversaire est aujourd'hui
-  // birth_date est stockée en YYYY-MM-DD, on filtre sur MM-DD via to_char côté Supabase
-  // Alternative compatible : charger et filtrer côté JS
-  const { data: members } = await db
+  console.log(`[CRON birthdays] Date UTC: ${today.toISOString()}, todayMD: ${todayMD}`)
+
+  // Charger tous les membres avec une date de naissance
+  const { data: members, error: membersErr } = await db
     .from("members")
-    .select("id, first_name, last_name, email, birth_date, studio_id, studios(name, slug, email)")
+    .select("id, first_name, last_name, email, birth_date, status, studio_id, studios(name, slug, email)")
     .not("birth_date", "is", null)
     .not("email", "is", null)
-    .in("status", ["actif", "Actif", "nouveau"])
+    .is("deleted_at", null)
 
-  if (!members?.length) return NextResponse.json({ ok: true, sent: 0 })
+  console.log(`[CRON birthdays] Membres avec birth_date: ${members?.length || 0}, error: ${membersErr?.message || "none"}`)
+
+  if (!members?.length) return NextResponse.json({ ok: true, sent: 0, todayMD, members_with_bd: 0 })
 
   // Filtrer côté JS sur MM-DD
   const birthdayMembers = members.filter((m: any) => {
@@ -39,8 +41,13 @@ export async function GET(request: Request) {
     return parts.length >= 3 && `${parts[1]}-${parts[2]}` === todayMD
   })
 
+  console.log(`[CRON birthdays] todayMD=${todayMD}, total membres=${members.length}, anniversaires trouvés=${birthdayMembers.length}`)
+  if (birthdayMembers.length > 0) {
+    console.log(`[CRON birthdays] Membres:`, birthdayMembers.map((m:any) => `${m.first_name} ${m.last_name} (${m.birth_date}, status=${m.status}, studio=${m.studios?.name||"?"})`))
+  }
+
   if (!birthdayMembers.length) {
-    return NextResponse.json({ ok: true, sent: 0, message: "Aucun anniversaire aujourd'hui" })
+    return NextResponse.json({ ok: true, sent: 0, todayMD, total_members: members.length, message: "Aucun anniversaire aujourd'hui" })
   }
 
   let totalSent = 0

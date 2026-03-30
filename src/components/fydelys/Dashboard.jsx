@@ -241,8 +241,7 @@ function Dashboard({ isMobile }) {
     sessions.forEach(s => {
       if (s.date >= d30str) {
         (bookings[s.id]||[]).forEach(b => {
-          if (b.st === "confirmed" && b.id) activeIds.add(b.fn ? `${b.fn}|${b.ln}` : b.memberId);
-          if (b.memberId) activeIds.add(b.memberId);
+          if (b.st === "confirmed" && b.id) activeIds.add(b.id); // b.id = member_id dans le dashboard
         });
       }
     });
