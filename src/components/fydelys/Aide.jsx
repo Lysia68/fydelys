@@ -932,10 +932,10 @@ function AlbertChat({ isMobile, studioName, onNeedsHuman }) {
   return (
     <div style={{ background:"linear-gradient(135deg,#2A1F14 0%,#5C3D20 100%)", borderRadius:16, padding:isMobile?"16px":"20px 24px", marginBottom:24, color:"#fff" }}>
       <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:expanded?16:0 }}>
-        <AlbertAvatar size={64}/>
+        <AlbertAvatar size={48}/>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:17, fontWeight:800 }}>Je suis Albert</div>
-          <div style={{ fontSize:13, color:"rgba(255,255,255,.6)", marginTop:2 }}>Votre assistant Fydelys — posez-moi une question !</div>
+          <div style={{ fontSize:13, color:"rgba(255,255,255,.6)", marginTop:2 }}>Votre assistant <a href={typeof window!=="undefined"&&window.location.hostname.includes("fydelys.fr")&&window.location.hostname!=="fydelys.fr"?"/dashboard":"https://fydelys.fr"} style={{color:"#F5D5A8",textDecoration:"none",fontWeight:600}}>{studioName||"Fydelys"}</a> — posez-moi une question !</div>
         </div>
       </div>
 
@@ -944,7 +944,7 @@ function AlbertChat({ isMobile, studioName, onNeedsHuman }) {
         <div ref={chatRef} style={{ maxHeight:300, overflowY:"auto", marginBottom:12, padding:"12px 0", borderTop:"1px solid rgba(255,255,255,.1)" }}>
           {messages.map((m, i) => (
             <div key={i} style={{ display:"flex", gap:10, marginBottom:10, justifyContent:m.role==="user"?"flex-end":"flex-start" }}>
-              {m.role === "albert" && <AlbertAvatar size={28}/>}
+              {m.role === "albert" && <AlbertAvatar size={24}/>}
               <div style={{
                 maxWidth:"80%", padding:"10px 14px", borderRadius:12,
                 background: m.role === "user" ? "rgba(255,255,255,.15)" : "rgba(245,213,168,.15)",
@@ -958,7 +958,7 @@ function AlbertChat({ isMobile, studioName, onNeedsHuman }) {
           ))}
           {loading && (
             <div style={{ display:"flex", gap:10, marginBottom:10 }}>
-              <AlbertAvatar size={28}/>
+              <AlbertAvatar size={24}/>
               <div style={{ padding:"10px 14px", borderRadius:12, background:"rgba(245,213,168,.15)", color:"rgba(255,255,255,.5)", fontSize:13 }}>Albert réfléchit...</div>
             </div>
           )}

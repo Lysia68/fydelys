@@ -81,7 +81,7 @@ export async function middleware(request: NextRequest) {
   const isProtected = pathname.startsWith("/dashboard") || pathname.startsWith("/planning") ||
                       pathname.startsWith("/members") || pathname.startsWith("/subscriptions") ||
                       pathname.startsWith("/payments") || pathname.startsWith("/disciplines") ||
-                      pathname.startsWith("/settings")
+                      pathname.startsWith("/settings") || pathname.startsWith("/aide")
 
   // Auth guard
   if (!user && isProtected) {

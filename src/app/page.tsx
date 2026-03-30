@@ -1,6 +1,125 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
 
+function ContactForm() {
+  const [form, setForm] = useState({ firstName:"", lastName:"", studio:"", phone:"", email:"", activity:"", message:"" });
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const inp = { width:"100%", padding:"11px 14px", border:"1.5px solid #DDD5C8", borderRadius:10, fontSize:14, outline:"none", boxSizing:"border-box" as const, color:"#2A1F14", background:"#FDFAF7", fontFamily:"inherit" };
+  const lbl = { fontSize:11, fontWeight:700 as const, color:"#8C7B6C", textTransform:"uppercase" as const, letterSpacing:0.8, display:"block" as const, marginBottom:5 };
+
+  const handleSend = async () => {
+    if (!form.firstName || !form.email || !form.message) return;
+    setSending(true);
+    try {
+      await fetch("/api/contact", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ name:`${form.firstName} ${form.lastName}`, email:form.email, subject:`Demande de renseignement — ${form.studio||"Sans studio"}`, message:`Studio: ${form.studio}\nActivité: ${form.activity}\nTel: ${form.phone}\n\n${form.message}` }),
+      });
+      setSent(true);
+    } catch {}
+    setSending(false);
+  };
+
+  if (sent) return (
+    <div style={{textAlign:"center",padding:32,background:"#F0FAF2",borderRadius:14,border:"1.5px solid #A8D5B0"}}>
+      <div style={{fontSize:36,marginBottom:12}}>✅</div>
+      <div style={{fontSize:18,fontWeight:700,color:"#2A6638",marginBottom:8}}>Message envoyé !</div>
+      <div style={{fontSize:14,color:"#4E8A58"}}>Nous vous répondrons sous 24h.</div>
+    </div>
+  );
+
+  return (
+    <div style={{background:"#fff",borderRadius:16,border:"1.5px solid #DDD5C8",padding:24,boxShadow:"0 4px 24px rgba(42,31,20,.06)"}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+        <div><label style={lbl}>Prénom *</label><input value={form.firstName} onChange={e=>setForm(f=>({...f,firstName:e.target.value}))} style={inp} placeholder="Jean"/></div>
+        <div><label style={lbl}>Nom</label><input value={form.lastName} onChange={e=>setForm(f=>({...f,lastName:e.target.value}))} style={inp} placeholder="Dupont"/></div>
+      </div>
+      <div style={{marginBottom:14}}><label style={lbl}>Nom du studio</label><input value={form.studio} onChange={e=>setForm(f=>({...f,studio:e.target.value}))} style={inp} placeholder="Mon Studio Yoga"/></div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+        <div><label style={lbl}>Email *</label><input type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} style={inp} placeholder="jean@studio.fr"/></div>
+        <div><label style={lbl}>Téléphone</label><input type="tel" value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))} style={inp} placeholder="06 12 34 56 78"/></div>
+      </div>
+      <div style={{marginBottom:14}}><label style={lbl}>Activité</label>
+        <select value={form.activity} onChange={e=>setForm(f=>({...f,activity:e.target.value}))} style={{...inp,appearance:"none" as any}}>
+          <option value="">— Choisir —</option>
+          {["Yoga","Pilates","Méditation","Danse","Fitness","Arts martiaux","Bien-être","Autre"].map(a=><option key={a}>{a}</option>)}
+        </select>
+      </div>
+      <div style={{marginBottom:18}}><label style={lbl}>Message *</label><textarea value={form.message} onChange={e=>setForm(f=>({...f,message:e.target.value}))} rows={4} style={{...inp,resize:"vertical" as any}} placeholder="Décrivez votre besoin..."/></div>
+      <button onClick={handleSend} disabled={sending || !form.firstName || !form.email || !form.message}
+        style={{width:"100%",padding:"14px",borderRadius:10,border:"none",background:sending?"#DDD5C8":"linear-gradient(145deg,#B88050,#9A6030)",color:"#fff",fontSize:15,fontWeight:700,cursor:sending?"wait":"pointer"}}>
+        {sending ? "Envoi..." : "Envoyer ma demande"}
+      </button>
+    </div>
+  );
+}
+
+function LandingAlbertChat() {
+  const [messages, setMessages] = useState<{role:string,text:string}[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const chatRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+  }, [messages]);
+
+  const send = async () => {
+    const q = input.trim();
+    if (!q || loading) return;
+    setInput("");
+    setMessages(prev => [...prev, { role:"user", text:q }]);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/albert", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ question:q, studioName:"Visiteur", history:messages.slice(-6) }),
+      });
+      const data = await res.json();
+      setMessages(prev => [...prev, { role:"albert", text:data.answer||"Je ne suis pas sûr de comprendre. Reformulez ou contactez-nous via le formulaire ci-dessus." }]);
+    } catch {
+      setMessages(prev => [...prev, { role:"albert", text:"Erreur réseau. Réessayez." }]);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{background:"#2A1F14",borderRadius:16,padding:24,color:"#fff"}}>
+      <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:messages.length?16:0}}>
+        <img src="/images/albert-sm.png" alt="Albert" width={64} height={64} style={{borderRadius:"50%",objectFit:"cover",flexShrink:0}}/>
+        <div>
+          <div style={{fontSize:18,fontWeight:800}}>Je suis Albert</div>
+          <div style={{fontSize:13,color:"rgba(255,255,255,.6)"}}>Posez-moi une question sur Fydelys !</div>
+        </div>
+      </div>
+      {messages.length > 0 && (
+        <div ref={chatRef} style={{maxHeight:300,overflowY:"auto",marginBottom:12,padding:"12px 0",borderTop:"1px solid rgba(255,255,255,.1)"}}>
+          {messages.map((m,i) => (
+            <div key={i} style={{display:"flex",gap:10,marginBottom:10,justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
+              {m.role==="albert" && <img src="/images/albert-sm.png" alt="" width={28} height={28} style={{borderRadius:"50%",objectFit:"cover",flexShrink:0}}/>}
+              <div style={{maxWidth:"80%",padding:"10px 14px",borderRadius:12,background:m.role==="user"?"rgba(255,255,255,.15)":"rgba(245,213,168,.15)",color:"#fff",fontSize:13,lineHeight:1.6}}>
+                {m.text}
+              </div>
+            </div>
+          ))}
+          {loading && <div style={{display:"flex",gap:10}}><img src="/images/albert-sm.png" alt="" width={28} height={28} style={{borderRadius:"50%",objectFit:"cover",flexShrink:0}}/><div style={{padding:"10px 14px",borderRadius:12,background:"rgba(245,213,168,.15)",color:"rgba(255,255,255,.5)",fontSize:13}}>Albert réfléchit...</div></div>}
+        </div>
+      )}
+      <div style={{display:"flex",gap:8,marginTop:messages.length?0:12}}>
+        <input value={input} onChange={e=>setInput(e.target.value)}
+          onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();send();}}}
+          placeholder="Ex : Comment fonctionne Fydelys ?"
+          style={{flex:1,padding:"10px 14px",borderRadius:10,border:"1.5px solid rgba(255,255,255,.2)",background:"rgba(255,255,255,.1)",color:"#fff",fontSize:14,outline:"none",fontFamily:"inherit"}}/>
+        <button onClick={send} disabled={loading||!input.trim()}
+          style={{padding:"10px 18px",borderRadius:10,border:"none",background:"#F5D5A8",color:"#2A1F14",fontSize:14,fontWeight:700,cursor:loading?"wait":"pointer",opacity:loading||!input.trim()?.5:1}}>
+          Envoyer
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function FleurDeLys({ size = 46 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 80 80" fill="none">
@@ -679,6 +798,32 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── CONTACT ── */}
+      <section id="contact" style={{padding:"64px 0"}}>
+        <div style={{maxWidth:600,margin:"0 auto",padding:"0 20px"}}>
+          <h2 style={{fontFamily:"var(--D)",fontSize:"clamp(28px,4vw,40px)",fontWeight:700,color:"var(--dark)",textAlign:"center",marginBottom:8,letterSpacing:"-0.5px"}}>
+            Contactez-nous
+          </h2>
+          <p style={{textAlign:"center",color:"var(--muted)",fontSize:15,marginBottom:32}}>
+            Une question, une demande de démo ? Remplissez le formulaire ci-dessous.
+          </p>
+          <ContactForm/>
+        </div>
+      </section>
+
+      {/* ── ASSISTANCE ALBERT ── */}
+      <section id="assistance" style={{padding:"64px 0",background:"var(--bg2)"}}>
+        <div style={{maxWidth:600,margin:"0 auto",padding:"0 20px"}}>
+          <h2 style={{fontFamily:"var(--D)",fontSize:"clamp(28px,4vw,40px)",fontWeight:700,color:"var(--dark)",textAlign:"center",marginBottom:8,letterSpacing:"-0.5px"}}>
+            Assistance
+          </h2>
+          <p style={{textAlign:"center",color:"var(--muted)",fontSize:15,marginBottom:32}}>
+            Albert, notre assistant IA, répond à vos questions en temps réel.
+          </p>
+          <LandingAlbertChat/>
+        </div>
+      </section>
+
       {/* ── FOOTER ── */}
       <footer>
         <div className="footer-top">
@@ -707,8 +852,8 @@ export default function LandingPage() {
           <div>
             <div className="footer-h">Support</div>
             <div className="footer-links">
-              <a href="mailto:info@lysia.fr" className="footer-link">Contact</a>
-              <a href="mailto:support@fydelys.fr" className="footer-link">Assistance</a>
+              <a href="#contact" className="footer-link">Contact</a>
+              <a href="#assistance" className="footer-link">Assistance</a>
             </div>
           </div>
           {/* Légal */}
