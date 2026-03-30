@@ -855,6 +855,124 @@ function AideIllustration({ type, color = "#3A6E90" }) {
   return null;
 }
 
+function AlbertChat({ isMobile, studioName }) {
+  const [messages, setMessages] = React.useState([]);
+  const [input, setInput] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  const [expanded, setExpanded] = React.useState(false);
+  const messagesEnd = React.useRef(null);
+
+  React.useEffect(() => {
+    messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const FAQ = [
+    { k: ["créer","séance","cours"], a: "Pour créer une séance, allez dans Planning → + Séance. Choisissez la discipline, le coach, la date et l'heure. Pour des séances récurrentes, utilisez l'onglet Récurrence." },
+    { k: ["membre","ajouter","inscrire","nouveau"], a: "Pour ajouter un membre, allez dans Membres → + Membre. Remplissez le formulaire et un magic link sera envoyé par email. Vous pouvez aussi inscrire un membre directement depuis le planning." },
+    { k: ["paiement","stripe","carte","payer"], a: "Configurez les paiements dans Paramètres → Paiements. Vous pouvez utiliser Stripe (Connect ou Direct) pour accepter les paiements en ligne, ou ajouter des paiements manuels (espèces, chèque, virement)." },
+    { k: ["annuler","annulation","supprimer séance"], a: "Pour annuler une séance, cliquez dessus dans le planning puis sur Annuler. Les inscrits sont notifiés automatiquement. Pour supprimer, cliquez sur Supprimer (les réservations seront retirées)." },
+    { k: ["pack","abonnement","formule","crédit"], a: "Gérez vos packs dans la section Packs. Créez des packs mensuels (illimités) ou à la séance (crédits). Assignez un pack à un membre depuis sa fiche → bouton Pack." },
+    { k: ["coach","équipe","inviter"], a: "Invitez un coach dans Paramètres → Équipe → + Inviter un coach. Il recevra un magic link par email. Vous pourrez ensuite lui assigner des disciplines." },
+    { k: ["fermeture","congé","vacances","fermé"], a: "Pour planifier une fermeture, allez dans Planning → Fermetures. Ajoutez un label (ex: Vacances d'été), choisissez les dates. La fermeture apparaîtra dans le planning admin et membre." },
+    { k: ["sms","rappel","notification"], a: "Activez les SMS dans Paramètres. Les rappels sont envoyés automatiquement avant chaque séance selon le délai configuré (1h à 48h). Chaque SMS consomme 1 crédit." },
+    { k: ["export","csv","données"], a: "Pour exporter vos membres, allez dans Membres → Exporter. Le fichier CSV est compatible Excel avec les séparateurs français." },
+    { k: ["gel","geler","suspendre","pause"], a: "Pour geler un membre, ouvrez sa fiche → Geler, puis choisissez la date de fin. Le membre ne pourra pas réserver pendant cette période." },
+  ];
+
+  const findFaqAnswer = (q) => {
+    const lower = q.toLowerCase();
+    const match = FAQ.find(f => f.k.some(k => lower.includes(k)));
+    return match?.a || null;
+  };
+
+  const send = async () => {
+    const q = input.trim();
+    if (!q || loading) return;
+    setInput("");
+    setExpanded(true);
+    setMessages(prev => [...prev, { role: "user", text: q }]);
+
+    // 1. Essayer FAQ locale
+    const faqAnswer = findFaqAnswer(q);
+    if (faqAnswer) {
+      setMessages(prev => [...prev, { role: "albert", text: faqAnswer }]);
+      return;
+    }
+
+    // 2. Appel API Claude
+    setLoading(true);
+    try {
+      const res = await fetch("/api/albert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: q, studioName, history: messages.slice(-6) }),
+      });
+      const data = await res.json();
+      if (data.answer) {
+        setMessages(prev => [...prev, { role: "albert", text: data.answer }]);
+      } else {
+        setMessages(prev => [...prev, { role: "albert", text: "Hmm, je ne suis pas sûr de comprendre. Pouvez-vous reformuler ? Si le problème persiste, utilisez le formulaire de contact ci-dessous." }]);
+      }
+    } catch {
+      setMessages(prev => [...prev, { role: "albert", text: "Oups, une erreur réseau. Réessayez dans quelques instants." }]);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ background:"linear-gradient(135deg,#2A1F14 0%,#5C3D20 100%)", borderRadius:16, padding:isMobile?"16px":"20px 24px", marginBottom:24, color:"#fff" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:expanded?16:0 }}>
+        <div style={{ width:52, height:52, borderRadius:"50%", background:"#F5D5A8", border:"2px solid #DFC0A0", display:"flex", alignItems:"center", justifyContent:"center", fontSize:28, flexShrink:0 }}>
+          🧓
+        </div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:17, fontWeight:800 }}>Je suis Albert</div>
+          <div style={{ fontSize:13, color:"rgba(255,255,255,.6)", marginTop:2 }}>Votre assistant Fydelys — posez-moi une question !</div>
+        </div>
+      </div>
+
+      {/* Messages */}
+      {expanded && messages.length > 0 && (
+        <div style={{ maxHeight:300, overflowY:"auto", marginBottom:12, padding:"12px 0", borderTop:"1px solid rgba(255,255,255,.1)" }}>
+          {messages.map((m, i) => (
+            <div key={i} style={{ display:"flex", gap:10, marginBottom:10, justifyContent:m.role==="user"?"flex-end":"flex-start" }}>
+              {m.role === "albert" && <div style={{ width:28, height:28, borderRadius:"50%", background:"#F5D5A8", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, flexShrink:0 }}>🧓</div>}
+              <div style={{
+                maxWidth:"80%", padding:"10px 14px", borderRadius:12,
+                background: m.role === "user" ? "rgba(255,255,255,.15)" : "rgba(245,213,168,.15)",
+                color: "#fff", fontSize:13, lineHeight:1.6,
+                borderBottomRightRadius: m.role === "user" ? 4 : 12,
+                borderBottomLeftRadius: m.role === "albert" ? 4 : 12,
+              }}>
+                {m.text}
+              </div>
+            </div>
+          ))}
+          {loading && (
+            <div style={{ display:"flex", gap:10, marginBottom:10 }}>
+              <div style={{ width:28, height:28, borderRadius:"50%", background:"#F5D5A8", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, flexShrink:0 }}>🧓</div>
+              <div style={{ padding:"10px 14px", borderRadius:12, background:"rgba(245,213,168,.15)", color:"rgba(255,255,255,.5)", fontSize:13 }}>Albert réfléchit...</div>
+            </div>
+          )}
+          <div ref={messagesEnd}/>
+        </div>
+      )}
+
+      {/* Input */}
+      <div style={{ display:"flex", gap:8, marginTop:expanded?0:12 }}>
+        <input value={input} onChange={e=>setInput(e.target.value)}
+          onKeyDown={e=>{ if(e.key==="Enter") send(); }}
+          placeholder="Ex : Comment créer une séance récurrente ?"
+          style={{ flex:1, padding:"10px 14px", borderRadius:10, border:"1.5px solid rgba(255,255,255,.2)", background:"rgba(255,255,255,.1)", color:"#fff", fontSize:14, outline:"none", fontFamily:"inherit" }}/>
+        <button onClick={send} disabled={loading || !input.trim()}
+          style={{ padding:"10px 18px", borderRadius:10, border:"none", background:"#F5D5A8", color:"#2A1F14", fontSize:14, fontWeight:700, cursor:loading?"wait":"pointer", opacity:loading||!input.trim()?.5:1 }}>
+          Envoyer
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AidePage({ isMobile }) {
   const p = isMobile ? 16 : 28;
   const [open, setOpen] = React.useState(null);
@@ -1068,6 +1186,9 @@ function AidePage({ isMobile }) {
         <div style={{ fontSize: isMobile?22:28, fontWeight: 800, color: C.text, letterSpacing: -0.5, marginBottom: 6 }}>Centre d'aide ✦</div>
         <div style={{ fontSize: 14, color: C.textSoft }}>Tout ce qu'il faut savoir pour gérer votre studio avec Fydelys.</div>
       </div>
+
+      {/* Albert — Assistant IA */}
+      <AlbertChat isMobile={isMobile} studioName={studioName}/>
 
       {/* Formulaire de contact */}
       <div style={{ background: C.surface, border: `1.5px solid ${C.border}`, borderRadius: 14, padding: "20px 20px", marginBottom: 24 }}>
