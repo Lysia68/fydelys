@@ -459,8 +459,12 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
           <>
             {/* Tabs : Adhérent / Invité */}
             <div style={{ display: "flex", gap: 4, background: C.bg, borderRadius: 10, padding: 3, marginBottom: 16 }}>
-              <button style={tabStyle(mode === "member")} onClick={() => setMode("member")}>Membre</button>
-              <button style={tabStyle(mode === "guest")} onClick={() => setMode("guest")}>Invité d'un membre</button>
+              <button style={tabStyle(mode === "member")} onClick={() => setMode("member")}>
+                Membre {selected.length > 0 && <span style={{marginLeft:4,fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:10,background:mode==="member"?"#fff":C.accentBg,color:C.accent}}>{selected.length}</span>}
+              </button>
+              <button style={tabStyle(mode === "guest")} onClick={() => setMode("guest")}>
+                Invité {hostId && guestName.trim() && <span style={{marginLeft:4,fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:10,background:mode==="guest"?"#fff":C.accentBg,color:C.accent}}>1</span>}
+              </button>
             </div>
 
             {confirming && (
@@ -481,7 +485,7 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
                   {q && !loading && <span onClick={() => { setQ(""); setResults([]); }} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 16, cursor: "pointer", color: C.textMuted }}>x</span>}
                 </div>
                 {/* Sélection en cours */}
-                {selected.length > 0 && (
+                {(selected.length > 0 || (hostId && guestName.trim())) && (
                   <div style={{ marginBottom: 10, display:"flex", flexWrap:"wrap", gap:6 }}>
                     {selected.map(m => (
                       <span key={m.id} style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"4px 10px", borderRadius:20, background:C.accentBg, border:`1px solid ${C.accent}40`, fontSize:12, fontWeight:600, color:C.accent }}>
@@ -489,6 +493,12 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
                         <span onClick={()=>setSelected(prev=>prev.filter(x=>x.id!==m.id))} style={{ cursor:"pointer", fontSize:14, lineHeight:1 }}>x</span>
                       </span>
                     ))}
+                    {hostId && guestName.trim() && (
+                      <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"4px 10px", borderRadius:20, background:"#F0E6FF", border:"1px solid #C4A0FF40", fontSize:12, fontWeight:600, color:"#7C3AED" }}>
+                        👤 {guestName.trim()}
+                        <span onClick={()=>{setGuestName("");setHostId(null);setHostName("");}} style={{ cursor:"pointer", fontSize:14, lineHeight:1 }}>x</span>
+                      </span>
+                    )}
                   </div>
                 )}
                 {results.length > 0 && (
@@ -597,45 +607,36 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
               </>
             )}
 
-            {/* Résumé + bouton Valider tout (membres + invité) */}
+            {/* Bouton Valider unique */}
             {!confirming && (selected.length > 0 || (hostId && guestName.trim())) && (
-              <div style={{ marginTop:12, padding:"10px 14px", background:C.bg, borderRadius:10, border:`1px solid ${C.borderSoft}` }}>
-                <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, textTransform:"uppercase", marginBottom:6 }}>Inscriptions à valider</div>
-                {selected.map(m => (
-                  <div key={m.id} style={{ fontSize:12, color:C.text, padding:"2px 0" }}>✓ {m.first_name} {m.last_name}</div>
-                ))}
-                {hostId && guestName.trim() && (
-                  <div style={{ fontSize:12, color:C.accent, padding:"2px 0" }}>✓ {guestName.trim()} (invité de {hostName.split(" ")[0]})</div>
-                )}
-                <button onClick={async () => {
-                  if (confirming) return;
-                  setConfirming(true);
-                  // 1. Inscrire les membres sélectionnés
-                  for (const member of selected) {
-                    const already = (bookings[sessId] || []).some(b => b.memberId === member.id && b.st !== "cancelled");
-                    if (already) continue;
-                    const res = await fetch("/api/bookings", { method:"POST", headers:{"Content-Type":"application/json"},
-                      body: JSON.stringify({ sessionId: sessId, memberId: member.id, studioId, force: true }) });
-                    const data = await res.json();
-                    if (data.ok) {
-                      const nb = { id: data.bookingId, memberId: member.id, st: data.status, attended: null,
-                        name: `${member.first_name||""} ${member.last_name||""}`.trim(), email: member.email||"", phone: member.phone||"" };
-                      setBookings(prev => ({ ...prev, [sessId]: [...(prev[sessId]||[]), nb] }));
-                      setSessions(prev => prev.map(s => s.id === sessId ? { ...s, booked: s.booked + (data.status === "confirmed" ? 1 : 0) } : s));
-                    }
+              <button onClick={async () => {
+                if (confirming) return;
+                setConfirming(true);
+                // 1. Inscrire les membres sélectionnés
+                for (const member of selected) {
+                  const already = (bookings[sessId] || []).some(b => b.memberId === member.id && b.st !== "cancelled");
+                  if (already) continue;
+                  const res = await fetch("/api/bookings", { method:"POST", headers:{"Content-Type":"application/json"},
+                    body: JSON.stringify({ sessionId: sessId, memberId: member.id, studioId, force: true }) });
+                  const data = await res.json();
+                  if (data.ok) {
+                    const nb = { id: data.bookingId, memberId: member.id, st: data.status, attended: null,
+                      name: `${member.first_name||""} ${member.last_name||""}`.trim(), email: member.email||"", phone: member.phone||"" };
+                    setBookings(prev => ({ ...prev, [sessId]: [...(prev[sessId]||[]), nb] }));
+                    setSessions(prev => prev.map(s => s.id === sessId ? { ...s, booked: s.booked + (data.status === "confirmed" ? 1 : 0) } : s));
                   }
-                  // 2. Inscrire l'invité si renseigné
-                  if (hostId && guestName.trim()) {
-                    await confirmGuest();
-                    return; // confirmGuest appelle déjà onClose
-                  }
-                  setConfirming(false);
-                  onClose();
-                }}
-                  style={{ width:"100%", marginTop:8, padding:"10px", borderRadius:9, border:"none", background:C.accent, color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}>
-                  Valider
-                </button>
-              </div>
+                }
+                // 2. Inscrire l'invité si renseigné
+                if (hostId && guestName.trim()) {
+                  await confirmGuest();
+                  return;
+                }
+                setConfirming(false);
+                onClose();
+              }}
+                style={{ width:"100%", marginTop:12, padding:"10px", borderRadius:9, border:"none", background:C.accent, color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                Valider ({selected.length + (hostId && guestName.trim() ? 1 : 0)})
+              </button>
             )}
             {!confirming && <button onClick={onClose} style={{ marginTop: 8, width: "100%", padding: "9px", borderRadius: 9, border: `1px solid ${C.border}`, background: "transparent", color: C.textSoft, fontSize: 14, cursor: "pointer" }}>Annuler</button>}
           </>
