@@ -600,13 +600,54 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
                   </div>
                 )}
 
-                {hostId && guestName.trim() && (
+                {hostId && guestName.trim() && !selected.length && (
                   <button onClick={() => confirmGuest()}
                     style={{ width: "100%", padding: "10px", borderRadius: 9, border: "none", background: C.accent, color: "#fff", fontSize: 14, cursor: "pointer", fontWeight: 700 }}>
                     Inscrire {guestName.trim()}
                   </button>
                 )}
               </>
+            )}
+
+            {/* Résumé + bouton Valider tout (membres + invité) */}
+            {!confirming && (selected.length > 0 || (hostId && guestName.trim())) && (
+              <div style={{ marginTop:12, padding:"10px 14px", background:C.bg, borderRadius:10, border:`1px solid ${C.borderSoft}` }}>
+                <div style={{ fontSize:11, fontWeight:700, color:C.textMuted, textTransform:"uppercase", marginBottom:6 }}>Inscriptions à valider</div>
+                {selected.map(m => (
+                  <div key={m.id} style={{ fontSize:12, color:C.text, padding:"2px 0" }}>✓ {m.first_name} {m.last_name}</div>
+                ))}
+                {hostId && guestName.trim() && (
+                  <div style={{ fontSize:12, color:C.accent, padding:"2px 0" }}>✓ {guestName.trim()} (invité de {hostName.split(" ")[0]})</div>
+                )}
+                <button onClick={async () => {
+                  if (confirming) return;
+                  setConfirming(true);
+                  // 1. Inscrire les membres sélectionnés
+                  for (const member of selected) {
+                    const already = (bookings[sessId] || []).some(b => b.memberId === member.id && b.st !== "cancelled");
+                    if (already) continue;
+                    const res = await fetch("/api/bookings", { method:"POST", headers:{"Content-Type":"application/json"},
+                      body: JSON.stringify({ sessionId: sessId, memberId: member.id, studioId, force: true }) });
+                    const data = await res.json();
+                    if (data.ok) {
+                      const nb = { id: data.bookingId, memberId: member.id, st: data.status, attended: null,
+                        name: `${member.first_name||""} ${member.last_name||""}`.trim(), email: member.email||"", phone: member.phone||"" };
+                      setBookings(prev => ({ ...prev, [sessId]: [...(prev[sessId]||[]), nb] }));
+                      setSessions(prev => prev.map(s => s.id === sessId ? { ...s, booked: s.booked + (data.status === "confirmed" ? 1 : 0) } : s));
+                    }
+                  }
+                  // 2. Inscrire l'invité si renseigné
+                  if (hostId && guestName.trim()) {
+                    await confirmGuest();
+                    return; // confirmGuest appelle déjà onClose
+                  }
+                  setConfirming(false);
+                  onClose();
+                }}
+                  style={{ width:"100%", marginTop:8, padding:"10px", borderRadius:9, border:"none", background:C.accent, color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                  Valider tout ({selected.length + (hostId && guestName.trim() ? 1 : 0)})
+                </button>
+              </div>
             )}
             {!confirming && <button onClick={onClose} style={{ marginTop: 8, width: "100%", padding: "9px", borderRadius: 9, border: `1px solid ${C.border}`, background: "transparent", color: C.textSoft, fontSize: 14, cursor: "pointer" }}>Annuler</button>}
           </>
