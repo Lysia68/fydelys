@@ -523,12 +523,6 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
                     })}
                   </div>
                 )}
-                {selected.length >= 1 && (
-                  <button onClick={selected.length === 1 ? ()=>confirm(selected[0]) : confirmSelected}
-                    style={{ width:"100%", padding:"10px", borderRadius:9, border:"none", background:C.accent, color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer", marginBottom:8 }}>
-                    Valider
-                  </button>
-                )}
                 {q.length >= 2 && !loading && results.length === 0 && (
                   <div style={{ fontSize: 13, color: C.textMuted, textAlign: "center", padding: "14px 0" }}>Aucun membre trouvé</div>
                 )}
@@ -600,12 +594,6 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
                   </div>
                 )}
 
-                {hostId && guestName.trim() && !selected.length && (
-                  <button onClick={() => confirmGuest()}
-                    style={{ width: "100%", padding: "10px", borderRadius: 9, border: "none", background: C.accent, color: "#fff", fontSize: 14, cursor: "pointer", fontWeight: 700 }}>
-                    Inscrire {guestName.trim()}
-                  </button>
-                )}
               </>
             )}
 
@@ -645,7 +633,7 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
                   onClose();
                 }}
                   style={{ width:"100%", marginTop:8, padding:"10px", borderRadius:9, border:"none", background:C.accent, color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}>
-                  Valider tout ({selected.length + (hostId && guestName.trim() ? 1 : 0)})
+                  Valider
                 </button>
               </div>
             )}
