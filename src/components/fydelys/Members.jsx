@@ -21,9 +21,20 @@ function GuestsList({ memberId, studioId }) {
 
   if (!guests || guests.length === 0) return null;
 
-  const handleDelete = async (guestId) => {
-    await createClient().from("member_guests").delete().eq("id", guestId);
-    setGuests(prev => prev.filter(g => g.id !== guestId));
+  const handleDelete = async (guest) => {
+    // Vérifier si l'invité a des réservations futures
+    const today = new Date().toISOString().slice(0,10);
+    const { count } = await createClient().from("bookings")
+      .select("id", { count:"exact", head:true })
+      .eq("guest_name", guest.name).eq("host_member_id", memberId)
+      .neq("status", "cancelled")
+      .gte("sessions.session_date", today);
+    if (count && count > 0) {
+      alert(`${guest.name} a ${count} réservation${count>1?"s":""} à venir. Annulez-les d'abord.`);
+      return;
+    }
+    await createClient().from("member_guests").delete().eq("id", guest.id);
+    setGuests(prev => prev.filter(g => g.id !== guest.id));
   };
 
   return (
@@ -38,7 +49,7 @@ function GuestsList({ memberId, studioId }) {
             <div style={{fontSize:13,fontWeight:600,color:C.text}}>{g.name}</div>
             {g.phone && <div style={{fontSize:11,color:C.textMuted}}>{g.phone}</div>}
           </div>
-          <button onClick={()=>handleDelete(g.id)}
+          <button onClick={()=>handleDelete(g)}
             style={{fontSize:11,padding:"2px 6px",borderRadius:6,border:"none",background:"transparent",color:C.textMuted,cursor:"pointer"}}
             onMouseEnter={e=>{e.currentTarget.style.color="#A85030";}}
             onMouseLeave={e=>{e.currentTarget.style.color=C.textMuted;}}>
