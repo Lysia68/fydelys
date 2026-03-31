@@ -57,13 +57,22 @@ export function Historique({ isMobile }) {
       .gte("session_date", dateFrom)
       .lte("session_date", dateTo)
       .order("session_date", { ascending: false })
-      .order("session_time", { ascending: false })
+      .order("session_time", { ascending: true })
       .limit(200);
 
     if (filterDisc !== "all") query = query.eq("discipline_id", filterDisc);
 
-    const { data } = await query;
-    if (!data) { setLoading(false); return; }
+    const { data: rawData } = await query;
+    if (!rawData) { setLoading(false); return; }
+
+    // Filtrer les séances d'aujourd'hui pas encore terminées
+    const now = new Date();
+    const data = rawData.filter(s => {
+      if (s.session_date !== today) return true;
+      const [h, m] = (s.session_time || "00:00").split(":").map(Number);
+      const endTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m + (s.duration_min || 60));
+      return now > endTime;
+    });
 
     const ids = data.map(s => s.id);
     if (ids.length > 0) {
