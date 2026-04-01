@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
 import { sendEmail } from "@/lib/email"
+import { rateLimit, getIP } from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
 
@@ -18,7 +19,9 @@ export async function GET(req: NextRequest) {
       .select("id, session_id, status")
       .eq("member_id", memberId)
       .in("status", ["confirmed", "waitlist"])
-    return NextResponse.json({ bookings: data || [] })
+    const res1 = NextResponse.json({ bookings: data || [] })
+    res1.headers.set("Cache-Control", "private, s-maxage=10, stale-while-revalidate=20")
+    return res1
   }
 
   // Mode 2 : bookings de plusieurs sessions (pour le planning admin)
@@ -28,7 +31,9 @@ export async function GET(req: NextRequest) {
     const { data } = await db.from("bookings")
       .select("id, session_id, member_id, status, attended, cancelled_by, guest_name, host_member_id, members!bookings_member_id_fkey(id, first_name, last_name, email, phone, credits, credits_total, subscription_id, subscriptions(period))")
       .in("session_id", ids)
-    return NextResponse.json({ bookings: data || [] })
+    const res2 = NextResponse.json({ bookings: data || [] })
+    res2.headers.set("Cache-Control", "private, s-maxage=10, stale-while-revalidate=20")
+    return res2
   }
 
   return NextResponse.json({ error: "(memberId ou sessionIds) + studioId requis" }, { status: 400 })
@@ -36,6 +41,10 @@ export async function GET(req: NextRequest) {
 
 // POST /api/bookings — crée une réservation (membre ou invité) et envoie les emails de confirmation
 export async function POST(req: NextRequest) {
+  // Rate limit : max 30 bookings/min par IP
+  const rl = rateLimit(getIP(req), { max: 30, windowSec: 60 })
+  if (!rl.ok) return NextResponse.json({ error: "Trop de requêtes. Réessayez dans quelques instants." }, { status: 429 })
+
   try {
     const body = await req.json()
     const { sessionId, memberId, studioId, guestName, hostMemberId, force } = body

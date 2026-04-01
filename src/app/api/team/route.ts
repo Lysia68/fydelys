@@ -65,7 +65,9 @@ export async function GET(request: NextRequest) {
     }
   })
 
-  return NextResponse.json({ coaches, invites: invites || [] })
+  const res = NextResponse.json({ coaches, invites: invites || [] })
+  res.headers.set("Cache-Control", "private, s-maxage=30, stale-while-revalidate=60")
+  return res
 }
 
 // POST /api/team → sauvegarder disciplines d'un coach

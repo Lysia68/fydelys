@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { sendEmail } from "@/lib/email"
+import { rateLimit, getIP } from "@/lib/rate-limit"
 
 export async function POST(request: NextRequest) {
+  const rl = rateLimit(getIP(request), { max: 3, windowSec: 60 })
+  if (!rl.ok) return NextResponse.json({ error: "Trop de messages. Réessayez dans quelques instants." }, { status: 429 })
+
   const { name, email, studio, subject, message, phone, activity } = await request.json()
 
   if (!name || !email || !message) {

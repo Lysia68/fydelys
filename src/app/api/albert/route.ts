@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { rateLimit, getIP } from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
 
@@ -21,6 +22,10 @@ Règles :
 - Termine par une phrase encourageante quand c'est pertinent`
 
 export async function POST(req: NextRequest) {
+  // Rate limit : max 10 questions/min par IP (protège le coût API Claude)
+  const rl = rateLimit(getIP(req), { max: 10, windowSec: 60 })
+  if (!rl.ok) return NextResponse.json({ answer: "Doucement, je suis un vieux monsieur ! Attendez quelques instants avant de me reposer une question." })
+
   try {
     const { question, studioName, history } = await req.json()
     if (!question) return NextResponse.json({ error: "Question requise" }, { status: 400 })

@@ -1,12 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
 import { sendEmail } from "@/lib/email"
+import { rateLimit, getIP } from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
 
 // Route utilisée pour envoyer un magic link brandé au nom du studio
-// au lieu de laisser Supabase envoyer son email générique "Fydelys"
 export async function POST(request: NextRequest) {
+  // Rate limit strict : max 5 magic links/min par IP
+  const rl = rateLimit(getIP(request), { max: 5, windowSec: 60 })
+  if (!rl.ok) return NextResponse.json({ error: "Trop de demandes. Réessayez dans quelques instants." }, { status: 429 })
+
   const { email, tenantSlug } = await request.json()
 
   if (!email || !tenantSlug) {

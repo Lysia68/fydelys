@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
 import { checkAuth } from "@/lib/auth-check"
 import { checkPlanLimit } from "@/lib/plan-limits"
+import { rateLimit, getIP } from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
 
@@ -36,11 +37,17 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ members: data || [] })
+  // Cache 15s + stale-while-revalidate 30s (les données membres changent peu)
+  const res = NextResponse.json({ members: data || [] })
+  if (!search) res.headers.set("Cache-Control", "private, s-maxage=15, stale-while-revalidate=30")
+  return res
 }
 
 // POST /api/members → créer un membre + envoyer invitation magic link
 export async function POST(request: NextRequest) {
+  const rl = rateLimit(getIP(request), { max: 20, windowSec: 60 })
+  if (!rl.ok) return NextResponse.json({ error: "Trop de requêtes" }, { status: 429 })
+
   const body = await request.json()
   const { studioId, ...payload } = body
   if (!studioId) return NextResponse.json({ error: "studioId requis" }, { status: 400 })

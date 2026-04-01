@@ -640,6 +640,15 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
 
             const date = item.date;
             const daySessions = item.sessions;
+            // Vérifier s'il reste des séances visibles pour ce jour
+            const now = new Date();
+            const visibleSessions = daySessions.filter(s => {
+              const isBooked = myBookings.includes(s.id);
+              const [sy,sm,sd] = (s.date||"").split("-").map(Number);
+              const [sh,smi] = (s.time||"00:00").split(":").map(Number);
+              return !(new Date(sy, sm-1, sd, sh, smi) <= now && !isBooked);
+            });
+            if (visibleSessions.length === 0) return null;
             return (
             <div key={date} style={{ marginBottom:20 }}>
               <DateLabel date={date}/>
