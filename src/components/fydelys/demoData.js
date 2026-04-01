@@ -28,23 +28,23 @@ const MEMBERS_DEMO = [
 
 const SESSIONS_DEMO = [
   // Lundi 9 mars
-  { id:"ds1",  disciplineId:DISC_IDS.yoga,    discName:"Yoga Vinyasa", discColor:"#C4956A", discIcon:"🧘", teacher:"Brigitte GUTHMANN", room:"Studio A", level:"Tous niveaux",  date:"2026-03-09", time:"09:00", duration:60,  spots:12, status:"scheduled" },
-  { id:"ds2",  disciplineId:DISC_IDS.pilates,  discName:"Pilates",      discColor:"#6B9E7A", discIcon:"⚡", teacher:"Brigitte GUTHMANN", room:"Studio B", level:"Intermédiaire", date:"2026-03-09", time:"17:30", duration:60,  spots:10, status:"scheduled" },
+  { id:"ds1",  disciplineId:DISC_IDS.yoga,    discName:"Yoga Vinyasa", discColor:"#C4956A", discIcon:"🧘", teacher:"Sophie MARTIN", room:"Studio A", level:"Tous niveaux",  date:"2026-03-09", time:"09:00", duration:60,  spots:12, status:"scheduled" },
+  { id:"ds2",  disciplineId:DISC_IDS.pilates,  discName:"Pilates",      discColor:"#6B9E7A", discIcon:"⚡", teacher:"Sophie MARTIN", room:"Studio B", level:"Intermédiaire", date:"2026-03-09", time:"17:30", duration:60,  spots:10, status:"scheduled" },
   // Mardi 10 mars
-  { id:"ds3",  disciplineId:DISC_IDS.medit,   discName:"Méditation",   discColor:"#6A8FAE", discIcon:"☯",  teacher:"Brigitte GUTHMANN", room:"Studio A", level:"Débutant",      date:"2026-03-10", time:"07:30", duration:30,  spots:15, status:"scheduled" },
-  { id:"ds4",  disciplineId:DISC_IDS.yoga,    discName:"Yoga Vinyasa", discColor:"#C4956A", discIcon:"🧘", teacher:"Brigitte GUTHMANN", room:"Studio A", level:"Avancé",        date:"2026-03-10", time:"19:00", duration:75,  spots:8,  status:"scheduled" },
+  { id:"ds3",  disciplineId:DISC_IDS.medit,   discName:"Méditation",   discColor:"#6A8FAE", discIcon:"☯",  teacher:"Sophie MARTIN", room:"Studio A", level:"Débutant",      date:"2026-03-10", time:"07:30", duration:30,  spots:15, status:"scheduled" },
+  { id:"ds4",  disciplineId:DISC_IDS.yoga,    discName:"Yoga Vinyasa", discColor:"#C4956A", discIcon:"🧘", teacher:"Sophie MARTIN", room:"Studio A", level:"Avancé",        date:"2026-03-10", time:"19:00", duration:75,  spots:8,  status:"scheduled" },
   // Mercredi 11 mars (aujourd'hui)
-  { id:"ds5",  disciplineId:DISC_IDS.yoga,    discName:"Yoga Vinyasa", discColor:"#C4956A", discIcon:"🧘", teacher:"Brigitte GUTHMANN", room:"Studio A", level:"Tous niveaux",  date:"2026-03-11", time:"09:00", duration:60,  spots:12, status:"scheduled" },
-  { id:"ds6",  disciplineId:DISC_IDS.medit,   discName:"Méditation",   discColor:"#6A8FAE", discIcon:"☯",  teacher:"Brigitte GUTHMANN", room:"Studio A", level:"Tous niveaux",  date:"2026-03-11", time:"18:30", duration:45,  spots:15, status:"scheduled" },
+  { id:"ds5",  disciplineId:DISC_IDS.yoga,    discName:"Yoga Vinyasa", discColor:"#C4956A", discIcon:"🧘", teacher:"Sophie MARTIN", room:"Studio A", level:"Tous niveaux",  date:"2026-03-11", time:"09:00", duration:60,  spots:12, status:"scheduled" },
+  { id:"ds6",  disciplineId:DISC_IDS.medit,   discName:"Méditation",   discColor:"#6A8FAE", discIcon:"☯",  teacher:"Sophie MARTIN", room:"Studio A", level:"Tous niveaux",  date:"2026-03-11", time:"18:30", duration:45,  spots:15, status:"scheduled" },
   // Jeudi 12 mars
-  { id:"ds7",  disciplineId:DISC_IDS.pilates,  discName:"Pilates",      discColor:"#6B9E7A", discIcon:"⚡", teacher:"Brigitte GUTHMANN", room:"Studio B", level:"Débutant",      date:"2026-03-12", time:"12:00", duration:45,  spots:10, status:"scheduled" },
-  { id:"ds8",  disciplineId:DISC_IDS.yin,     discName:"Yin Yoga",     discColor:"#AE7A7A", discIcon:"🌙", teacher:"Brigitte GUTHMANN", room:"Studio A", level:"Tous niveaux",  date:"2026-03-12", time:"19:00", duration:75,  spots:12, status:"scheduled" },
+  { id:"ds7",  disciplineId:DISC_IDS.pilates,  discName:"Pilates",      discColor:"#6B9E7A", discIcon:"⚡", teacher:"Sophie MARTIN", room:"Studio B", level:"Débutant",      date:"2026-03-12", time:"12:00", duration:45,  spots:10, status:"scheduled" },
+  { id:"ds8",  disciplineId:DISC_IDS.yin,     discName:"Yin Yoga",     discColor:"#AE7A7A", discIcon:"🌙", teacher:"Sophie MARTIN", room:"Studio A", level:"Tous niveaux",  date:"2026-03-12", time:"19:00", duration:75,  spots:12, status:"scheduled" },
   // Vendredi 13 mars
-  { id:"ds9",  disciplineId:DISC_IDS.yoga,    discName:"Yoga Vinyasa", discColor:"#C4956A", discIcon:"🧘", teacher:"Brigitte GUTHMANN", room:"Studio A", level:"Tous niveaux",  date:"2026-03-13", time:"09:00", duration:60,  spots:12, status:"scheduled" },
-  { id:"ds10", disciplineId:DISC_IDS.yin,     discName:"Yin Yoga",     discColor:"#AE7A7A", discIcon:"🌙", teacher:"Brigitte GUTHMANN", room:"Studio A", level:"Débutant",      date:"2026-03-13", time:"18:00", duration:75,  spots:12, status:"cancelled" },
+  { id:"ds9",  disciplineId:DISC_IDS.yoga,    discName:"Yoga Vinyasa", discColor:"#C4956A", discIcon:"🧘", teacher:"Sophie MARTIN", room:"Studio A", level:"Tous niveaux",  date:"2026-03-13", time:"09:00", duration:60,  spots:12, status:"scheduled" },
+  { id:"ds10", disciplineId:DISC_IDS.yin,     discName:"Yin Yoga",     discColor:"#AE7A7A", discIcon:"🌙", teacher:"Sophie MARTIN", room:"Studio A", level:"Débutant",      date:"2026-03-13", time:"18:00", duration:75,  spots:12, status:"cancelled" },
   // Samedi 14 mars
-  { id:"ds11", disciplineId:DISC_IDS.yoga,    discName:"Yoga Vinyasa", discColor:"#C4956A", discIcon:"🧘", teacher:"Brigitte GUTHMANN", room:"Studio A", level:"Tous niveaux",  date:"2026-03-14", time:"10:00", duration:75,  spots:16, status:"scheduled" },
-  { id:"ds12", disciplineId:DISC_IDS.medit,   discName:"Méditation",   discColor:"#6A8FAE", discIcon:"☯",  teacher:"Brigitte GUTHMANN", room:"Studio A", level:"Tous niveaux",  date:"2026-03-15", time:"09:30", duration:45,  spots:15, status:"scheduled" },
+  { id:"ds11", disciplineId:DISC_IDS.yoga,    discName:"Yoga Vinyasa", discColor:"#C4956A", discIcon:"🧘", teacher:"Sophie MARTIN", room:"Studio A", level:"Tous niveaux",  date:"2026-03-14", time:"10:00", duration:75,  spots:16, status:"scheduled" },
+  { id:"ds12", disciplineId:DISC_IDS.medit,   discName:"Méditation",   discColor:"#6A8FAE", discIcon:"☯",  teacher:"Sophie MARTIN", room:"Studio A", level:"Tous niveaux",  date:"2026-03-15", time:"09:30", duration:45,  spots:15, status:"scheduled" },
 ];
 
 const BOOKINGS_DEMO = {
@@ -231,7 +231,7 @@ const MY_COACH_NAME = "Sophie Laurent";
 const TENANTS_INIT = [];
 
 const TENANTS_DATA = [
-  { id:"t1", name:"Yogalate Paris",    plan:"Pro",      members:124, revenue:"6 240 €", status:"actif",    city:"Paris 1er",   since:"Jan 2025" },
+  { id:"t1", name:"Zen Studio Paris",    plan:"Pro",      members:124, revenue:"6 240 €", status:"actif",    city:"Paris 1er",   since:"Jan 2025" },
   { id:"t2", name:"Zen Studio Lyon",   plan:"Essentiel",members:48,  revenue:"1 890 €", status:"actif",    city:"Lyon 2e",     since:"Mar 2025" },
   { id:"t3", name:"Flow Bordeaux",     plan:"Pro",      members:87,  revenue:"4 120 €", status:"actif",    city:"Bordeaux",    since:"Fév 2025" },
   { id:"t4", name:"Pilates Nice",      plan:"Essentiel",members:31,  revenue:"980 €",   status:"suspendu", city:"Nice",        since:"Avr 2025" },
@@ -239,10 +239,10 @@ const TENANTS_DATA = [
 ];
 
 const USERS_DATA = [
-  { id:"u1", fn:"Marie",   ln:"Laurent",  email:"marie.l@yogalate.fr",  role:"admin",    tenant:"t1", status:"actif",    lastLogin:"Aujourd'hui" },
-  { id:"u2", fn:"Thomas",  ln:"Blanc",    email:"thomas.b@yogalate.fr", role:"staff",    tenant:"t1", status:"actif",    lastLogin:"Hier" },
-  { id:"u3", fn:"Sophie",  ln:"Leroux",   email:"sophie@yogalate.fr",   role:"adherent", tenant:"t1", status:"actif",    lastLogin:"Il y a 3j" },
-  { id:"u4", fn:"Claire",  ln:"Martin",   email:"claire@yogalate.fr",   role:"adherent", tenant:"t1", status:"actif",    lastLogin:"Aujourd'hui" },
+  { id:"u1", fn:"Marie",   ln:"Laurent",  email:"marie.l@zenstudio.fr",  role:"admin",    tenant:"t1", status:"actif",    lastLogin:"Aujourd'hui" },
+  { id:"u2", fn:"Thomas",  ln:"Blanc",    email:"thomas.b@zenstudio.fr", role:"staff",    tenant:"t1", status:"actif",    lastLogin:"Hier" },
+  { id:"u3", fn:"Sophie",  ln:"Leroux",   email:"sophie@zenstudio.fr",   role:"adherent", tenant:"t1", status:"actif",    lastLogin:"Il y a 3j" },
+  { id:"u4", fn:"Claire",  ln:"Martin",   email:"claire@zenstudio.fr",   role:"adherent", tenant:"t1", status:"actif",    lastLogin:"Aujourd'hui" },
   { id:"u5", fn:"Paul",    ln:"Dubois",   email:"paul@zenstudio.fr",    role:"admin",    tenant:"t2", status:"actif",    lastLogin:"Il y a 2j" },
   { id:"u6", fn:"Julie",   ln:"Bernard",  email:"julie@zenstudio.fr",   role:"staff",    tenant:"t2", status:"actif",    lastLogin:"Il y a 5j" },
   { id:"u7", fn:"Antoine", ln:"Girard",   email:"ant@flow.fr",          role:"admin",    tenant:"t3", status:"actif",    lastLogin:"Hier" },
