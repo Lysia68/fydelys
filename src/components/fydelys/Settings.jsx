@@ -556,7 +556,7 @@ function Settings({ isMobile, onImpersonate }) {
             <div style={{ gridColumn:"1 / -1" }}>
               <SI label="Adresse" fkey="address" placeholder="12 rue de la Paix"/>
             </div>
-            <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:12 }}>
+            <div style={{ gridColumn:"1 / -1", display:"grid", gridTemplateColumns:"2fr 1fr", gap:12 }}>
               <div>
                 <FieldLabel>Ville</FieldLabel>
                 <input value={studioForm.city||""} disabled={!isAdmin} placeholder="Paris"
