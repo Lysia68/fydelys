@@ -132,6 +132,8 @@ export function PlanningAccordion({ sess, sessId, bookings, onChangeStatus, onAd
     const { error } = await sb.from("bookings").update({ attended: true }).in("id", ids);
     if (!error) {
       setAttended(prev => { const n={...prev}; ids.forEach(id=>{n[id]=true;}); return n; });
+      // Notifier le parent pour chaque booking marqué
+      ids.forEach(id => onAttendanceChange && onAttendanceChange(id, true));
       // Déduire 1 crédit par membre présent (si crédits > 0)
       const UNLIMITED_PERIODS = ["mois", "trimestre", "année", "annuel", "annee", "monthly", "yearly"];
       for (const b of toMark) {
