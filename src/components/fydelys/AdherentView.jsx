@@ -93,15 +93,15 @@ const AdhAccountPanel = React.memo(function AdhAccountPanel({ me, loading, histo
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
           {[
-            { l:"Crédits restants",   v:`${me?.credits||0} / ${me?.credits_total||0}`,  icon:<IcoCreditCard2 s={16} c={C.accent}/> },
+            { l:"Crédits restants",   v:`${me?.credits??0} / ${me?.credits_total||0}`,  icon:<IcoCreditCard2 s={16} c={(me?.credits??0)<=0?"#C43A3A":C.accent}/>, danger:(me?.credits??0)<=0 },
             { l:"Membre depuis",      v:me?.created_at ? new Date(me.created_at).toLocaleDateString("fr-FR") : "—", icon:<IcoCalendar2 s={16} c={C.accent}/> },
             { l:"Séances effectuées", v:(history||[]).filter(h=>h.attended===true).length, icon:<IcoCheck s={16} c={C.ok}/> },
             { l:"Statut",             v:me?.status||"actif", icon:<IcoUser2 s={16} c={C.accent}/> },
           ].map(k=>(
-            <div key={k.l} style={{ background:C.bg, borderRadius:10, padding:"12px 14px", display:"flex", gap:10, alignItems:"center" }}>
+            <div key={k.l} style={{ background:k.danger?"#FDE8E8":C.bg, borderRadius:10, padding:"12px 14px", display:"flex", gap:10, alignItems:"center", border:k.danger?"1px solid #F5C2C2":"none" }}>
               {k.icon}
               <div>
-                <div style={{ fontSize:15, fontWeight:700, color:C.text }}>{k.v}</div>
+                <div style={{ fontSize:15, fontWeight:700, color:k.danger?"#C43A3A":C.text }}>{k.v}</div>
                 <div style={{ fontSize:12, color:C.textSoft }}>{k.l}</div>
               </div>
             </div>
@@ -1170,8 +1170,8 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
             {me && (
               <div style={{ display:"flex", alignItems:"center", gap:7 }}>
                 {me.credits_total > 0 && (
-                  <span style={{ fontSize:11, fontWeight:700, color:me.credits<=0?C.warn:C.accent, background:me.credits<=0?C.warnBg:C.accentBg, padding:"2px 8px", borderRadius:12 }}>
-                    {me.credits||0} cr.
+                  <span style={{ fontSize:11, fontWeight:700, color:me.credits<=0?"#C43A3A":C.accent, background:me.credits<=0?"#FDE8E8":C.accentBg, padding:"2px 8px", borderRadius:12 }}>
+                    {me.credits??0} cr.
                   </span>
                 )}
                 <div style={{ width:28, height:28, borderRadius:"50%", background:C.accentBg, border:`1.5px solid ${C.accent}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:C.accent }}>
