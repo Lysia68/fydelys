@@ -28,6 +28,9 @@ export function Historique({ isMobile }) {
   const [loading, setLoading]       = useState(true);
   const [expandedId, setExpandedId] = useState(null);
   const [bookings, setBookings]     = useState({});
+  const [activeTab, setActiveTab]   = useState("seances"); // "seances" | "compta"
+  const [compta, setCompta]         = useState(null); // { year, months: [{month,amount,count,avg}] }
+  const [comptaYear, setComptaYear] = useState(new Date().getFullYear());
 
   const today = toISO(new Date());
   const [dateFrom, setDateFrom] = useState(() => {
@@ -43,6 +46,29 @@ export function Historique({ isMobile }) {
       .eq("studio_id", studioId).order("name")
       .then(({ data }) => { if (data) setDisciplines(data); });
   }, [studioId]);
+
+  // Charger comptabilité
+  useEffect(() => {
+    if (!studioId || activeTab !== "compta") return;
+    const sb = createClient();
+    sb.from("member_payments")
+      .select("amount, status, payment_date, member_id")
+      .eq("studio_id", studioId)
+      .gte("payment_date", `${comptaYear}-01-01`)
+      .lte("payment_date", `${comptaYear}-12-31`)
+      .then(({ data }) => {
+        const MOIS = ["Janv.","Févr.","Mars","Avr.","Mai","Juin","Juil.","Août","Sept.","Oct.","Nov.","Déc."];
+        const months = MOIS.map((label, i) => {
+          const m = String(i + 1).padStart(2, "0");
+          const payments = (data || []).filter(p => p.payment_date?.startsWith(`${comptaYear}-${m}`) && p.status === "payé");
+          const amount = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+          const members = new Set(payments.map(p => p.member_id).filter(Boolean));
+          return { label, amount, count: members.size, avg: members.size > 0 ? amount / members.size : 0 };
+        });
+        const total = months.reduce((s, m) => s + m.amount, 0);
+        setCompta({ year: comptaYear, months, total });
+      });
+  }, [studioId, comptaYear, activeTab]);
 
   // Charger sessions historique
   const loadSessions = useCallback(async () => {
@@ -152,12 +178,68 @@ export function Historique({ isMobile }) {
   return (
     <div style={{ padding: p, maxWidth: 860, margin: "0 auto" }}>
 
-      {/* ── Titre ── */}
+      {/* ── Titre + Tabs ── */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: C.text }}>Historique</div>
-        <div style={{ fontSize: 13, color: C.textSoft, marginTop: 2 }}>Séances passées, présences et statistiques</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: C.text, marginBottom: 12 }}>Historique</div>
+        <div style={{ display: "flex", gap: 4, background: C.bg, borderRadius: 10, padding: 3 }}>
+          {[{key:"seances",label:"Séances"},{key:"compta",label:"Comptabilité"}].map(t => (
+            <button key={t.key} onClick={() => setActiveTab(t.key)}
+              style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                background: activeTab === t.key ? C.accent : "transparent", color: activeTab === t.key ? "#fff" : C.textMuted }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {/* ── Comptabilité ── */}
+      {activeTab === "compta" && (
+        <div>
+          {/* Sélecteur année */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <select value={comptaYear} onChange={e => setComptaYear(parseInt(e.target.value))}
+              style={{ fontSize: 14, padding: "8px 14px", border: `1.5px solid ${C.border}`, borderRadius: 8, color: C.text, background: C.surfaceWarm, fontWeight: 600 }}>
+              {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: C.accent }}>{compta ? compta.total.toLocaleString("fr-FR", {minimumFractionDigits:2, maximumFractionDigits:2}) + " €" : "—"}</div>
+              <div style={{ fontSize: 12, color: C.textSoft }}>CA cumul — année {comptaYear}</div>
+            </div>
+          </div>
+
+          {/* Tableau mensuel */}
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", padding: "10px 16px", background: C.bg, borderBottom: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase" }}>Mois</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", textAlign: "right" }}>Montant</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", textAlign: "right" }}>Inscrits</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", textAlign: "right" }}>Tarif moyen</div>
+            </div>
+            {compta ? compta.months.map((m, i) => (
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", padding: "10px 16px", borderBottom: `1px solid ${C.borderSoft}`, background: m.amount > 0 ? "#FDFAF7" : C.surface }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{m.label}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: m.amount > 0 ? C.ok : C.textMuted, textAlign: "right" }}>{m.amount.toLocaleString("fr-FR", {minimumFractionDigits:2})} €</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: m.count > 0 ? C.text : C.textMuted, textAlign: "right" }}>{m.count}</div>
+                <div style={{ fontSize: 13, color: m.avg > 0 ? C.textMid : C.textMuted, textAlign: "right" }}>{m.avg > 0 ? m.avg.toLocaleString("fr-FR", {minimumFractionDigits:2}) + " €" : "—"}</div>
+              </div>
+            )) : (
+              <div style={{ padding: 20, textAlign: "center", color: C.textMuted, fontSize: 13 }}>Chargement...</div>
+            )}
+            {compta && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", padding: "12px 16px", background: C.accentBg, borderTop: `2px solid ${C.accent}` }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: C.accentDark }}>TOTAL</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: C.accent, textAlign: "right" }}>{compta.total.toLocaleString("fr-FR", {minimumFractionDigits:2})} €</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.accentDark, textAlign: "right" }}>{compta.months.reduce((s,m) => s + m.count, 0)}</div>
+                <div style={{ fontSize: 13, color: C.accentDark, textAlign: "right" }}>
+                  {(() => { const t = compta.total; const c = compta.months.reduce((s,m) => s + m.count, 0); return c > 0 ? (t/c).toLocaleString("fr-FR", {minimumFractionDigits:2}) + " €" : "—"; })()}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "seances" && <>
       {/* ── Filtres ── */}
       <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -333,6 +415,7 @@ export function Historique({ isMobile }) {
           </div>
         ))
       )}
+      </>}
     </div>
   );
 }

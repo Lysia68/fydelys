@@ -1034,12 +1034,22 @@ function Planning({ isMobile }) {
   };
 
   const handleAttendanceChange = (bookingId, val) => {
-    // Mettre à jour le booking dans le state pour rafraîchir le bandeau
     setBookings(prev => {
-      const nb = { ...prev };
-      for (const sid of Object.keys(nb)) {
-        nb[sid] = (nb[sid] || []).map(b => b.id === bookingId ? { ...b, attended: val } : b);
+      const nb = {};
+      for (const sid of Object.keys(prev)) {
+        nb[sid] = (prev[sid] || []).map(b => b.id === bookingId ? { ...b, attended: val } : b);
       }
+      // Retirer les séances passées entièrement validées
+      const now = new Date();
+      setSessions(ss => ss.filter(s => {
+        const [sy,sm,sd] = (s.date||"").split("-").map(Number);
+        const [sh,smi] = (s.time||"00:00").split(":").map(Number);
+        const sessEnd = new Date(sy, sm-1, sd, sh+Math.ceil((s.duration||60)/60), smi);
+        if (sessEnd > now) return true; // future ou en cours → garder
+        const bks = nb[s.id] || prev[s.id] || [];
+        const pending = bks.some(b => b.st === "confirmed" && (b.attended === null || b.attended === undefined));
+        return pending; // passée → garder seulement si présences à valider
+      }));
       return nb;
     });
   };
