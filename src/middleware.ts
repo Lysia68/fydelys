@@ -8,7 +8,7 @@ export async function middleware(request: NextRequest) {
   // Geo-blocking : bloquer les IPs hors France (sauf localhost et assets)
   const country = request.headers.get("x-vercel-ip-country") || ""
   const ALLOWED_COUNTRIES = ["FR", "BE", "CH", "LU", "MC", "DE", ""] // France + voisins + vide (localhost/dev)
-  if (country && !ALLOWED_COUNTRIES.includes(country) && !pathname.startsWith("/_next") && !pathname.startsWith("/api/stripe")) {
+  if (country && !ALLOWED_COUNTRIES.includes(country) && !pathname.startsWith("/_next") && !pathname.startsWith("/api/stripe") && !pathname.startsWith("/google") && !pathname.startsWith("/robots.txt") && !pathname.startsWith("/sitemap")) {
     return new NextResponse("Accès restreint à la France et pays limitrophes.", { status: 403 })
   }
 
