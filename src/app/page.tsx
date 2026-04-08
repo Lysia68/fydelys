@@ -314,7 +314,7 @@ function StudioPage({ slug }: { slug: string }) {
       {/* Header */}
       <div style={{ background: studio.cover_photo_url ? "none" : "#2A1F14", position:"relative", overflow:"hidden", minHeight: studio.cover_photo_url ? 320 : "auto" }}>
         {studio.cover_photo_url && (
-          <img src={studio.cover_photo_url} alt={studio.name}
+          <img src={studio.cover_photo_url} alt={studio.name} loading="eager" decoding="async" fetchPriority="high"
             style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover", objectPosition:"center 30%", filter:"brightness(.45)" }}/>
         )}
         <div style={{ position:"relative", padding:"80px 24px 72px", maxWidth:720, margin:"0 auto", textAlign:"center" }}>
@@ -408,8 +408,14 @@ export default function LandingPage() {
   }, [])
 
   useEffect(() => {
-    const fn = () => setScrolled(window.scrollY > 40)
-    window.addEventListener("scroll", fn)
+    let ticking = false
+    const fn = () => {
+      if (!ticking) {
+        requestAnimationFrame(() => { setScrolled(window.scrollY > 40); ticking = false })
+        ticking = true
+      }
+    }
+    window.addEventListener("scroll", fn, { passive: true })
     return () => window.removeEventListener("scroll", fn)
   }, [])
 
@@ -421,7 +427,6 @@ export default function LandingPage() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
         :root{
           --bg:#F4EFE8;--bg2:#EDE7DD;--surface:#FDFAF7;
@@ -668,7 +673,7 @@ export default function LandingPage() {
                 {DISCIPLINES.map((d) => (
                   <div key={d.name} className="disc-card-photo">
                     <div style={{position:"relative",overflow:"hidden",borderRadius:"12px 12px 0 0",height:130}}>
-                      <img src={d.img} alt={d.name + " studio"} style={{width:"100%",height:"100%",objectFit:"cover",transition:"transform .4s"}}
+                      <img src={d.img} alt={d.name + " studio"} loading="lazy" decoding="async" width={600} height={400} style={{width:"100%",height:"100%",objectFit:"cover",transition:"transform .4s"}}
                         onMouseOver={e=>(e.currentTarget.style.transform="scale(1.05)")}
                         onMouseOut={e=>(e.currentTarget.style.transform="scale(1)")}
                       />
