@@ -51,23 +51,42 @@ export function Historique({ isMobile }) {
   useEffect(() => {
     if (!studioId || activeTab !== "compta") return;
     const sb = createClient();
-    sb.from("member_payments")
-      .select("amount, status, payment_date, member_id")
-      .eq("studio_id", studioId)
-      .gte("payment_date", `${comptaYear}-01-01`)
-      .lte("payment_date", `${comptaYear}-12-31`)
-      .then(({ data }) => {
-        const MOIS = ["Janv.","Févr.","Mars","Avr.","Mai","Juin","Juil.","Août","Sept.","Oct.","Nov.","Déc."];
-        const months = MOIS.map((label, i) => {
-          const m = String(i + 1).padStart(2, "0");
-          const payments = (data || []).filter(p => p.payment_date?.startsWith(`${comptaYear}-${m}`) && p.status === "payé");
-          const amount = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
-          const members = new Set(payments.map(p => p.member_id).filter(Boolean));
-          return { label, amount, count: members.size, avg: members.size > 0 ? amount / members.size : 0 };
-        });
-        const total = months.reduce((s, m) => s + m.amount, 0);
-        setCompta({ year: comptaYear, months, total });
+    Promise.all([
+      sb.from("member_payments").select("amount, status, payment_date, member_id")
+        .eq("studio_id", studioId).gte("payment_date", `${comptaYear}-01-01`).lte("payment_date", `${comptaYear}-12-31`),
+      sb.from("sessions").select("id, session_date, spots, status")
+        .eq("studio_id", studioId).gte("session_date", `${comptaYear}-01-01`).lte("session_date", `${comptaYear}-12-31`).neq("status", "cancelled"),
+      sb.from("bookings").select("session_id, status")
+        .in("status", ["confirmed"]),
+    ]).then(([payRes, sessRes, bkRes]) => {
+      const payData = payRes.data || [];
+      const sessData = sessRes.data || [];
+      const bkData = bkRes.data || [];
+      // Bookings par session
+      const bkMap = {};
+      bkData.forEach(b => { bkMap[b.session_id] = (bkMap[b.session_id] || 0) + 1; });
+
+      const MOIS = ["Janv.","Févr.","Mars","Avr.","Mai","Juin","Juil.","Août","Sept.","Oct.","Nov.","Déc."];
+      const months = MOIS.map((label, i) => {
+        const m = String(i + 1).padStart(2, "0");
+        const prefix = `${comptaYear}-${m}`;
+        // Paiements
+        const payments = payData.filter(p => p.payment_date?.startsWith(prefix) && p.status === "payé");
+        const amount = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+        const nbPayments = payments.length;
+        // Séances
+        const monthSessions = sessData.filter(s => s.session_date?.startsWith(prefix));
+        const nbSessions = monthSessions.length;
+        const totalSpots = monthSessions.reduce((s, x) => s + (x.spots || 0), 0);
+        const totalBooked = monthSessions.reduce((s, x) => s + (bkMap[x.id] || 0), 0);
+        const fillRate = totalSpots > 0 ? Math.round(totalBooked / totalSpots * 100) : 0;
+        return { label, amount, nbPayments, nbSessions, fillRate };
       });
+      const total = months.reduce((s, m) => s + m.amount, 0);
+      const totalPayments = months.reduce((s, m) => s + m.nbPayments, 0);
+      const totalSessions = months.reduce((s, m) => s + m.nbSessions, 0);
+      setCompta({ year: comptaYear, months, total, totalPayments, totalSessions });
+    });
   }, [studioId, comptaYear, activeTab]);
 
   // Charger sessions historique
@@ -209,30 +228,31 @@ export function Historique({ isMobile }) {
 
           {/* Tableau mensuel */}
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", padding: "10px 16px", background: C.bg, borderBottom: `1px solid ${C.border}` }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 0.8fr 0.8fr 0.8fr", padding: "10px 16px", background: C.bg, borderBottom: `1px solid ${C.border}` }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase" }}>Mois</div>
               <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", textAlign: "right" }}>Montant</div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", textAlign: "right" }}>Inscrits</div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", textAlign: "right" }}>Tarif moyen</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", textAlign: "right" }}>Paiements</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", textAlign: "right" }}>Séances</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", textAlign: "right" }}>Remplissage</div>
             </div>
             {compta ? compta.months.map((m, i) => (
-              <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", padding: "10px 16px", borderBottom: `1px solid ${C.borderSoft}`, background: m.amount > 0 ? "#FDFAF7" : C.surface }}>
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 0.8fr 0.8fr 0.8fr", padding: "10px 16px", borderBottom: `1px solid ${C.borderSoft}`, background: m.amount > 0 ? "#FDFAF7" : C.surface }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{m.label}</div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: m.amount > 0 ? C.ok : C.textMuted, textAlign: "right" }}>{m.amount.toLocaleString("fr-FR", {minimumFractionDigits:2})} €</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: m.count > 0 ? C.text : C.textMuted, textAlign: "right" }}>{m.count}</div>
-                <div style={{ fontSize: 13, color: m.avg > 0 ? C.textMid : C.textMuted, textAlign: "right" }}>{m.avg > 0 ? m.avg.toLocaleString("fr-FR", {minimumFractionDigits:2}) + " €" : "—"}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: m.nbPayments > 0 ? C.text : C.textMuted, textAlign: "right" }}>{m.nbPayments}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: m.nbSessions > 0 ? C.text : C.textMuted, textAlign: "right" }}>{m.nbSessions}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: m.fillRate > 0 ? (m.fillRate >= 75 ? C.ok : C.accent) : C.textMuted, textAlign: "right" }}>{m.fillRate > 0 ? m.fillRate + " %" : "—"}</div>
               </div>
             )) : (
               <div style={{ padding: 20, textAlign: "center", color: C.textMuted, fontSize: 13 }}>Chargement...</div>
             )}
             {compta && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", padding: "12px 16px", background: C.accentBg, borderTop: `2px solid ${C.accent}` }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 0.8fr 0.8fr 0.8fr", padding: "12px 16px", background: C.accentBg, borderTop: `2px solid ${C.accent}` }}>
                 <div style={{ fontSize: 13, fontWeight: 800, color: C.accentDark }}>TOTAL</div>
                 <div style={{ fontSize: 13, fontWeight: 800, color: C.accent, textAlign: "right" }}>{compta.total.toLocaleString("fr-FR", {minimumFractionDigits:2})} €</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: C.accentDark, textAlign: "right" }}>{compta.months.reduce((s,m) => s + m.count, 0)}</div>
-                <div style={{ fontSize: 13, color: C.accentDark, textAlign: "right" }}>
-                  {(() => { const t = compta.total; const c = compta.months.reduce((s,m) => s + m.count, 0); return c > 0 ? (t/c).toLocaleString("fr-FR", {minimumFractionDigits:2}) + " €" : "—"; })()}
-                </div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.accentDark, textAlign: "right" }}>{compta.totalPayments}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.accentDark, textAlign: "right" }}>{compta.totalSessions}</div>
+                <div style={{ fontSize: 13, color: C.accentDark, textAlign: "right" }}>—</div>
               </div>
             )}
           </div>
