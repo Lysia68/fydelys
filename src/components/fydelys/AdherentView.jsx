@@ -573,25 +573,6 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
           ))}
         </div>
 
-        {/* Fermetures à venir */}
-        {closures.length > 0 && closures.map(c => {
-          const startFmt = new Date(c.date_start+"T12:00:00").toLocaleDateString("fr-FR",{day:"numeric",month:"long"});
-          const endFmt = new Date(c.date_end+"T12:00:00").toLocaleDateString("fr-FR",{day:"numeric",month:"long"});
-          const isNow = c.date_start <= new Date().toISOString().slice(0,10) && c.date_end >= new Date().toISOString().slice(0,10);
-          return (
-            <div key={c.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", background:isNow?"#FDE8E8":"#FFF8E8", border:`1.5px solid ${isNow?"#F5C2C2":"#F0D080"}`, borderRadius:10, marginBottom:12 }}>
-              <span style={{ fontSize:16 }}>🔒</span>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:isNow?"#C43A3A":"#8B6914" }}>{c.label || "Fermeture"}</div>
-                <div style={{ fontSize:12, color:isNow?"#A85030":"#8C7B6C" }}>
-                  {c.date_start === c.date_end ? startFmt : `Du ${startFmt} au ${endFmt}`}
-                </div>
-              </div>
-              {isNow && <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:8, background:"#C43A3A", color:"#fff" }}>En cours</span>}
-            </div>
-          );
-        })}
-
         {(() => {
           // Construire une timeline mixte : jours de sessions + fermetures
           const timeline = [];

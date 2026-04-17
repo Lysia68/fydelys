@@ -403,7 +403,7 @@ function Dashboard({ isMobile }) {
               ? <EmptyCard label="Chargement…"/>
               : recentMembers.length === 0
                 ? <EmptyCard label="Aucun membre pour le moment"/>
-                : recentMembers.map(m=><MemberRow key={m.id} m={m} onSelect={()=>{}} selected={false}/>)
+                : recentMembers.map(m=><MemberRow key={m.id} m={m} onSelect={()=>window.dispatchEvent(new CustomEvent("fydelys:openMember",{detail:m.id}))} selected={false}/>)
             }
           </Card>
         </div>

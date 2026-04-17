@@ -289,7 +289,7 @@ const PAGE_TITLES = {
         )}
         {!isMobile && <Sidebar active={page} onNav={handleNav} studioName={activeStudioName} planName={dynamicPlanName||planName} membersCount={dynamicMembersCount !== null ? dynamicMembersCount : membersCount} userName={userName} userRole={userRole} trialEndsAt={dynamicTrialEndsAt!==null?dynamicTrialEndsAt:trialEndsAt} billingStatus={dynamicBillingStatus||billingStatus}/>}
         <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, paddingBottom:isMobile?62:0 }}>
-          <TopBar title={PAGE_TITLES[page]} isMobile={isMobile} onSignOut={onSignOut} isSuperAdmin={initialRole==="superadmin" && !isImpersonatingAdmin} studioName={activeStudioName} billingStatus={dynamicBillingStatus||billingStatus} planName={dynamicPlanName||planName}/>
+          <TopBar title={PAGE_TITLES[page]} titleBadge={page==="members" ? (dynamicMembersCount !== null ? dynamicMembersCount : membersCount) : undefined} isMobile={isMobile} onSignOut={onSignOut} isSuperAdmin={initialRole==="superadmin" && !isImpersonatingAdmin} studioName={activeStudioName} billingStatus={dynamicBillingStatus||billingStatus} planName={dynamicPlanName||planName}/>
           {showTrialBanner && (
             <div style={{ background:trialDaysLeft<=3?"#F5EAE6":"#FDF4E3", borderBottom:`1px solid ${trialDaysLeft<=3?"#F5C2B5":"rgba(196,146,42,.25)"}`, padding:"10px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
               <div style={{ fontSize:13, color:trialDaysLeft<=3?"#A85030":"#C4922A", fontWeight:600 }}>

@@ -151,14 +151,19 @@ function BottomNav({ active, onNav }) {
   );
 }
 
-function TopBar({ title, isMobile, onSignOut, isSuperAdmin, studioName = "", billingStatus = "active", planName = "" }) {
+function TopBar({ title, titleBadge, isMobile, onSignOut, isSuperAdmin, studioName = "", billingStatus = "active", planName = "" }) {
   const [confirmLogout, setConfirmLogout] = useState(false);
   return (
     <>
       {confirmLogout && <ConfirmModal message="Voulez-vous vous déconnecter de Fydelys ?" onConfirm={()=>{ setConfirmLogout(false); onSignOut?.(); }} onCancel={()=>setConfirmLogout(false)}/>}
       <div style={{ background:C.surface, borderBottom:`1.5px solid ${C.border}`, padding:`0 ${isMobile?16:28}px`, height:isMobile?48:56, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, position:"sticky", top:0, zIndex:50 }}>
-        <div style={{ fontSize:isMobile?18:20, fontWeight:700, color:C.text, letterSpacing:isMobile?-0.3:0 }}>
+        <div style={{ fontSize:isMobile?18:20, fontWeight:700, color:C.text, letterSpacing:isMobile?-0.3:0, display:"flex", alignItems:"center", gap:10 }}>
           {isMobile ? <>Fyde<span style={{ color:C.accent }}>lys</span></> : title}
+          {!isMobile && titleBadge != null && (
+            <span style={{ fontSize:12, fontWeight:700, color:C.accent, background:C.accentBg, border:`1px solid ${C.accent}30`, padding:"2px 10px", borderRadius:20, letterSpacing:0 }}>
+              {titleBadge}
+            </span>
+          )}
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
           {!isMobile && studioName && (
