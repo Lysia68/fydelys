@@ -125,7 +125,34 @@ WHERE b.status = 'cancelled' AND b.member_id IS NOT NULL
       AND ma.details->>'booking_id' = b.id::text
   );
 
--- 6) Création de membre (estimation à partir de joined_at)
+-- 6) Crédits initiaux importés via script (CSV initial, 26/03/2026)
+-- Pour chaque membre ayant credits_total > 0 et joined_at = '2026-03-26', on suppose
+-- un crédit initial = credits_total (valeur à l'import). Évite les doublons avec les
+-- paiements déjà loggés à cette date.
+INSERT INTO member_activity (studio_id, member_id, actor_role, action, details, created_at)
+SELECT
+  m.studio_id,
+  m.id,
+  'system',
+  'credit_add',
+  jsonb_build_object(
+    'amount', m.credits_total,
+    'source', 'import_csv',
+    'label', 'Import initial',
+    'backfilled', true
+  ),
+  '2026-03-26 00:00:00'::timestamptz
+FROM members m
+WHERE m.joined_at = '2026-03-26'
+  AND COALESCE(m.credits_total, 0) > 0
+  AND NOT EXISTS (
+    SELECT 1 FROM member_activity ma
+    WHERE ma.member_id = m.id
+      AND ma.action = 'credit_add'
+      AND ma.details->>'source' = 'import_csv'
+  );
+
+-- 8) Création de membre (estimation à partir de joined_at)
 INSERT INTO member_activity (studio_id, member_id, actor_role, action, details, created_at)
 SELECT
   m.studio_id,

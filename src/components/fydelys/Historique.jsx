@@ -26,17 +26,37 @@ function actionColor(action) {
   return { bg: "#F5F5F5", icon: "•" };
 }
 
+function frDate(s) {
+  if (!s) return "";
+  // YYYY-MM-DD → JJ/MM/AAAA
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
+}
+
+function actorLabel(role) {
+  switch (role) {
+    case "admin":    return "Gérant";
+    case "coach":    return "Coach";
+    case "adherent": return "Adhérent";
+    case "stripe":   return "Paiement en ligne";
+    case "system":   return "Système";
+    default:         return role || "—";
+  }
+}
+
 function actionLabel(action, details) {
   const d = details || {};
+  const date = frDate(d.session_date);
+  const time = d.session_time?.slice(0, 5) || "";
   switch (action) {
     case "credit_add":        return `+${d.amount || "?"} crédit${(d.amount || 0) > 1 ? "s" : ""}${d.label ? ` — ${d.label}` : d.source === "admin_gift" ? " (offert)" : ""}`;
     case "credit_deduct":     return `−1 crédit${d.reason === "attendance" ? " (présence validée)" : d.reason === "attendance_bulk" ? " (validation groupée)" : ""}`;
     case "credit_restore":    return `+1 crédit restitué${d.reason === "attendance_undone" ? " (présence annulée)" : ""}`;
     case "credit_manual":     return `Ajustement manuel des crédits (${d.from ?? "?"} → ${d.to ?? "?"})`;
-    case "booking_created":   return `Réservation — ${d.session_date || ""} ${d.session_time?.slice(0, 5) || ""}${d.discipline ? ` · ${d.discipline}` : ""}`;
-    case "booking_attended":  return `Présence validée — ${d.session_date || ""}`;
-    case "booking_absent":    return `Marqué absent — ${d.session_date || ""}`;
-    case "booking_cancelled": return `Réservation annulée${d.by ? ` par ${d.by}` : ""} — ${d.session_date || ""}`;
+    case "booking_created":   return `Réservation — ${date} ${time}${d.discipline ? ` · ${d.discipline}` : ""}`;
+    case "booking_attended":  return `Présence validée — ${date}`;
+    case "booking_absent":    return `Marqué absent — ${date}`;
+    case "booking_cancelled": return `Réservation annulée${d.by ? ` par ${d.by}` : ""} — ${date}`;
     case "payment":           return `Paiement ${d.amount ? `${d.amount} €` : ""}${d.type ? ` · ${d.type}` : ""}${d.notes ? ` — ${d.notes}` : ""}`;
     case "subscription_change": return `Abonnement changé → ${d.name || "—"}${d.price ? ` (${d.price}€)` : ""}`;
     case "member_created":    return `Membre créé`;
@@ -44,7 +64,7 @@ function actionLabel(action, details) {
     case "member_deleted":    return `Membre supprimé`;
     case "member_suspended":  return `Membre suspendu`;
     case "member_reactivated": return `Membre réactivé`;
-    case "member_frozen":     return `Compte gelé jusqu'au ${d.to || "?"}`;
+    case "member_frozen":     return `Compte gelé jusqu'au ${frDate(d.to) || "?"}`;
     case "member_unfrozen":   return `Compte dégelé`;
     default: return action;
   }
@@ -72,6 +92,10 @@ export function Historique({ isMobile }) {
   const [comptaYear, setComptaYear] = useState(new Date().getFullYear());
   const [activity, setActivity]     = useState(null); // null=loading, [...]=data
   const [activityFilter, setActivityFilter] = useState("all"); // all | credit | booking | payment | member
+  const [actFrom, setActFrom] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 15); return toISO(d);
+  });
+  const [actTo, setActTo] = useState(() => toISO(new Date()));
 
   const today = toISO(new Date());
   const [dateFrom, setDateFrom] = useState(() => {
@@ -92,12 +116,12 @@ export function Historique({ isMobile }) {
   useEffect(() => {
     if (!studioId || activeTab !== "activite") return;
     setActivity(null);
-    const params = new URLSearchParams({ studioId, limit: "200", from: dateFrom, to: dateTo });
+    const params = new URLSearchParams({ studioId, limit: "300", from: actFrom, to: actTo });
     fetch(`/api/activity?${params}`)
       .then(r => r.json())
       .then(json => setActivity(json?.activity || []))
       .catch(() => setActivity([]));
-  }, [studioId, activeTab, dateFrom, dateTo]);
+  }, [studioId, activeTab, actFrom, actTo]);
 
   // Charger comptabilité
   useEffect(() => {
@@ -319,13 +343,23 @@ export function Historique({ isMobile }) {
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase" }}>DU</label>
-                <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                <input type="date" value={actFrom} onChange={e => setActFrom(e.target.value)}
                   style={{ padding: "7px 10px", border: `1.5px solid ${C.border}`, borderRadius: 8, fontSize: 13, color: C.text, background: C.surfaceWarm }}/>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase" }}>AU</label>
-                <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+                <input type="date" value={actTo} onChange={e => setActTo(e.target.value)}
                   style={{ padding: "7px 10px", border: `1.5px solid ${C.border}`, borderRadius: 8, fontSize: 13, color: C.text, background: C.surfaceWarm }}/>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, alignSelf: "flex-end" }}>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {[{n:"15j",d:15},{n:"30j",d:30},{n:"3 mois",d:90},{n:"1 an",d:365}].map(o => (
+                    <button key={o.n} onClick={() => { const d = new Date(); d.setDate(d.getDate() - o.d); setActFrom(toISO(d)); setActTo(toISO(new Date())); }}
+                      style={{ padding: "6px 10px", fontSize: 11, border: `1px solid ${C.border}`, borderRadius: 7, background: C.surface, color: C.textMid, cursor: "pointer", fontWeight: 600 }}>
+                      {o.n}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: "uppercase" }}>TYPE</label>
@@ -381,7 +415,6 @@ export function Historique({ isMobile }) {
                               <div style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{memberName}</div>
                               <div style={{ fontSize: 12, color: C.textSoft, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
                             </div>
-                            <div style={{ fontSize: 11, color: C.textMuted, background: C.bg, padding: "2px 8px", borderRadius: 10, flexShrink: 0 }}>{a.actor_role || "—"}</div>
                           </div>
                         );
                       })}
