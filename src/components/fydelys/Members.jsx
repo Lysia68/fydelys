@@ -178,16 +178,20 @@ function Members({ isMobile, onImpersonate, openMemberId, onMemberOpened }) {
     if (studioSlug !== "yogalatestudio") { setVoSubs(new Map()); return; }
     const emails = members.map(m => m.email?.toLowerCase()).filter(Boolean);
     if (emails.length === 0) return;
-    createClient().from("vo_members")
-      .select("email, subscription_plan, subscription_status")
-      .in("email", emails)
-      .then(({ data }) => {
+    fetch("/api/yogalatestudio-vo-subs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ emails }),
+    })
+      .then(r => r.json())
+      .then(({ subs }) => {
         const map = new Map();
-        (data || []).forEach(v => {
+        (subs || []).forEach(v => {
           if (v.email) map.set(v.email.toLowerCase(), { plan: v.subscription_plan, status: v.subscription_status });
         });
         setVoSubs(map);
-      });
+      })
+      .catch(() => setVoSubs(new Map()));
   }, [studioSlug, members.length]);
 
   useEffect(() => {
