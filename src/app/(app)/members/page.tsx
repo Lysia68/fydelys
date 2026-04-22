@@ -19,11 +19,28 @@ function Tag({ s }: { s: string }) {
   return <span style={{ background: bg, color: c, padding: "3px 10px", borderRadius: 20, fontSize: 10, fontWeight: 600 }}>{s.charAt(0).toUpperCase()+s.slice(1)}</span>
 }
 
+const VO_PLAN_LABEL: Record<string, string> = {
+  monthly: "Mensuel", quarterly: "Trimestriel", biannual: "Semestriel",
+  yearly: "Annuel", family: "Famille", one_shot: "Accès 1 mois",
+}
+
+function VideoIcon({ size = 12, color = "#A85030" }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} aria-hidden="true">
+      <path d="M4 4h12a2 2 0 0 1 2 2v2.5l3.5-2.5a1 1 0 0 1 1.5.9v10.2a1 1 0 0 1-1.5.9L18 15.5V18a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/>
+    </svg>
+  )
+}
+
+type VoSub = { plan: string | null; status: string | null }
+
 export default function MembersPage() {
   const supabase = createClient()
   const [members, setMembers] = useState<Member[]>([])
   const [subs, setSubs] = useState<Subscription[]>([])
   const [studioId, setStudioId] = useState<string | null>(null)
+  const [studioSlug, setStudioSlug] = useState<string | null>(null)
+  const [voSubs, setVoSubs] = useState<Map<string, VoSub>>(new Map())
   const [search, setSearch] = useState("")
   const [selected, setSelected] = useState<Member | null>(null)
   const [showAdd, setShowAdd] = useState(false)
@@ -39,12 +56,31 @@ export default function MembersPage() {
       if (!profile?.studio_id) return
       setStudioId(profile.studio_id)
 
-      const [mRes, sRes] = await Promise.all([
+      const [mRes, sRes, studioRes] = await Promise.all([
         supabase.from("members").select("*, subscription:subscriptions(*)").eq("studio_id", profile.studio_id).order("created_at", { ascending: false }),
         supabase.from("subscriptions").select("*").eq("studio_id", profile.studio_id).eq("active", true),
+        supabase.from("studios").select("slug").eq("id", profile.studio_id).single(),
       ])
       if (mRes.data) setMembers(mRes.data as any)
       if (sRes.data) setSubs(sRes.data)
+      if (studioRes.data) setStudioSlug(studioRes.data.slug)
+
+      // Uniquement pour yogalatestudio : charger les abonnements VideosOnline
+      if (studioRes.data?.slug === "yogalatestudio" && mRes.data) {
+        const emails = mRes.data.map(m => m.email?.toLowerCase()).filter(Boolean) as string[]
+        if (emails.length > 0) {
+          const { data: voData } = await supabase.from("vo_members")
+            .select("email, subscription_plan, subscription_status")
+            .in("email", emails)
+          if (voData) {
+            const map = new Map<string, VoSub>()
+            for (const v of voData) {
+              if (v.email) map.set(v.email.toLowerCase(), { plan: v.subscription_plan, status: v.subscription_status })
+            }
+            setVoSubs(map)
+          }
+        }
+      }
       setLoading(false)
     }
     load()
@@ -132,7 +168,15 @@ export default function MembersPage() {
                 {m.first_name?.[0]}{m.last_name?.[0]}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.first_name} {m.last_name}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
+                  {m.first_name} {m.last_name}
+                  {voSubs.has(m.email?.toLowerCase() || "") && (
+                    <span title={`Abonnement VideosOnline — ${VO_PLAN_LABEL[voSubs.get(m.email.toLowerCase())?.plan || ""] || "actif"}`}
+                      style={{ display: "inline-flex", alignItems: "center" }}>
+                      <VideoIcon size={13}/>
+                    </span>
+                  )}
+                </div>
                 <div style={{ fontSize: 11, color: C.textSoft, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(m as any).subscription?.name || m.email}</div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
@@ -152,6 +196,26 @@ export default function MembersPage() {
                     </div>
                   ))}
                 </div>
+
+                {studioSlug === "yogalatestudio" && voSubs.has(m.email?.toLowerCase() || "") && (() => {
+                  const vo = voSubs.get(m.email.toLowerCase())!
+                  return (
+                    <div style={{ background: "linear-gradient(145deg,#F5EBE0,#EFDFCB)", border: `1.5px solid ${C.accent}40`, borderRadius: 10, padding: "10px 14px", marginBottom: 10, display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#FFF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <VideoIcon size={16} color={C.accentDk}/>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: C.accentDk, textTransform: "uppercase", letterSpacing: .8, marginBottom: 2 }}>
+                          Videos Online
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>
+                          {VO_PLAN_LABEL[vo.plan || ""] || "Sans formule"}
+                          {vo.status && <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 500, color: vo.status === "active" ? C.ok : vo.status === "trialing" ? C.info : C.textSoft }}>· {vo.status}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })()}
                 <div className="flex flex-wrap gap-2">
                   {m.status === "actif"
                     ? <button onClick={() => updateStatus(m.id, "suspendu")} className="btn-danger text-xs py-1.5 px-3">Suspendre</button>
