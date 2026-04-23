@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
     .from("vo_members")
     .select("email, subscription_plan, subscription_status")
     .in("email", cleaned)
+    .not("subscription_plan", "is", null) // seuls les vrais abonnements (exclut les trials auto-créés)
 
   return NextResponse.json({ subs: data || [] })
 }
