@@ -148,15 +148,23 @@ export function PlanningAccordion({ sess, sessId, bookings, onChangeStatus, onAd
       setAttended(prev => { const n={...prev}; ids.forEach(id=>{n[id]=true;}); return n; });
       // Notifier le parent pour chaque booking marqué
       ids.forEach(id => onAttendanceChange && onAttendanceChange(id, true));
-      // Déduire 1 crédit par membre présent si le membre utilise le système de crédits
-      // (credits_total > 0) — même avec un abonnement illimité
+      // Déduire 1 crédit par présence si le porteur de crédits (membre ou hôte de l'invité)
+      // utilise le système de crédits (credits_total > 0) — même avec un abonnement illimité
       for (const b of toMark) {
         if (studioId && b.memberId) {
           await sb.from("member_activity").insert({ member_id: b.memberId, studio_id: studioId, actor_role: "admin", action: "booking_attended", details: { booking_id: b.id, session_id: sessId, session_date: sess?.date, bulk: true } });
         }
-        if ((b.total ?? 0) > 0 && b.memberId) {
-          await sb.from("members").update({ credits: (b.credits ?? 0) - 1 }).eq("id", b.memberId);
-          if (studioId) await sb.from("member_activity").insert({ member_id: b.memberId, studio_id: studioId, actor_role: "admin", action: "credit_deduct", details: { amount: 1, reason: "attendance_bulk", booking_id: b.id, session_date: sess?.date } });
+        // Pour un invité, déduire le crédit du membre hôte
+        const creditMemberId = b.hostMemberId || b.memberId;
+        if (!creditMemberId) continue;
+        // Recharger depuis la DB : b.credits/b.total sont null pour un invité,
+        // et plusieurs invités du même hôte dans la même séance doivent décrémenter séquentiellement
+        const { data: memberData } = await sb.from("members").select("credits, credits_total").eq("id", creditMemberId).single();
+        const currentCredits = memberData?.credits ?? 0;
+        const totalCredits   = memberData?.credits_total ?? 0;
+        if (totalCredits > 0) {
+          await sb.from("members").update({ credits: currentCredits - 1 }).eq("id", creditMemberId);
+          if (studioId) await sb.from("member_activity").insert({ member_id: creditMemberId, studio_id: studioId, actor_role: "admin", action: "credit_deduct", details: { amount: 1, reason: "attendance_bulk", booking_id: b.id, session_date: sess?.date, ...(b.isGuest ? { guest_booking: true, guest_name: b.name } : {}) } });
         }
       }
     }

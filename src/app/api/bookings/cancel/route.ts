@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     // Si on a un bookingId direct, l'annuler
     if (bookingId) {
       const { data: booking } = await db.from("bookings")
-        .select("id, session_id, member_id, status")
+        .select("id, session_id, member_id, status, attended, host_member_id, guest_name")
         .eq("id", bookingId).single()
 
       if (!booking) return NextResponse.json({ error: "Booking introuvable" }, { status: 404 })
@@ -34,12 +34,19 @@ export async function POST(req: NextRequest) {
 
       // Log
       const { data: sessForLog } = await db.from("sessions").select("session_date, session_time, studio_id, disciplines(name)").eq("id", booking.session_id).maybeSingle()
-      if (sessForLog && booking.member_id) {
-        await logActivity(db, { memberId: booking.member_id, studioId: (sessForLog as any).studio_id, action: "booking_cancelled", actorRole: "admin", details: { booking_id: bookingId, session_id: booking.session_id, by: "admin", session_date: (sessForLog as any).session_date, session_time: (sessForLog as any).session_time, discipline: (sessForLog as any).disciplines?.name } })
+      // Logguer sur le membre direct OU sur l'hôte si c'est un invité
+      const logMemberId = booking.member_id || booking.host_member_id
+      if (sessForLog && logMemberId) {
+        await logActivity(db, { memberId: logMemberId, studioId: (sessForLog as any).studio_id, action: "booking_cancelled", actorRole: "admin", details: { booking_id: bookingId, session_id: booking.session_id, by: "admin", session_date: (sessForLog as any).session_date, session_time: (sessForLog as any).session_time, discipline: (sessForLog as any).disciplines?.name, ...(booking.guest_name ? { guest_booking: true, guest_name: booking.guest_name } : {}) } })
       }
 
-      // Restituer le crédit si applicable
-      await restoreCredit(db, booking.member_id)
+      // Restituer le crédit si applicable — seulement si la présence avait été validée
+      // (les crédits sont déduits à la validation des présences, pas à la réservation)
+      // Pour un invité : restitution sur le membre hôte
+      const creditMemberId = booking.host_member_id || booking.member_id
+      if (booking.attended === true && creditMemberId) {
+        await restoreCredit(db, creditMemberId)
+      }
 
       // Promouvoir le 1er en waitlist
       const promoted = await promoteWaitlist(db, booking.session_id)
@@ -53,7 +60,7 @@ export async function POST(req: NextRequest) {
     // Si on a sessionId + memberId (cas adhérent)
     if (sessionId && memberId) {
       const { data: booking } = await db.from("bookings")
-        .select("id, status")
+        .select("id, status, attended")
         .eq("session_id", sessionId).eq("member_id", memberId)
         .neq("status", "cancelled").maybeSingle()
 
@@ -66,7 +73,10 @@ export async function POST(req: NextRequest) {
         await logActivity(db, { memberId, studioId: (sessForLog as any).studio_id, action: "booking_cancelled", actorRole: "adherent", details: { booking_id: booking.id, session_id: sessionId, by: "membre", session_date: (sessForLog as any).session_date, session_time: (sessForLog as any).session_time, discipline: (sessForLog as any).disciplines?.name } })
       }
 
-      await restoreCredit(db, memberId)
+      // Restituer seulement si la présence avait été validée (crédit effectivement déduit)
+      if (booking.attended === true) {
+        await restoreCredit(db, memberId)
+      }
       const promoted = await promoteWaitlist(db, sessionId)
 
       // Email d'annulation au membre + admin (fire-and-forget)
@@ -112,7 +122,7 @@ async function promoteWaitlist(db: any, sessionId: string): Promise<{ memberName
 
   // Trouver le 1er en waitlist (FIFO par date de création)
   const { data: waitlisted } = await db.from("bookings")
-    .select("id, member_id, members!bookings_member_id_fkey(first_name, last_name, email, phone, sms_opt_in, credits, credits_total, subscription_id, subscriptions(period))")
+    .select("id, member_id, host_member_id, guest_name, members!bookings_member_id_fkey(first_name, last_name, email, phone, sms_opt_in, credits, credits_total, subscription_id, subscriptions(period))")
     .eq("session_id", sessionId).eq("status", "waitlist")
     .order("created_at", { ascending: true })
     .limit(1)
@@ -121,20 +131,19 @@ async function promoteWaitlist(db: any, sessionId: string): Promise<{ memberName
 
   const booking = waitlisted[0]
   const member = booking.members as any
+  const isGuest = !!booking.guest_name
 
   // Promouvoir : waitlist → confirmed
+  // Le crédit n'est PAS déduit ici : il sera décompté à la validation des présences (accordion.jsx),
+  // exactement comme une réservation directe. Déduire ici provoquerait une double-déduction.
   await db.from("bookings").update({ status: "confirmed" }).eq("id", booking.id)
 
-  // Déduire un crédit si le membre utilise le système de crédits
-  const hasCredits = (member?.credits_total ?? 0) > 0
-  if (hasCredits) {
-    await db.from("members").update({
-      credits: Math.max(0, (member.credits ?? 1) - 1)
-    }).eq("id", booking.member_id)
+  // Notifier le membre promu (pas d'email pour un invité — pas d'adresse)
+  const memberName = isGuest ? `${booking.guest_name} (invité)` : `${member?.first_name || ""} ${member?.last_name || ""}`.trim()
+  if (isGuest) {
+    console.log(`[waitlist] Invité promu: ${memberName} pour session ${sessionId}`)
+    return { memberName }
   }
-
-  // Notifier le membre promu
-  const memberName = `${member?.first_name || ""} ${member?.last_name || ""}`.trim()
   const { data: studio } = await db.from("studios")
     .select("name, slug, email, sms_enabled, sms_credits_balance")
     .eq("id", sess.studio_id).single()
