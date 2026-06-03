@@ -174,9 +174,9 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
-  // Enregistrer le paiement dans member_payments — côté serveur (service role) car la RLS
-  // bloque l'insert depuis le client. À chaque changement d'abonnement OU dès qu'un mode de
-  // paiement est explicitement choisi (renouvellement du même abonnement).
+  // Enregistrer le paiement dans member_payments — un seul insert serveur (service role).
+  // À chaque changement d'abonnement OU dès qu'un mode de paiement est explicitement choisi
+  // (renouvellement du même abonnement). NB : la table n'a PAS de colonne subscription_id.
   const billedSubId: string | null = updates.subscription_id !== undefined
     ? (updates.subscription_id || null)
     : (member?.subscription_id ?? null)
@@ -187,7 +187,6 @@ export async function PATCH(request: NextRequest) {
         await db.from("member_payments").insert({
           studio_id: member.studio_id,
           member_id: id,
-          subscription_id: billedSubId,
           amount: sub.price || 0,
           status: "payé",
           payment_date: new Date().toISOString().slice(0, 10),

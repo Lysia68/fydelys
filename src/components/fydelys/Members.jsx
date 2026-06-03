@@ -365,8 +365,8 @@ function Members({ isMobile, onImpersonate, openMemberId, onMemberOpened }) {
     const payMode = modal.paymentMode || "";
     setModal(prev => ({...prev, saving:true}));
     const sub = subscriptionsList.find(s=>s.id===subId);
-    // Tout est traité côté serveur (service role) : assignation, paiement (avec le mode choisi)
-    // et ajout des crédits — la RLS bloque ces écritures depuis le client.
+    // Tout est traité côté serveur (service role) en un seul appel : assignation, paiement
+    // (avec le mode choisi) et ajout des crédits. Évite le doublon serveur+client.
     const res = await fetch("/api/members", { method:"PATCH", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({ id: modal.member.id, subscription_id: subId || null, payment_mode: payMode || null }) });
     const json = res.ok ? await res.json().catch(()=>({})) : {};
