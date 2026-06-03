@@ -96,10 +96,12 @@ type Prepared = {
   replyTo?: { email: string; name?: string }
 }
 
+type SendResult = { ok: boolean; error?: string; provider?: "sendgrid" | "brevo" }
+
 /** Envoi via SendGrid (HTTP API v3) */
-async function sendViaSendGrid(p: Prepared): Promise<{ ok: boolean; error?: string }> {
+async function sendViaSendGrid(p: Prepared): Promise<SendResult> {
   const apiKey = process.env.SENDGRID_API_KEY
-  if (!apiKey) return { ok: false, error: "SENDGRID_API_KEY manquante" }
+  if (!apiKey) return { ok: false, error: "SENDGRID_API_KEY manquante", provider: "sendgrid" }
 
   const body: any = {
     personalizations: [{ to: [p.toObj], subject: p.subject }],
@@ -121,15 +123,15 @@ async function sendViaSendGrid(p: Prepared): Promise<{ ok: boolean; error?: stri
   if (!res.ok) {
     const err = await res.text()
     console.error("SendGrid error:", err)
-    return { ok: false, error: err }
+    return { ok: false, error: err, provider: "sendgrid" }
   }
-  return { ok: true }
+  return { ok: true, provider: "sendgrid" }
 }
 
 /** Envoi via Brevo (Transactional Email API v3) */
-async function sendViaBrevo(p: Prepared): Promise<{ ok: boolean; error?: string }> {
+async function sendViaBrevo(p: Prepared): Promise<SendResult> {
   const apiKey = process.env.BREVO_API_KEY
-  if (!apiKey) return { ok: false, error: "BREVO_API_KEY manquante" }
+  if (!apiKey) return { ok: false, error: "BREVO_API_KEY manquante", provider: "brevo" }
 
   const body: any = {
     sender: { email: FROM_EMAIL, name: p.fromName },
@@ -150,12 +152,12 @@ async function sendViaBrevo(p: Prepared): Promise<{ ok: boolean; error?: string 
   if (!res.ok) {
     const err = await res.text()
     console.error("Brevo error:", err)
-    return { ok: false, error: err }
+    return { ok: false, error: err, provider: "brevo" }
   }
-  return { ok: true }
+  return { ok: true, provider: "brevo" }
 }
 
-export async function sendEmail({ to, subject, html, fromName, replyTo }: SendEmailOptions): Promise<{ ok: boolean; error?: string }> {
+export async function sendEmail({ to, subject, html, fromName, replyTo }: SendEmailOptions): Promise<SendResult> {
   const toObj = typeof to === "string" ? { email: to } : to
 
   // Nettoyage anti-spam (mutualisé entre les deux providers)
