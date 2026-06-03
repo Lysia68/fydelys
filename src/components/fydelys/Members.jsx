@@ -365,39 +365,22 @@ function Members({ isMobile, onImpersonate, openMemberId, onMemberOpened }) {
     const payMode = modal.paymentMode || "";
     setModal(prev => ({...prev, saving:true}));
     const sub = subscriptionsList.find(s=>s.id===subId);
+    // Tout est traité côté serveur (service role) : assignation, paiement (avec le mode choisi)
+    // et ajout des crédits — la RLS bloque ces écritures depuis le client.
     const res = await fetch("/api/members", { method:"PATCH", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ id: modal.member.id, subscription_id: subId || null }) });
-    // Enregistrer le paiement si abonnement + mode de paiement renseigné
-    if (res.ok && subId && payMode && sub?.price) {
-      await createClient().from("member_payments").insert({
-        studio_id: studioId, member_id: modal.member.id,
-        amount: sub.price, status: "payé",
-        payment_date: new Date().toISOString().slice(0,10),
-        payment_type: payMode, source: "manual",
-        notes: sub.name,
-      });
-    }
-    // Ajouter les crédits de l'abonnement au membre (uniquement si changement réel d'abonnement)
-    const previousSubId = modal.member.subscriptionId || null;
-    const subChanged = subId && subId !== previousSubId;
-    if (res.ok && sub?.credits && subChanged) {
-      const currentCredits = modal.member.credits || 0;
-      const currentTotal = modal.member.creditTotal || 0;
-      await createClient().from("members").update({
-        credits: currentCredits + sub.credits,
-        credits_total: currentTotal + sub.credits,
-      }).eq("id", modal.member.id);
-      setMembers(prev=>prev.map(m => m.id===modal.member.id ? {...m, credits:currentCredits+sub.credits, creditTotal:currentTotal+sub.credits} : m));
-      setSelected(prev=>prev?.id===modal.member.id ? {...prev, credits:currentCredits+sub.credits, creditTotal:currentTotal+sub.credits} : prev);
-    }
+      body: JSON.stringify({ id: modal.member.id, subscription_id: subId || null, payment_mode: payMode || null }) });
+    const json = res.ok ? await res.json().catch(()=>({})) : {};
     setModal(prev => ({...prev, saving:false}));
     if (res.ok) {
       const newSub = sub?.name||"—";
-      setMembers(prev=>prev.map(m => m.id===modal.member.id ? {...m, subscriptionId:subId||null, subscription:newSub} : m));
-      setSelected(prev=>prev?.id===modal.member.id ? {...prev, subscriptionId:subId||null, subscription:newSub} : prev);
+      const patch = { subscriptionId:subId||null, subscription:newSub };
+      if (typeof json.credits === "number") patch.credits = json.credits;
+      if (typeof json.credits_total === "number") patch.creditTotal = json.credits_total;
+      setMembers(prev=>prev.map(m => m.id===modal.member.id ? {...m, ...patch} : m));
+      setSelected(prev=>prev?.id===modal.member.id ? {...prev, ...patch} : prev);
       setModal(null);
       showToast("Abonnement mis à jour ✓");
-    } else { showToast("Erreur lors de la sauvegarde",false); setModal(prev => ({...prev, saving:false})); }
+    } else { showToast("Erreur lors de la sauvegarde",false); }
   };
 
   const SubscriptionModal = () => {

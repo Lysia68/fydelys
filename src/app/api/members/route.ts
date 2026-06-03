@@ -107,7 +107,7 @@ export async function PATCH(request: NextRequest) {
   const auth = await checkAuth(request)
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
-  const { id, ...updates } = await request.json()
+  const { id, payment_mode, ...updates } = await request.json()
   if (!id) return NextResponse.json({ error: "id requis" }, { status: 400 })
 
   const db = createServiceSupabase()
@@ -144,7 +144,11 @@ export async function PATCH(request: NextRequest) {
     await logActivity(db, { memberId: id, studioId, actorId, actorRole, action: updates.frozen_until ? "member_frozen" : "member_unfrozen", details: { from: member?.frozen_until, to: updates.frozen_until } })
   }
 
-  // Enregistrer l'achat dans member_payments si un nouvel abonnement est assigné
+  // Crédits après éventuel ajout (retournés au client pour rafraîchir l'UI)
+  let newCredits: number | undefined
+  let newCreditsTotal: number | undefined
+
+  // Abonnement assigné/changé : journaliser + créditer (carnet / séance / once)
   if (isSubChange && updates.subscription_id && member?.studio_id) {
     try {
       const { data: sub } = await db.from("subscriptions")
@@ -158,34 +162,48 @@ export async function PATCH(request: NextRequest) {
         if (CREDIT_PERIODS.includes(sub.period) && sub.credits && sub.credits > 0) {
           const { data: currentMember } = await db.from("members").select("credits, credits_total").eq("id", id).single()
           if (currentMember) {
-            await db.from("members").update({
-              credits: (currentMember.credits || 0) + sub.credits,
-              credits_total: (currentMember.credits_total || 0) + sub.credits,
-            }).eq("id", id)
+            newCredits = (currentMember.credits || 0) + sub.credits
+            newCreditsTotal = (currentMember.credits_total || 0) + sub.credits
+            await db.from("members").update({ credits: newCredits, credits_total: newCreditsTotal }).eq("id", id)
             await logActivity(db, { memberId: id, studioId: member.studio_id, actorId, actorRole, action: "credit_add", details: { amount: sub.credits, source: "admin_subscription", label: sub.name } })
           }
         }
+      }
+    } catch (err: any) {
+      console.warn("[members PATCH] Erreur abonnement/crédits:", err.message)
+    }
+  }
 
+  // Enregistrer le paiement dans member_payments — côté serveur (service role) car la RLS
+  // bloque l'insert depuis le client. À chaque changement d'abonnement OU dès qu'un mode de
+  // paiement est explicitement choisi (renouvellement du même abonnement).
+  const billedSubId: string | null = updates.subscription_id !== undefined
+    ? (updates.subscription_id || null)
+    : (member?.subscription_id ?? null)
+  if (member?.studio_id && billedSubId && (isSubChange || payment_mode)) {
+    try {
+      const { data: sub } = await db.from("subscriptions").select("name, price").eq("id", billedSubId).single()
+      if (sub) {
         await db.from("member_payments").insert({
           studio_id: member.studio_id,
           member_id: id,
-          subscription_id: updates.subscription_id,
+          subscription_id: billedSubId,
           amount: sub.price || 0,
           status: "payé",
           payment_date: new Date().toISOString().slice(0, 10),
-          payment_type: "Manuel",
-          source: "admin_subscription",
+          payment_type: payment_mode || "Manuel",
+          source: payment_mode ? "manual" : "admin_subscription",
           notes: sub.name || "Abonnement",
         })
-        console.log("[members PATCH] member_payments créé pour", id, "—", sub.name)
-        await logActivity(db, { memberId: id, studioId: member.studio_id, actorId, actorRole, action: "payment", details: { amount: sub.price || 0, type: "Manuel", source: "admin_subscription", notes: sub.name } })
+        console.log("[members PATCH] member_payments créé pour", id, "—", sub.name, "(", payment_mode || "Manuel", ")")
+        await logActivity(db, { memberId: id, studioId: member.studio_id, actorId, actorRole, action: "payment", details: { amount: sub.price || 0, type: payment_mode || "Manuel", source: payment_mode ? "manual" : "admin_subscription", notes: sub.name } })
       }
     } catch (err: any) {
       console.warn("[members PATCH] Erreur création member_payments:", err.message)
     }
   }
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, credits: newCredits, credits_total: newCreditsTotal })
 }
 
 // DELETE /api/members?id=xxx
