@@ -96,7 +96,7 @@ type Prepared = {
   replyTo?: { email: string; name?: string }
 }
 
-type SendResult = { ok: boolean; error?: string; provider?: "sendgrid" | "brevo" }
+type SendResult = { ok: boolean; error?: string; provider?: "sendgrid" | "brevo"; fallbackError?: string }
 
 /** Envoi via SendGrid (HTTP API v3) */
 async function sendViaSendGrid(p: Prepared): Promise<SendResult> {
@@ -179,6 +179,8 @@ export async function sendEmail({ to, subject, html, fromName, replyTo }: SendEm
     // Si Brevo échoue (clé invalide, quota…), repli sur SendGrid pour ne pas perdre le mail.
     if (r.ok) return r
     console.warn("[email] Brevo a échoué, repli SendGrid:", r.error)
+    const sg = await sendViaSendGrid(prepared)
+    return { ...sg, fallbackError: r.error }  // on remonte la raison de l'échec Brevo
   }
   return sendViaSendGrid(prepared)
 }

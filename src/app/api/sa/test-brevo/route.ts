@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
       providerUtilise: result.provider,        // "brevo" ou "sendgrid"
       brevoKeyPresent,
       error: result.error || null,
+      brevoError: result.fallbackError || null, // raison de l'échec Brevo si repli SendGrid
       hint: !brevoKeyPresent
         ? "BREVO_API_KEY absente → tout passe par SendGrid. Pose la variable dans Vercel et redéploie."
         : result.provider === "brevo"
