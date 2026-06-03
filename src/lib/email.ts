@@ -1,13 +1,42 @@
 /**
- * Helper centralisé pour l'envoi d'emails via SendGrid.
+ * Helper centralisé pour l'envoi d'emails — routage hybride SendGrid / Brevo.
+ *
+ * Pourquoi : les FAI grand public français (Free, Orange, SFR, La Poste…)
+ * blacklistent les IP mutualisées SendGrid → mails bloqués. On route donc
+ * ces destinataires vers Brevo (ESP français mieux peeré avec ces FAI),
+ * et tout le reste (Gmail, Outlook, domaines pro…) reste sur SendGrid.
+ *
  * - Adresse from unifiée : noreply@fydelys.fr
  * - Toujours text/plain + text/html (anti-spam)
  * - Header List-Unsubscribe (requis Outlook/Gmail)
  * - Stripping emojis du sujet et du body (anti-spam)
+ *
+ * Config requise : SENDGRID_API_KEY + BREVO_API_KEY.
+ * Si BREVO_API_KEY est absente, tout repart sur SendGrid (dégradation propre).
  */
 
 const SENDGRID_URL = "https://api.sendgrid.com/v3/mail/send"
+const BREVO_URL = "https://api.brevo.com/v3/smtp/email"
 const FROM_EMAIL = "noreply@fydelys.fr"
+const FROM_NAME_DEFAULT = "Fydelys"
+const UNSUBSCRIBE_HEADER = `<mailto:${FROM_EMAIL}?subject=unsubscribe>`
+
+/**
+ * Domaines de FAI grand public français qui blacklistent les IP mutualisées
+ * SendGrid → on les route vers Brevo. (Gmail/Outlook/domaines pro restent SendGrid.)
+ */
+const FRENCH_ISP_DOMAINS = new Set([
+  // Free
+  "free.fr", "freebox.fr", "aliceadsl.fr", "alice.fr",
+  // Orange
+  "orange.fr", "wanadoo.fr",
+  // SFR
+  "sfr.fr", "neuf.fr", "cegetel.net", "club-internet.fr", "numericable.fr", "noos.fr",
+  // Bouygues
+  "bbox.fr", "bouyguetelecom.fr",
+  // La Poste
+  "laposte.net",
+])
 
 type SendEmailOptions = {
   to: string | { email: string; name?: string }
@@ -52,37 +81,40 @@ function htmlToPlainText(html: string): string {
     .trim()
 }
 
-export async function sendEmail({ to, subject, html, fromName, replyTo }: SendEmailOptions): Promise<{ ok: boolean; error?: string }> {
+/** Domaine (minuscule) extrait d'une adresse email */
+function domainOf(email: string): string {
+  const at = email.lastIndexOf("@")
+  return at === -1 ? "" : email.slice(at + 1).toLowerCase().trim()
+}
+
+type Prepared = {
+  toObj: { email: string; name?: string }
+  subject: string
+  html: string
+  text: string
+  fromName: string
+  replyTo?: { email: string; name?: string }
+}
+
+/** Envoi via SendGrid (HTTP API v3) */
+async function sendViaSendGrid(p: Prepared): Promise<{ ok: boolean; error?: string }> {
   const apiKey = process.env.SENDGRID_API_KEY
   if (!apiKey) return { ok: false, error: "SENDGRID_API_KEY manquante" }
 
-  const toObj = typeof to === "string" ? { email: to } : to
-
-  // Nettoyer emojis du sujet et du HTML
-  const cleanSubject = stripEmojis(subject).replace(/\s{2,}/g, " ").trim()
-  const cleanHtml = stripEmojis(html)
-  const plainText = stripEmojis(htmlToPlainText(html))
-
   const body: any = {
-    personalizations: [{ to: [toObj], subject: cleanSubject }],
-    from: { email: FROM_EMAIL, name: fromName || "Fydelys" },
+    personalizations: [{ to: [p.toObj], subject: p.subject }],
+    from: { email: FROM_EMAIL, name: p.fromName },
     content: [
-      { type: "text/plain", value: plainText },
-      { type: "text/html", value: cleanHtml },
+      { type: "text/plain", value: p.text },
+      { type: "text/html", value: p.html },
     ],
-    headers: {
-      "List-Unsubscribe": `<mailto:${FROM_EMAIL}?subject=unsubscribe>`,
-    },
+    headers: { "List-Unsubscribe": UNSUBSCRIBE_HEADER },
   }
-
-  if (replyTo) body.reply_to = replyTo
+  if (p.replyTo) body.reply_to = p.replyTo
 
   const res = await fetch(SENDGRID_URL, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify(body),
   })
 
@@ -91,6 +123,60 @@ export async function sendEmail({ to, subject, html, fromName, replyTo }: SendEm
     console.error("SendGrid error:", err)
     return { ok: false, error: err }
   }
-
   return { ok: true }
+}
+
+/** Envoi via Brevo (Transactional Email API v3) */
+async function sendViaBrevo(p: Prepared): Promise<{ ok: boolean; error?: string }> {
+  const apiKey = process.env.BREVO_API_KEY
+  if (!apiKey) return { ok: false, error: "BREVO_API_KEY manquante" }
+
+  const body: any = {
+    sender: { email: FROM_EMAIL, name: p.fromName },
+    to: [p.toObj],
+    subject: p.subject,
+    htmlContent: p.html,
+    textContent: p.text,
+    headers: { "List-Unsubscribe": UNSUBSCRIBE_HEADER },
+  }
+  if (p.replyTo) body.replyTo = p.replyTo
+
+  const res = await fetch(BREVO_URL, {
+    method: "POST",
+    headers: { "api-key": apiKey, "Content-Type": "application/json", accept: "application/json" },
+    body: JSON.stringify(body),
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    console.error("Brevo error:", err)
+    return { ok: false, error: err }
+  }
+  return { ok: true }
+}
+
+export async function sendEmail({ to, subject, html, fromName, replyTo }: SendEmailOptions): Promise<{ ok: boolean; error?: string }> {
+  const toObj = typeof to === "string" ? { email: to } : to
+
+  // Nettoyage anti-spam (mutualisé entre les deux providers)
+  const prepared: Prepared = {
+    toObj,
+    subject: stripEmojis(subject).replace(/\s{2,}/g, " ").trim(),
+    html: stripEmojis(html),
+    text: stripEmojis(htmlToPlainText(html)),
+    fromName: fromName || FROM_NAME_DEFAULT,
+    replyTo,
+  }
+
+  // Routage : FAI grand public français → Brevo (si configuré), sinon SendGrid.
+  const isFrenchISP = FRENCH_ISP_DOMAINS.has(domainOf(toObj.email))
+  const useBrevo = isFrenchISP && !!process.env.BREVO_API_KEY
+
+  if (useBrevo) {
+    const r = await sendViaBrevo(prepared)
+    // Si Brevo échoue (clé invalide, quota…), repli sur SendGrid pour ne pas perdre le mail.
+    if (r.ok) return r
+    console.warn("[email] Brevo a échoué, repli SendGrid:", r.error)
+  }
+  return sendViaSendGrid(prepared)
 }
