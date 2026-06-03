@@ -48,8 +48,8 @@ export async function GET(req: NextRequest) {
       hint: !brevoKeyPresent
         ? "BREVO_API_KEY absente → tout passe par SendGrid. Pose la variable dans Vercel et redéploie."
         : result.provider === "brevo"
-          ? "OK : ce domaine a bien été routé vers Brevo."
-          : "Ce domaine n'est pas dans FRENCH_ISP_DOMAINS (ou repli depuis Brevo) → SendGrid.",
+          ? "OK : envoyé via Brevo (provider par défaut)."
+          : "Brevo a échoué → repli sur SendGrid. Voir le champ brevoError.",
     })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
