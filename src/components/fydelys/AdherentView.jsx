@@ -1048,8 +1048,8 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
 
               return (
                 <div style={{ marginBottom:24 }}>
-                  <Section title="Cours individuels (solo)" icon="👤" accent="#6A8FAE" items={groups.solo}/>
                   <Section title="Cours collectifs"          icon="🧘" accent={C.accent} items={groups.collectif}/>
+                  <Section title="Cours individuels (solo)" icon="👤" accent="#6A8FAE" items={groups.solo}/>
                   <Section title="Autres formules"           icon="📦" accent="#8A8A8A" items={groups.autres}/>
                 </div>
               );
