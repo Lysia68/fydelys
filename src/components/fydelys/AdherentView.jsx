@@ -990,29 +990,71 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
           </Card>
         )}
 
-        {/* Abonnements */}
+        {/* Abonnements — séparés solo / collectif pour éviter que les adhérents se trompent */}
         <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:12 }}>📋 Formules</div>
-        <div style={{ display:"grid", gridTemplateColumns:`repeat(${isMobile?1:2},1fr)`, gap:12, marginBottom:24 }}>
-          {subsLoading
-            ? <div style={{ color:C.textMuted, fontSize:14 }}>Chargement…</div>
-            : subs.filter(s=>s.price>0).map(sub => (
-              <div key={sub.id}
-                style={{ background:C.surface, borderRadius:12, border:`2px solid ${sub.popular?C.accent:C.border}`, padding:"18px 16px", position:"relative" }}>
-                {sub.popular && <div style={{ position:"absolute", top:-1, right:14, background:C.accent, color:"white", fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:"0 0 6px 6px" }}>Populaire</div>}
-                <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:4 }}>{sub.name}</div>
-                <div style={{ fontSize:24, fontWeight:800, color:C.accent, lineHeight:1, marginBottom:12 }}>
-                  {sub.price} €<span style={{ fontSize:13, fontWeight:400, color:C.textSoft }}> / {sub.period||"mois"}</span>
+        {subsLoading
+          ? <div style={{ color:C.textMuted, fontSize:14, marginBottom:24 }}>Chargement…</div>
+          : (() => {
+              const payable = subs.filter(s=>s.price>0);
+              if (payable.length===0) return <div style={{ color:C.textMuted, fontSize:13, fontStyle:"italic", marginBottom:24 }}>Aucun abonnement disponible.</div>;
+
+              // Détection solo / collectif par mots-clés dans le nom + description (insensible aux accents/casse)
+              const norm = s => (s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+              const SOLO_KW = ["solo", "individuel", "individuelle", "perso", "prive", "privee", "particulier", "1:1", "1 a 1", "one to one", "duo", "coaching", "cours particulier"];
+              const COLL_KW = ["collectif", "collective", "groupe", "cours co", "en groupe", "illimite"];
+              const cat = sub => {
+                const t = norm(`${sub.name} ${sub.description||""}`);
+                if (SOLO_KW.some(k=>t.includes(k))) return "solo";
+                if (COLL_KW.some(k=>t.includes(k))) return "collectif";
+                return "autres";
+              };
+              const groups = { solo:[], collectif:[], autres:[] };
+              payable.forEach(s => groups[cat(s)].push(s));
+
+              const renderSub = sub => (
+                <div key={sub.id}
+                  style={{ background:C.surface, borderRadius:12, border:`2px solid ${sub.popular?C.accent:C.border}`, padding:"18px 16px", position:"relative" }}>
+                  {sub.popular && <div style={{ position:"absolute", top:-1, right:14, background:C.accent, color:"white", fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:"0 0 6px 6px" }}>Populaire</div>}
+                  <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:4 }}>{sub.name}</div>
+                  <div style={{ fontSize:24, fontWeight:800, color:C.accent, lineHeight:1, marginBottom:12 }}>
+                    {sub.price} €<span style={{ fontSize:13, fontWeight:400, color:C.textSoft }}> / {sub.period||"mois"}</span>
+                  </div>
+                  <Button sm block onClick={()=>handleCheckout("subscription", sub.id)} disabled={redirecting===sub.id}>
+                    {redirecting===sub.id ? "Redirection…" : ["once","séance","carnet","session","unit"].includes(sub.period) ? "Acheter →" : "Souscrire →"}
+                  </Button>
                 </div>
-                <Button sm block onClick={()=>handleCheckout("subscription", sub.id)} disabled={redirecting===sub.id}>
-                  {redirecting===sub.id ? "Redirection…" : ["once","séance","carnet","session","unit"].includes(sub.period) ? "Acheter →" : "Souscrire →"}
-                </Button>
-              </div>
-            ))
-          }
-          {!subsLoading && subs.filter(s=>s.price>0).length===0 && (
-            <div style={{ color:C.textMuted, fontSize:13, fontStyle:"italic" }}>Aucun abonnement disponible.</div>
-          )}
-        </div>
+              );
+
+              const Section = ({ title, icon, accent, items }) => items.length===0 ? null : (
+                <div style={{ marginBottom:18 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10, paddingBottom:7, borderBottom:`1.5px solid ${C.border}` }}>
+                    <span style={{ width:24, height:24, borderRadius:7, background:`${accent}1A`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, flexShrink:0 }}>{icon}</span>
+                    <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{title}</span>
+                    <span style={{ fontSize:11, fontWeight:600, color:C.textMuted }}>· {items.length}</span>
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:`repeat(${isMobile?1:2},1fr)`, gap:12 }}>
+                    {items.map(renderSub)}
+                  </div>
+                </div>
+              );
+
+              // On n'affiche les en-têtes de section que s'il y a vraiment plusieurs groupes à séparer.
+              const nonEmpty = Object.values(groups).filter(g=>g.length>0).length;
+              if (nonEmpty <= 1) return (
+                <div style={{ display:"grid", gridTemplateColumns:`repeat(${isMobile?1:2},1fr)`, gap:12, marginBottom:24 }}>
+                  {payable.map(renderSub)}
+                </div>
+              );
+
+              return (
+                <div style={{ marginBottom:24 }}>
+                  <Section title="Cours individuels (solo)" icon="👤" accent="#6A8FAE" items={groups.solo}/>
+                  <Section title="Cours collectifs"          icon="🧘" accent={C.accent} items={groups.collectif}/>
+                  <Section title="Autres formules"           icon="📦" accent="#8A8A8A" items={groups.autres}/>
+                </div>
+              );
+            })()
+        }
 
         {/* Packs crédits */}
         {packs.length > 0 && (
