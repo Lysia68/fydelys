@@ -118,7 +118,7 @@ function DiscSelect({ label, value, onChange, options }) {
 }
 
 // ── Session card ─────────────────────────────────────────────────────────────
-function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onChangeStatus, onDelete, onCancel, onRestore, onAddBooking, onSendReminder, onDeleteBooking, onAttendanceChange, closures = [], isMobile = false, onConfirm, roomsList = [] }) {
+function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onChangeStatus, onDelete, onCancel, onRestore, onEdit, onAddBooking, onSendReminder, onDeleteBooking, onAttendanceChange, closures = [], isMobile = false, onConfirm, roomsList = [] }) {
   const allDiscs = discs?.length ? discs : DISCIPLINES;
   const disc = allDiscs.find(d => String(d.id) === String(sess.disciplineId)) || allDiscs[0] || { name: "Cours", color: C.accent, icon: "🧘" };
   const bl     = bookings[sess.id] || [];
@@ -127,6 +127,8 @@ function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onCh
   const pct    = booked / sess.spots;
   const isExp  = expandedId === sess.id;
   const isFull = booked >= sess.spots;
+  const [editing, setEditing] = useState(false);
+  const [ed, setEd] = useState({ date: sess.date, time: sess.time });
 
   // Calcul statut temporel
   const now = new Date();
@@ -190,6 +192,12 @@ function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onCh
         {/* Boutons actions inline (séance expanded) */}
         {isExp && (
           <div onClick={e => e.stopPropagation()} style={{ display: "flex", gap: 4, flexShrink: 0, ...(isMobile ? { width:"100%", paddingTop:6, borderTop:`1px solid ${C.borderSoft}`, marginTop:2 } : {}) }}>
+            {sess.status !== "cancelled" && onEdit && (
+              <button onClick={() => { setEd({ date: sess.date, time: sess.time }); setEditing(e => !e); }} title="Corriger la date ou l'heure"
+                style={{ display:"flex", alignItems:"center", gap:4, fontSize: 12, padding: "5px 9px", borderRadius: 8, border: `1px solid ${C.border}`, background: editing ? C.accentBg : C.surface, color: C.accentDark, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
+                ✎ Modifier
+              </button>
+            )}
             {sess.status !== "cancelled" && onCancel && (
               <button onClick={() => onCancel(sess.id)} title="Annuler cette séance"
                 style={{ display:"flex", alignItems:"center", gap:4, fontSize: 12, padding: "5px 9px", borderRadius: 8, border: `1px solid #EFC8BC`, background: "#FFF5F5", color: C.warn, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
@@ -218,6 +226,30 @@ function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onCh
         )}
         <span style={{ flexShrink: 0, display: "inline-flex", transition: "transform .2s", transform: isExp ? "rotate(180deg)" : "none" }}><IcoChevron s={16} c={C.textMuted} /></span>
       </div>
+      {isExp && editing && onEdit && (
+        <div onClick={e => e.stopPropagation()} style={{ padding:"12px 16px", background:C.surfaceWarm, borderTop:`1px solid ${C.borderSoft}`, display:"flex", gap:12, alignItems:"flex-end", flexWrap:"wrap" }}>
+          <div style={{ flex:"1 1 160px", minWidth:150 }}>
+            <DatePicker label="Nouvelle date" value={ed.date} onChange={v => setEd(p => ({ ...p, date: v }))} />
+          </div>
+          <div style={{ flex:"0 1 130px" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: .8, marginBottom: 5 }}>Nouvelle heure</div>
+            <TimePicker value={ed.time} onChange={v => setEd(p => ({ ...p, time: v }))} />
+          </div>
+          <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+            <Button sm variant="primary"
+              onClick={() => { onEdit(sess.id, ed.date, ed.time); setEditing(false); }}
+              disabled={!ed.date || !ed.time || (ed.date === sess.date && ed.time === sess.time)}>
+              Enregistrer
+            </Button>
+            <Button sm variant="ghost" onClick={() => setEditing(false)}>Annuler</Button>
+          </div>
+          {booked > 0 && (
+            <div style={{ flexBasis:"100%", fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:5 }}>
+              ⚠ {booked} inscrit{booked>1?"s":""} — pensez à les prévenir du changement.
+            </div>
+          )}
+        </div>
+      )}
       <div style={{ padding:"4px 14px 5px", display:"flex", alignItems:"center", gap:5, background:statusStyle.bg, borderTop:`1.5px solid ${statusStyle.color}44`, flexWrap:"wrap", minHeight:24 }}>
         {sessionStatus === "ongoing"   && <span style={{ width:7, height:7, borderRadius:"50%", background:C.ok, display:"inline-block", animation:"pulse 1.2s ease-in-out infinite" }}/>}
         {sessionStatus === "cancelled" && <span style={{ fontSize:12 }}>⚠</span>}
@@ -1009,6 +1041,21 @@ function Planning({ isMobile }) {
     }
   };
 
+  // Corriger la date / l'heure d'une séance (erreur de saisie)
+  const updateSessionDateTime = async (id, date, time) => {
+    const prev = sessions.find(s => s.id === id);
+    if (!prev || (prev.date === date && prev.time === time)) return;
+    setSessions(list => list.map(s => s.id === id ? { ...s, date, time } : s));
+    const { error } = await createClient().from("sessions")
+      .update({ session_date: date, session_time: time }).eq("id", id);
+    if (error) {
+      setSessions(list => list.map(s => s.id === id ? { ...s, date: prev.date, time: prev.time } : s));
+      showPlanToast("Erreur lors de la modification", false);
+    } else {
+      showPlanToast("Séance déplacée ✓", true);
+    }
+  };
+
   const addRecurringSessions = async () => {
     if (!recPreview.length || !studioId) return;
     const rows = recPreview.map(s => ({
@@ -1635,6 +1682,7 @@ function Planning({ isMobile }) {
                   onDelete={deleteSession}
                   onCancel={cancelSession}
                   onRestore={restoreSession}
+                  onEdit={updateSessionDateTime}
                 />
               ))}
             </div>
