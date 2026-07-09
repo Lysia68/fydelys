@@ -422,80 +422,119 @@ function Members({ isMobile, onImpersonate, openMemberId, onMemberOpened }) {
   };
 
   const HistoryModal = () => {
-    const [history, setHistory] = React.useState(null); // null=loading, []=empty, [...]=data
+    const [data, setData] = React.useState(null); // null=loading, {bookings,payments}=data
+    const [tab, setTab]   = React.useState("bookings"); // "bookings" | "payments"
     const memberId = modal?.member?.id;
 
     React.useEffect(() => {
       if (!memberId) return;
-      // Via API service role pour contourner RLS bookings
+      // Via API service role pour contourner RLS bookings/paiements
       fetch(`/api/members/history?memberId=${memberId}`)
         .then(r => r.ok ? r.json() : null)
-        .then(json => {
-          if (!json?.bookings) { setHistory([]); return; }
-          const today = new Date(); today.setHours(0,0,0,0);
-          setHistory(json.bookings.map(b => {
-            const s = b.sessions;
-            const sessionDate = s?.session_date ? new Date(s.session_date) : null;
-            const past = sessionDate && sessionDate < today;
-            const statut = past
-              ? (b.status === "cancelled" ? "absent" : "présent")
-              : "à venir";
-            return {
-              date: s?.session_date || "",
-              disc: s?.disciplines?.name || "—",
-              icon: s?.disciplines?.icon || "🏃",
-              teacher: s?.teacher || "—",
-              room: s?.room || "",
-              status: statut,
-            };
-          }).filter(b => b.date));
-        })
-        .catch(() => setHistory([]));
+        .then(json => setData({ bookings: json?.bookings || [], payments: json?.payments || [] }))
+        .catch(() => setData({ bookings: [], payments: [] }));
     }, [memberId]);
 
-    const presences = history?.filter(s => s.status === "présent").length || 0;
-    const absences  = history?.filter(s => s.status === "absent").length || 0;
-    const avenir    = history?.filter(s => s.status === "à venir").length || 0;
+    const loading = data === null;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const sessions = (data?.bookings || []).map(b => {
+      const s = b.sessions;
+      const sessionDate = s?.session_date ? new Date(s.session_date) : null;
+      const past = sessionDate && sessionDate < today;
+      const status = past ? (b.status === "cancelled" ? "absent" : "présent") : "à venir";
+      return { date: s?.session_date || "", disc: s?.disciplines?.name || "—", icon: s?.disciplines?.icon || "🏃",
+        teacher: s?.teacher || "—", room: s?.room || "", status };
+    }).filter(b => b.date);
+    const payments = data?.payments || [];
+
+    const presences = sessions.filter(s => s.status === "présent").length;
+    const absences  = sessions.filter(s => s.status === "absent").length;
+    const avenir    = sessions.filter(s => s.status === "à venir").length;
+    const totalPaye = payments.filter(p => p.status !== "remboursé").reduce((s,p) => s + (parseFloat(p.amount) || 0), 0);
+    const fmtDate = d => d ? new Date(String(d).slice(0,10)+"T12:00:00").toLocaleDateString("fr-FR") : "";
 
     return (
       <Modal>
-        <ModalHeader title={`Séances — ${modal.member.firstName} ${modal.member.lastName}`} onClose={()=>setModal(null)}/>
-        <div style={{display:"flex",gap:10,marginBottom:16}}>
-          {[["Séances",(history?.length||0)],["Présences",presences],["Absences",absences],["À venir",avenir]].map(([l,v])=>(
-            <div key={l} style={{flex:1,textAlign:"center",padding:"10px 6px",background:C.bg,borderRadius:10,border:`1.5px solid ${C.border}`}}>
-              <div style={{fontSize:20,fontWeight:800,color:C.text}}>{history===null?"…":v}</div>
-              <div style={{fontSize:10,color:C.textSoft}}>{l}</div>
-            </div>
+        <ModalHeader title={`Historique — ${modal.member.firstName} ${modal.member.lastName}`} onClose={()=>setModal(null)}/>
+
+        {/* Onglets Séances / Paiements */}
+        <div style={{display:"flex",gap:8,marginBottom:16}}>
+          {[["bookings","🗓 Séances",sessions.length],["payments","💳 Paiements",payments.length]].map(([k,l,n])=>(
+            <button key={k} onClick={()=>setTab(k)}
+              style={{flex:1,padding:"9px 6px",borderRadius:10,fontSize:13,fontWeight:700,cursor:"pointer",
+                border:`1.5px solid ${tab===k?C.accent:C.border}`,
+                background:tab===k?C.accentBg:C.surface, color:tab===k?C.accentDark:C.textSoft}}>
+              {l} <span style={{opacity:.7}}>({loading?"…":n})</span>
+            </button>
           ))}
         </div>
-        {history === null && (
-          <div style={{textAlign:"center",padding:"32px 0",color:C.textMuted,fontSize:13}}>Chargement…</div>
-        )}
-        {history !== null && history.length === 0 && (
-          <div style={{textAlign:"center",padding:"32px 0"}}>
-            <div style={{fontSize:28,marginBottom:8}}>📅</div>
-            <div style={{fontSize:14,fontWeight:700,color:C.text}}>Aucune séance</div>
-            <div style={{fontSize:12,color:C.textMuted,marginTop:4}}>Ce membre n'a pas encore de réservations.</div>
+
+        {loading && <div style={{textAlign:"center",padding:"32px 0",color:C.textMuted,fontSize:13}}>Chargement…</div>}
+
+        {/* ── Onglet Séances ── */}
+        {!loading && tab==="bookings" && (<>
+          <div style={{display:"flex",gap:10,marginBottom:16}}>
+            {[["Séances",sessions.length],["Présences",presences],["Absences",absences],["À venir",avenir]].map(([l,v])=>(
+              <div key={l} style={{flex:1,textAlign:"center",padding:"10px 6px",background:C.bg,borderRadius:10,border:`1.5px solid ${C.border}`}}>
+                <div style={{fontSize:20,fontWeight:800,color:C.text}}>{v}</div>
+                <div style={{fontSize:10,color:C.textSoft}}>{l}</div>
+              </div>
+            ))}
           </div>
-        )}
-        {history !== null && history.map((s,i)=>(
-          <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"9px 0",borderBottom:`1px solid ${C.borderSoft}`}}>
-            <div style={{width:32,height:32,borderRadius:8,
-              background:s.status==="présent"?C.okBg:s.status==="absent"?C.warnBg:C.accentBg,
-              display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              {s.status==="présent"?<IcoCheck s={14} c={C.ok}/>:s.status==="absent"?<IcoX s={14} c={C.warn}/>:<IcoCalendar2 s={14} c={C.accent}/>}
-            </div>
-            <div style={{flex:1}}>
-              <div style={{fontSize:14,fontWeight:700,color:C.text}}>{s.icon} {s.disc}</div>
-              <div style={{fontSize:12,color:C.textSoft}}>{s.teacher} · {s.date ? new Date(s.date+"T12:00:00").toLocaleDateString("fr-FR") : ""}</div>
-              {s.room && <div style={{fontSize:11,color:C.textMuted,marginTop:1}}>📍 {s.room}</div>}
-            </div>
-            <span style={{fontSize:12,fontWeight:600,
-              color:s.status==="présent"?C.ok:s.status==="absent"?C.warn:C.accent}}>
-              {s.status}
-            </span>
-          </div>
-        ))}
+          {sessions.length === 0
+            ? <div style={{textAlign:"center",padding:"32px 0"}}>
+                <div style={{fontSize:28,marginBottom:8}}>📅</div>
+                <div style={{fontSize:14,fontWeight:700,color:C.text}}>Aucune séance</div>
+                <div style={{fontSize:12,color:C.textMuted,marginTop:4}}>Ce membre n'a pas encore de réservations.</div>
+              </div>
+            : sessions.map((s,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"9px 0",borderBottom:`1px solid ${C.borderSoft}`}}>
+                <div style={{width:32,height:32,borderRadius:8,
+                  background:s.status==="présent"?C.okBg:s.status==="absent"?C.warnBg:C.accentBg,
+                  display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  {s.status==="présent"?<IcoCheck s={14} c={C.ok}/>:s.status==="absent"?<IcoX s={14} c={C.warn}/>:<IcoCalendar2 s={14} c={C.accent}/>}
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:14,fontWeight:700,color:C.text}}>{s.icon} {s.disc}</div>
+                  <div style={{fontSize:12,color:C.textSoft}}>{s.teacher} · {fmtDate(s.date)}</div>
+                  {s.room && <div style={{fontSize:11,color:C.textMuted,marginTop:1}}>📍 {s.room}</div>}
+                </div>
+                <span style={{fontSize:12,fontWeight:600,
+                  color:s.status==="présent"?C.ok:s.status==="absent"?C.warn:C.accent}}>{s.status}</span>
+              </div>
+            ))
+          }
+        </>)}
+
+        {/* ── Onglet Paiements ── */}
+        {!loading && tab==="payments" && (<>
+          {payments.length === 0
+            ? <div style={{textAlign:"center",padding:"32px 0"}}>
+                <div style={{fontSize:28,marginBottom:8}}>💳</div>
+                <div style={{fontSize:14,fontWeight:700,color:C.text}}>Aucun paiement</div>
+                <div style={{fontSize:12,color:C.textMuted,marginTop:4}}>Aucun règlement enregistré pour ce membre.</div>
+              </div>
+            : <>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",marginBottom:12,background:C.accentBg,borderRadius:10}}>
+                  <span style={{fontSize:12,fontWeight:700,color:C.textMid}}>Total réglé</span>
+                  <span style={{fontSize:16,fontWeight:800,color:C.accentDark}}>{totalPaye.toFixed(2)} €</span>
+                </div>
+                {payments.map((p,i)=>(
+                  <div key={p.id||i} style={{display:"flex",alignItems:"center",gap:12,padding:"9px 0",borderBottom:`1px solid ${C.borderSoft}`}}>
+                    <div style={{width:32,height:32,borderRadius:8,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:15}}>💳</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.notes || "Paiement"}</div>
+                      <div style={{fontSize:12,color:C.textSoft}}>{fmtDate(p.payment_date)}{p.payment_type ? ` · ${p.payment_type}` : ""}</div>
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div style={{fontSize:14,fontWeight:800,color:p.status==="remboursé"?C.textMuted:C.accent}}>{(parseFloat(p.amount)||0).toFixed(2)} €</div>
+                      <div style={{fontSize:11,fontWeight:600,color:p.status==="payé"?C.ok:p.status==="remboursé"?C.warn:C.textMuted}}>{p.status||"payé"}</div>
+                    </div>
+                  </div>
+                ))}
+              </>
+          }
+        </>)}
       </Modal>
     );
   };
