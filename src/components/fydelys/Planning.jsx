@@ -369,6 +369,7 @@ function BookingModal({ sessId, sessions, studioId, bookings, setBookings, setSe
     const { data } = await createClient().from("members")
       .select("id, first_name, last_name, email")
       .eq("studio_id", studioId)
+      .is("deleted_at", null)
       .or(`first_name.ilike.%${v}%,last_name.ilike.%${v}%,email.ilike.%${v}%`)
       .limit(6);
     setHostResults(data || []);

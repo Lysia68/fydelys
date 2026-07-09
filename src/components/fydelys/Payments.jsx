@@ -94,6 +94,7 @@ function Payments({ isMobile }) {
                       const v=e.target.value; setMemberSearch(v);
                       if(v.length<2){setMemberResults([]);return;}
                       createClient().from("members").select("id,first_name,last_name,email").eq("studio_id",studioId)
+                        .is("deleted_at", null)
                         .or(`first_name.ilike.%${v}%,last_name.ilike.%${v}%,email.ilike.%${v}%`).limit(6)
                         .then(({data})=>setMemberResults(data||[]));
                     }}

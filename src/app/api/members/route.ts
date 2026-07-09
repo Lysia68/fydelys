@@ -215,13 +215,29 @@ export async function DELETE(request: NextRequest) {
 
   const db = createServiceSupabase()
   // Vérifier que le membre appartient au studio du caller
-  const { data: member } = await db.from("members").select("studio_id").eq("id", id).single()
+  const { data: member } = await db.from("members").select("studio_id, auth_user_id").eq("id", id).single()
   if (!member || member.studio_id !== auth.studioId) return NextResponse.json({ error: "Accès refusé" }, { status: 403 })
 
   // Soft delete : marquer deleted_at au lieu de supprimer (historique préservé)
   const { error } = await db.from("members").update({ deleted_at: new Date().toISOString(), status: "suspendu" }).eq("id", id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Supprimer le compte auth lié (accès espace adhérent) — sauf s'il est encore
+  // utilisé par un autre membre actif (même personne inscrite dans un autre studio).
+  if (member.auth_user_id) {
+    const { data: others } = await db.from("members")
+      .select("id")
+      .eq("auth_user_id", member.auth_user_id)
+      .is("deleted_at", null)
+      .neq("id", id)
+      .limit(1)
+    if (!others || others.length === 0) {
+      const { error: authErr } = await db.auth.admin.deleteUser(member.auth_user_id)
+      if (authErr) console.warn("[members DELETE] Suppression auth user échouée:", authErr.message)
+    }
+  }
+
   await logActivity(db, { memberId: id, studioId: member.studio_id, actorId: (auth as any).user?.id, actorRole: (auth as any).profile?.role || "admin", action: "member_deleted" })
   return NextResponse.json({ ok: true })
 }
