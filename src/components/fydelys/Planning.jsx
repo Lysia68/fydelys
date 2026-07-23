@@ -128,7 +128,7 @@ function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onCh
   const isExp  = expandedId === sess.id;
   const isFull = booked >= sess.spots;
   const [editing, setEditing] = useState(false);
-  const [ed, setEd] = useState({ date: sess.date, time: sess.time });
+  const [ed, setEd] = useState({ date: sess.date, time: sess.time, spots: sess.spots });
 
   // Calcul statut temporel
   const now = new Date();
@@ -193,7 +193,7 @@ function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onCh
         {isExp && (
           <div onClick={e => e.stopPropagation()} style={{ display: "flex", gap: 4, flexShrink: 0, ...(isMobile ? { width:"100%", paddingTop:6, borderTop:`1px solid ${C.borderSoft}`, marginTop:2 } : {}) }}>
             {sess.status !== "cancelled" && onEdit && (
-              <button onClick={() => { setEd({ date: sess.date, time: sess.time }); setEditing(e => !e); }} title="Corriger la date ou l'heure"
+              <button onClick={() => { setEd({ date: sess.date, time: sess.time, spots: sess.spots }); setEditing(e => !e); }} title="Corriger la date, l'heure ou le nombre de places"
                 style={{ display:"flex", alignItems:"center", gap:4, fontSize: 12, padding: "5px 9px", borderRadius: 8, border: `1px solid ${C.border}`, background: editing ? C.accentBg : C.surface, color: C.accentDark, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
                 ✎ Modifier
               </button>
@@ -235,17 +235,28 @@ function PlanningSessionCard({ sess, expandedId, bookings, discs, onToggle, onCh
             <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: .8, marginBottom: 5 }}>Nouvelle heure</div>
             <TimePicker value={ed.time} onChange={v => setEd(p => ({ ...p, time: v }))} />
           </div>
-          <div style={{ display:"flex", gap:6, flexShrink:0 }}>
-            <Button sm variant="primary"
-              onClick={() => { onEdit(sess.id, ed.date, ed.time); setEditing(false); }}
-              disabled={!ed.date || !ed.time || (ed.date === sess.date && ed.time === sess.time)}>
-              Enregistrer
-            </Button>
-            <Button sm variant="ghost" onClick={() => setEditing(false)}>Annuler</Button>
+          <div style={{ flex:"0 1 100px" }}>
+            <Field label="Places" type="number" value={ed.spots}
+              onChange={v => setEd(p => ({ ...p, spots: v === "" ? "" : Math.min(200, Math.max(1, parseInt(v) || 1)) }))}
+              min={Math.max(1, booked)} max={200} />
           </div>
+          {(() => {
+            const spotsNum = Math.max(Math.max(1, booked), parseInt(ed.spots) || sess.spots);
+            const unchanged = ed.date === sess.date && ed.time === sess.time && spotsNum === sess.spots;
+            return (
+              <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+                <Button sm variant="primary"
+                  onClick={() => { onEdit(sess.id, ed.date, ed.time, spotsNum); setEditing(false); }}
+                  disabled={!ed.date || !ed.time || unchanged}>
+                  Enregistrer
+                </Button>
+                <Button sm variant="ghost" onClick={() => setEditing(false)}>Annuler</Button>
+              </div>
+            );
+          })()}
           {booked > 0 && (
             <div style={{ flexBasis:"100%", fontSize:11, color:C.textMuted, display:"flex", alignItems:"center", gap:5 }}>
-              ⚠ {booked} inscrit{booked>1?"s":""} — pensez à les prévenir du changement.
+              ⚠ {booked} inscrit{booked>1?"s":""} — minimum {booked} place{booked>1?"s":""} · pensez à les prévenir du changement.
             </div>
           )}
         </div>
@@ -1042,18 +1053,18 @@ function Planning({ isMobile }) {
     }
   };
 
-  // Corriger la date / l'heure d'une séance (erreur de saisie)
-  const updateSessionDateTime = async (id, date, time) => {
+  // Corriger la date / l'heure / le nombre de places d'une séance (erreur de saisie)
+  const updateSession = async (id, date, time, spots) => {
     const prev = sessions.find(s => s.id === id);
-    if (!prev || (prev.date === date && prev.time === time)) return;
-    setSessions(list => list.map(s => s.id === id ? { ...s, date, time } : s));
+    if (!prev || (prev.date === date && prev.time === time && prev.spots === spots)) return;
+    setSessions(list => list.map(s => s.id === id ? { ...s, date, time, spots } : s));
     const { error } = await createClient().from("sessions")
-      .update({ session_date: date, session_time: time }).eq("id", id);
+      .update({ session_date: date, session_time: time, spots }).eq("id", id);
     if (error) {
-      setSessions(list => list.map(s => s.id === id ? { ...s, date: prev.date, time: prev.time } : s));
+      setSessions(list => list.map(s => s.id === id ? { ...s, date: prev.date, time: prev.time, spots: prev.spots } : s));
       showPlanToast("Erreur lors de la modification", false);
     } else {
-      showPlanToast("Séance déplacée ✓", true);
+      showPlanToast("Séance modifiée ✓", true);
     }
   };
 
@@ -1683,7 +1694,7 @@ function Planning({ isMobile }) {
                   onDelete={deleteSession}
                   onCancel={cancelSession}
                   onRestore={restoreSession}
-                  onEdit={updateSessionDateTime}
+                  onEdit={updateSession}
                 />
               ))}
             </div>
