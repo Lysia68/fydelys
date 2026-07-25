@@ -12,7 +12,7 @@ name: Backup Fydelys → Cloudflare R2
 #       (à recopier depuis le repo synq9-crm, ou nouvelle clé R2 dédiée).
 #   - SENDGRID_API_KEY : pour l'email de notification (optionnel).
 #
-# Upload sous le préfixe `fydelys/db/` : sans collision même si le bucket R2 est
+# Upload sous le préfixe `db/` : sans collision même si le bucket R2 est
 # partagé avec Synq9. Lancement manuel possible via workflow_dispatch.
 on:
   schedule:
@@ -96,10 +96,10 @@ jobs:
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
-          aws s3 cp "$DUMP_FILE" "s3://$R2_BUCKET/fydelys/db/$DUMP_FILE" \
+          aws s3 cp "$DUMP_FILE" "s3://$R2_BUCKET/db/$DUMP_FILE" \
             --endpoint-url "$R2_ENDPOINT" \
             --no-progress
-          echo "✓ DB Fydelys uploaded to s3://$R2_BUCKET/fydelys/db/$DUMP_FILE"
+          echo "✓ DB Fydelys uploaded to s3://$R2_BUCKET/db/$DUMP_FILE"
 
       - name: Cleanup local
         if: always()
@@ -124,7 +124,7 @@ jobs:
           else
             SUBJ="❌ Backup Fydelys ÉCHEC ($JOB_STATUS) — $STAMP"
           fi
-          BODY=$(printf 'Sauvegarde Fydelys → Cloudflare R2\n\nStatut      : %s\nDate (UTC)  : %s\nDump        : %s\nTaille dump : %s octets (%s gzip)\nDestination : s3://<bucket>/fydelys/db/\n\nLogs détaillés : %s\n\n(Mail automatique — cron quotidien 03:30 UTC + déclenchements manuels.)' \
+          BODY=$(printf 'Sauvegarde Fydelys → Cloudflare R2\n\nStatut      : %s\nDate (UTC)  : %s\nDump        : %s\nTaille dump : %s octets (%s gzip)\nDestination : s3://<bucket>/db/\n\nLogs détaillés : %s\n\n(Mail automatique — cron quotidien 03:30 UTC + déclenchements manuels.)' \
             "$JOB_STATUS" "$STAMP" "${DUMP_FILE:-non produit}" "${DUMP_BYTES:-0}" "${DUMP_GZ_SIZE:-?}" "$RUN_URL")
           jq -n \
             --arg to "info@lysia.fr" \
