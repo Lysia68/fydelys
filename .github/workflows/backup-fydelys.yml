@@ -1,0 +1,140 @@
+name: Backup Fydelys → Cloudflare R2
+
+# Sauvegarde quotidienne de la base Postgres (Supabase) de Fydelys vers
+# Cloudflare R2 (S3-compatible). Jumeau du backup Synq9, version BASE SEULE.
+# Décalée à 03:30 UTC.
+#
+# SECRETS REQUIS (Settings → Secrets and variables → Actions de CE repo) :
+#   - SUPABASE_DB_URL : chaîne de connexion Postgres de Fydelys.
+#       Supabase : utiliser le Session Pooler IPv4 (port 5432), PAS le
+#       Transaction Pooler (6543) qui casse pg_dump.
+#   - R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_ENDPOINT / R2_BUCKET
+#       (à recopier depuis le repo synq9-crm, ou nouvelle clé R2 dédiée).
+#   - SENDGRID_API_KEY : pour l'email de notification (optionnel).
+#
+# Upload sous le préfixe `fydelys/db/` : sans collision même si le bucket R2 est
+# partagé avec Synq9. Lancement manuel possible via workflow_dispatch.
+on:
+  schedule:
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # aws-cli v2 récent envoie un checksum CRC32 que Cloudflare R2 rejette
+    # (uploads en échec -> bucket vide). On le repasse en "quand requis".
+    env:
+      AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+      AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Postgres client 17 (pg_dump doit être >= serveur)
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Install AWS CLI (S3-compatible pour R2)
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip -q awscliv2.zip
+          sudo ./aws/install --update
+          aws --version
+
+      - name: Configure AWS CLI pour R2
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          aws configure set aws_access_key_id "$R2_ACCESS_KEY_ID"
+          aws configure set aws_secret_access_key "$R2_SECRET_ACCESS_KEY"
+          aws configure set region auto
+          aws configure set output json
+
+      - name: Dump Postgres Fydelys (gzip)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::Secret SUPABASE_DB_URL absent — ajoutez-le dans Settings → Secrets → Actions."
+            exit 1
+          fi
+          STAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
+          OUT="fydelys-$STAMP.sql.gz"
+          echo "DUMP_FILE=$OUT" >> $GITHUB_ENV
+          echo "DUMP_STAMP=$STAMP" >> $GITHUB_ENV
+          # Dump dans un FICHIER (pas de pipe vers gzip) : sinon un échec de
+          # pg_dump serait masqué (gzip de rien = succès -> dump vide uploadé).
+          # On capture le code retour + on vérifie la taille avant compression.
+          PG_DUMP=/usr/lib/postgresql/17/bin/pg_dump
+          "$PG_DUMP" --version
+          set +e
+          "$PG_DUMP" "$SUPABASE_DB_URL" \
+            --no-owner --no-acl --quote-all-identifiers --format=plain \
+            > dump.sql 2> pgdump.err
+          RC=$?
+          set -e
+          BYTES=$(wc -c < dump.sql)
+          echo "pg_dump exit=$RC, dump=$BYTES octets"
+          if [ "$RC" -ne 0 ] || [ "$BYTES" -lt 1000 ]; then
+            echo "::error::Dump vide ou en échec (exit=$RC, $BYTES octets). SUPABASE_DB_URL incorrect ? (Session Pooler IPv4 :5432, pas Transaction Pooler :6543)"
+            echo "----- stderr pg_dump -----"; cat pgdump.err
+            exit 1
+          fi
+          gzip -9 < dump.sql > "$OUT"
+          echo "DUMP_BYTES=$BYTES" >> $GITHUB_ENV
+          echo "DUMP_GZ_SIZE=$(du -h "$OUT" | cut -f1)" >> $GITHUB_ENV
+          echo "Dump size : $(du -h "$OUT" | cut -f1)"
+
+      - name: Upload dump vers R2 (préfixe fydelys/)
+        env:
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          aws s3 cp "$DUMP_FILE" "s3://$R2_BUCKET/fydelys/db/$DUMP_FILE" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --no-progress
+          echo "✓ DB Fydelys uploaded to s3://$R2_BUCKET/fydelys/db/$DUMP_FILE"
+
+      - name: Cleanup local
+        if: always()
+        run: |
+          rm -f fydelys-*.sql.gz dump.sql pgdump.err
+
+      # Mail de notification (succès OU échec) via SendGrid.
+      - name: Notifier par email (SendGrid)
+        if: always()
+        env:
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          JOB_STATUS: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$SENDGRID_API_KEY" ]; then
+            echo "::warning::SENDGRID_API_KEY absent — pas d'email de notification"
+            exit 0
+          fi
+          STAMP="${DUMP_STAMP:-$(date -u +%Y-%m-%dT%H-%M-%SZ)}"
+          if [ "$JOB_STATUS" = "success" ]; then
+            SUBJ="✅ Backup Fydelys OK — $STAMP"
+          else
+            SUBJ="❌ Backup Fydelys ÉCHEC ($JOB_STATUS) — $STAMP"
+          fi
+          BODY=$(printf 'Sauvegarde Fydelys → Cloudflare R2\n\nStatut      : %s\nDate (UTC)  : %s\nDump        : %s\nTaille dump : %s octets (%s gzip)\nDestination : s3://<bucket>/fydelys/db/\n\nLogs détaillés : %s\n\n(Mail automatique — cron quotidien 03:30 UTC + déclenchements manuels.)' \
+            "$JOB_STATUS" "$STAMP" "${DUMP_FILE:-non produit}" "${DUMP_BYTES:-0}" "${DUMP_GZ_SIZE:-?}" "$RUN_URL")
+          jq -n \
+            --arg to "info@lysia.fr" \
+            --arg from "noreply@synq9.com" \
+            --arg subj "$SUBJ" \
+            --arg body "$BODY" \
+            '{personalizations:[{to:[{email:$to}]}],from:{email:$from,name:"Fydelys Backup"},subject:$subj,content:[{type:"text/plain",value:$body}]}' \
+            > mail.json
+          curl -s -o /dev/null -w "SendGrid HTTP=%{http_code}\n" \
+            -X POST https://api.sendgrid.com/v3/mail/send \
+            -H "Authorization: Bearer $SENDGRID_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data @mail.json
