@@ -73,16 +73,33 @@ jobs:
           # On capture le code retour + on vérifie la taille avant compression.
           PG_DUMP=/usr/lib/postgresql/17/bin/pg_dump
           "$PG_DUMP" --version
-          set +e
-          "$PG_DUMP" "$SUPABASE_DB_URL" \
-            --no-owner --no-acl --quote-all-identifiers --format=plain \
-            > dump.sql 2> pgdump.err
-          RC=$?
-          set -e
-          BYTES=$(wc -c < dump.sql)
-          echo "pg_dump exit=$RC, dump=$BYTES octets"
+          # Relance jusqu'à 3 fois : les poolers Supabase refusent parfois une
+          # connexion de façon transitoire (un run isolé échoue puis repasse sans
+          # rien changer). On n'échoue -- et on n'envoie de mail rouge -- qu'après
+          # 3 tentatives espacées de 15 s.
+          ATTEMPTS=3
+          RC=1
+          BYTES=0
+          for i in $(seq 1 "$ATTEMPTS"); do
+            set +e
+            "$PG_DUMP" "$SUPABASE_DB_URL" \
+              --no-owner --no-acl --quote-all-identifiers --format=plain \
+              > dump.sql 2> pgdump.err
+            RC=$?
+            set -e
+            BYTES=$(wc -c < dump.sql)
+            echo "tentative $i/$ATTEMPTS : pg_dump exit=$RC, dump=$BYTES octets"
+            if [ "$RC" -eq 0 ] && [ "$BYTES" -ge 1000 ]; then
+              break
+            fi
+            if [ "$i" -lt "$ATTEMPTS" ]; then
+              echo "----- stderr pg_dump (tentative $i) -----"; cat pgdump.err
+              echo "échec probablement transitoire, nouvelle tentative dans 15 s..."
+              sleep 15
+            fi
+          done
           if [ "$RC" -ne 0 ] || [ "$BYTES" -lt 1000 ]; then
-            echo "::error::Dump vide ou en échec (exit=$RC, $BYTES octets). SUPABASE_DB_URL incorrect ? (Session Pooler IPv4 :5432, pas Transaction Pooler :6543)"
+            echo "::error::Dump vide ou en échec après $ATTEMPTS tentatives (exit=$RC, $BYTES octets). SUPABASE_DB_URL incorrect ? (Session Pooler IPv4 :5432, pas Transaction Pooler :6543)"
             echo "----- stderr pg_dump -----"; cat pgdump.err
             exit 1
           fi
