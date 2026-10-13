@@ -246,13 +246,22 @@ export async function POST(req: NextRequest) {
           break
         }
 
-        const nextPayment = new Date()
-        nextPayment.setMonth(nextPayment.getMonth() + 1)
+        // Prochain prélèvement = fin de la période Stripe (vraie périodicité : mois, trimestre, an…),
+        // en date de Paris. Repli sur +1 mois si Stripe ne la fournit pas.
+        const periodEnd = subscription.current_period_end
+        let nextPaymentDate: string
+        if (periodEnd) {
+          nextPaymentDate = new Date(periodEnd * 1000).toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" })
+        } else {
+          const fallback = new Date()
+          fallback.setMonth(fallback.getMonth() + 1)
+          nextPaymentDate = fallback.toISOString().slice(0, 10)
+        }
 
         const { error: uErr } = await db.from("members").update({
           status:          "Actif",
           subscription_id: subscriptionId || null,
-          next_payment:    nextPayment.toISOString().slice(0, 10),
+          next_payment:    nextPaymentDate,
           stripe_sub_id:   subId2,
         }).eq("id", memberId)
         if (uErr) L.err("Échec update membre abonnement", uErr)

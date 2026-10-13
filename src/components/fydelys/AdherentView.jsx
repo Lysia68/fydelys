@@ -296,18 +296,18 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
       if (impersonateUserId) {
         // Impersonate : chercher d'abord par member.id, puis par auth_user_id
         const { data: byId } = await sb.from("members")
-          .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, birth_date, address, postal_code, city, profession, facebook, profile_complete, subscription_id, subscriptions(period)")
+          .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, birth_date, address, postal_code, city, profession, facebook, profile_complete, subscription_id, next_payment, subscriptions(name, period)")
           .eq("studio_id", studioId).eq("id", targetUid).maybeSingle();
         member = byId;
         if (!member) {
           const { data: byUid } = await sb.from("members")
-            .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, birth_date, address, postal_code, city, profession, facebook, profile_complete, subscription_id, subscriptions(period)")
+            .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, birth_date, address, postal_code, city, profession, facebook, profile_complete, subscription_id, next_payment, subscriptions(name, period)")
             .eq("studio_id", studioId).eq("auth_user_id", targetUid).maybeSingle();
           member = byUid;
         }
       } else {
         const { data: byUid } = await sb.from("members")
-          .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, birth_date, address, postal_code, city, profession, facebook, profile_complete, subscription_id, subscriptions(period)")
+          .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, birth_date, address, postal_code, city, profession, facebook, profile_complete, subscription_id, next_payment, subscriptions(name, period)")
           .eq("studio_id", studioId).eq("auth_user_id", targetUid).maybeSingle();
         member = byUid;
       }
@@ -315,7 +315,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
       // Fallback email uniquement pour l'user réel (pas l'impersonate)
       if (!member && !impersonateUserId && user.email) {
         const { data: byEmail } = await sb.from("members")
-          .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, birth_date, address, postal_code, city, profession, facebook, profile_complete, subscription_id, subscriptions(period)")
+          .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, birth_date, address, postal_code, city, profession, facebook, profile_complete, subscription_id, next_payment, subscriptions(name, period)")
           .eq("studio_id", studioId).eq("email", user.email).maybeSingle();
         member = byEmail;
         if (member) {
@@ -333,7 +333,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
         window.history.replaceState({}, "", window.location.pathname);
         setTimeout(async () => {
           const { data: fresh } = await sb.from("members")
-            .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, birth_date, address, postal_code, city, profession, facebook, profile_complete, subscription_id, subscriptions(period)")
+            .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, birth_date, address, postal_code, city, profession, facebook, profile_complete, subscription_id, next_payment, subscriptions(name, period)")
             .eq("id", member.id).maybeSingle();
           if (fresh) setMe(fresh);
         }, 2000);
@@ -756,7 +756,7 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
       const sb = createClient();
       // Recharger credits + statut
       sb.from("members")
-        .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, birth_date, address, postal_code, city, profession, facebook, profile_complete, subscription_id, subscriptions(period)")
+        .select("id, first_name, last_name, email, status, credits, credits_total, created_at, phone, birth_date, address, postal_code, city, profession, facebook, profile_complete, subscription_id, next_payment, subscriptions(name, period)")
         .eq("id", me.id).maybeSingle()
         .then(({ data }) => { if (data) setMe(data); });
       // Recharger historique pour avoir les présences à jour
@@ -989,6 +989,28 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
             </div>
           </Card>
         )}
+
+        {/* Abonnement en cours — date du prochain prélèvement Stripe */}
+        {(() => {
+          if (me?.status !== "Actif" || !me?.next_payment) return null;
+          const d = new Date(`${String(me.next_payment).slice(0, 10)}T12:00:00`);
+          if (isNaN(d.getTime())) return null;
+          return (
+            <Card style={{ marginBottom:16, borderLeft:`3px solid ${C.accent}` }}>
+              <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+                <IcoCreditCard2 s={24} c={C.accent}/>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:C.text }}>
+                    {me.subscriptions?.name || "Abonnement"} en cours
+                  </div>
+                  <div style={{ fontSize:13, color:C.textSoft, marginTop:2 }}>
+                    Prochain prélèvement le <strong style={{ color:C.text }}>{d.toLocaleDateString("fr-FR", { day:"numeric", month:"long", year:"numeric" })}</strong>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          );
+        })()}
 
         {/* Abonnements — séparés solo / collectif pour éviter que les adhérents se trompent */}
         <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:12 }}>📋 Formules</div>
