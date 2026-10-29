@@ -80,10 +80,28 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(callbackUrl)
   }
 
-  // Helper pour créer un redirect qui préserve les cookies rafraîchis
+  // Helper pour créer un redirect qui préserve les cookies rafraîchis.
+  //
+  // ── Recopier le cookie ENTIER, pas seulement name + value ──────────────────
+  // Jusqu'au 29/10/2026 cette fonction faisait `set(c.name, c.value)`. Les
+  // attributs posés par `setAll` ci-dessus etaient donc perdus a chaque
+  // redirection :
+  //   - sans `domain`, le cookie devient host-only (`studio.fydelys.fr` au lieu
+  //     de `.fydelys.fr`) : le partage entre sous-domaines que `setAll` reclame
+  //     explicitement ne tient plus, et deux cookies homonymes coexistent ;
+  //   - sans expiration, c'est un cookie de SESSION, qui meurt a la fermeture
+  //     du navigateur.
+  //
+  // Et ca mordait sur le chemin QUOTIDIEN d'une adherente : aller sur
+  // `<studio>.fydelys.fr/` en etant connectee declenche la redirection vers
+  // `/dashboard` d'ici meme. Un rafraichissement de jeton pendant cette requete
+  // suffisait a rendre la session non persistante — d'ou des adherentes
+  // deconnectees « sans raison », qui retombaient sur la landing commerciale.
+  //
+  // Couvert par tests/middleware.test.ts.
   const safeRedirect = (url: string | URL) => {
     const res = NextResponse.redirect(url instanceof URL ? url : new URL(url, request.url))
-    supabaseResponse.cookies.getAll().forEach(c => res.cookies.set(c.name, c.value))
+    supabaseResponse.cookies.getAll().forEach(c => res.cookies.set(c))
     return res
   }
 
