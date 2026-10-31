@@ -20,7 +20,12 @@ export async function middleware(request: NextRequest) {
   const tenantSlug = (() => {
     if (isApp || isLocal) return null
     const match = hostname.match(/^([a-z0-9-]+)\.fydelys\.fr/)
-    return match ? match[1] : null
+    // `www` et `app` ne sont pas des studios. Le domaine joker `*.fydelys.fr`
+    // est attache au projet, donc `www.fydelys.fr` repond (200, verifie le
+    // 31/10/2026) : sans cette exclusion, la reecriture plus bas l'enverrait
+    // sur « Studio introuvable » au lieu de la landing.
+    if (!match || match[1] === "www" || match[1] === "app") return null
+    return match[1]
   })()
   const isTenant = !!tenantSlug
 
@@ -80,7 +85,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(callbackUrl)
   }
 
-  // Helper pour créer un redirect qui préserve les cookies rafraîchis.
+  // Helper qui preserve les cookies rafraichis.
   //
   // ── Recopier le cookie ENTIER, pas seulement name + value ──────────────────
   // Jusqu'au 29/10/2026 cette fonction faisait `set(c.name, c.value)`. Les
@@ -98,12 +103,18 @@ export async function middleware(request: NextRequest) {
   // suffisait a rendre la session non persistante — d'ou des adherentes
   // deconnectees « sans raison », qui retombaient sur la landing commerciale.
   //
+  // Toute reponse qui n'est PAS `supabaseResponse` passe par ici — redirection
+  // comme reecriture. Un seul endroit, pour que la lecon ne s'applique pas a
+  // moitie : `res.cookies.set(c)` recopie l'objet entier, jamais name + value.
+  //
   // Couvert par tests/middleware.test.ts.
-  const safeRedirect = (url: string | URL) => {
-    const res = NextResponse.redirect(url instanceof URL ? url : new URL(url, request.url))
+  const reporterCookies = (res: NextResponse) => {
     supabaseResponse.cookies.getAll().forEach(c => res.cookies.set(c))
     return res
   }
+
+  const safeRedirect = (url: string | URL) =>
+    reporterCookies(NextResponse.redirect(url instanceof URL ? url : new URL(url, request.url)))
 
   let user = null
   try {
@@ -174,6 +185,28 @@ export async function middleware(request: NextRequest) {
   if (user && pathname === "/" && isTenant && !isPreview) {
     return safeRedirect(new URL("/dashboard", request.url))
   }
+
+  // ── `/` sur un sous-domaine de studio = la VITRINE, rendue par le serveur
+  //
+  // Reecriture, pas redirection : l'adresse affichee reste celle du studio.
+  //
+  // Avant le 31/10/2026, `/` servait la landing COMMERCIALE et c'est un
+  // `useEffect` qui la remplacait par la vitrine apres hydratation. Une
+  // adherente non connectee — ou dont la session venait d'expirer — recevait
+  // donc un argumentaire de vente pour logiciel de gestion de studio. Deux
+  // personnes l'ont signale les 27 et 29/10/2026.
+  //
+  // Ce cas est atteint quand personne n'est connecte, et aussi avec
+  // `?preview=1` : l'apercu de la vitrine depuis les reglages passe par le
+  // meme rendu que ce que voient les adherentes, et non par un chemin a part.
+  if (isTenant && pathname === "/") {
+    const vitrine = request.nextUrl.clone()
+    vitrine.pathname = `/studio/${tenantSlug}`
+    const res = NextResponse.rewrite(vitrine, { request: { headers: requestHeaders } })
+    setHeaders(res)
+    return reporterCookies(res)
+  }
+
   // Sur fydelys.fr : si connecté et va sur /login → redirect /dashboard
   // Sauf si ?force=1 (clic volontaire sur "Connexion" depuis la landing)
   const forceLogin = searchParams.get("force") === "1"
