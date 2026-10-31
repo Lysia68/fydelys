@@ -242,14 +242,34 @@ function SR({ label, k, opts, value, onChange }:SRProps) {
   )
 }
 
-export default function LoginPage({ initialStudioName }: { initialStudioName?: string }) {
-  const [ctx, setCtx]           = useState<Ctx>("tenant-login")
-  const [studioName, setStudioName] = useState(initialStudioName || "")
+// Tout vient du serveur, qui connait l'hote par l'en-tete `x-tenant-slug` pose
+// par le middleware.
+//
+// ── Avant le 31/10/2026 ──────────────────────────────────
+// `ctx` etait devine ici, dans un `useEffect`, en lisant
+// `window.location.hostname`. Comme la page ne pouvait pas s'afficher avant de
+// savoir a qui elle parlait, elle etait masquee derriere un
+// `if (!hydrated) return <spinner>` : le HTML servi ne contenait NI le nom du
+// studio, NI le formulaire — rien qu'un rond de chargement (7,9 Ko releves en
+// production le 31/10/2026).
+//
+// C'est la meme maladie que celle de la page d'accueil, soignee le meme jour :
+// une identite connue du serveur, devinee par le navigateur.
+export default function LoginPage({
+  ctx,
+  slug = "",
+  studioName = "",
+  accent,
+}: {
+  ctx: Ctx
+  slug?: string
+  studioName?: string
+  accent?: string
+}) {
   const [tab, setTab]           = useState<"login"|"register">("login")
   const [email, setEmail]       = useState("")
   const [loading, setLoading]   = useState(false)
   const [sent, setSent]         = useState(false)
-  const [hydrated, setHydrated] = useState(false)
   const [error, setError]       = useState<string|null>(null)
   const [focused, setFocused]   = useState(false)
   const turnstile = useTurnstile()
@@ -271,14 +291,11 @@ export default function LoginPage({ initialStudioName }: { initialStudioName?: s
   useEffect(()=>{
     const saved = localStorage.getItem("fydelys_last_email")
     if (saved) setEmail(saved)
-    const h = window.location.hostname
-    const isRoot = h==="fydelys.fr"||h==="localhost"||h.startsWith("localhost:")
-    if(isRoot) {
-      setCtx("superadmin")
-      // Si ?tab=register dans l'URL → créer studio directement
+    // `?tab=register` → creation de studio directement. Sur `fydelys.fr`
+    // seulement : `ctx` vient du serveur, on ne le devine plus.
+    if (ctx === "superadmin") {
       const tabParam = new URLSearchParams(window.location.search).get("tab")
-      if (tabParam === "register") { setTab("register") }
-      else { setTab("login") }  // Par défaut : connexion directe, pas les 2 CTA
+      setTab(tabParam === "register" ? "register" : "login")
     }
     // Afficher message si redirect depuis callback avec erreur
     const params = new URLSearchParams(window.location.search)
@@ -292,8 +309,7 @@ export default function LoginPage({ initialStudioName }: { initialStudioName?: s
     } else if(errParam) {
       setError("Erreur de connexion. Veuillez réessayer.")
     }
-    setHydrated(true)
-  },[])
+  },[ctx])
 
   const toSlug = (s:string) =>
     s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
@@ -344,10 +360,9 @@ export default function LoginPage({ initialStudioName }: { initialStudioName?: s
     }
     lastLoginAttempt.current = now
     setLoading(true); setError(null)
-    const hostname = window.location.hostname
-    const tenantMatch = hostname.match(/^([a-z0-9-]+)\.fydelys\.fr/)
-    const slug = tenantMatch ? tenantMatch[1] : null
-
+    // `slug` est une prop : le serveur le tient de `x-tenant-slug`. Il etait
+    // relu ici dans `window.location.hostname`, avec une regexp de plus a
+    // garder en phase avec celle du middleware.
     if (slug) {
       // Sur slug.fydelys.fr : on génère le magic link côté serveur
       // pour envoyer un email brandé au nom du studio (pas "Fydelys")
@@ -456,36 +471,45 @@ export default function LoginPage({ initialStudioName }: { initialStudioName?: s
     return e
   }
 
+  // ── La couleur du studio ─────────────────────────────────
+  // `accent_color` est choisi par le studio dans ses reglages et ne servait
+  // jusqu'ici qu'a la vitrine : sa page de connexion restait au brun Fydelys.
+  //
+  // Le format est VERIFIE avant d'etre pose dans un attribut `style` : la
+  // valeur vient de la base, le selecteur de couleurs n'est qu'une convention
+  // d'ecran, et une chaine libre interpolee dans du CSS reste une chaine libre
+  // interpolee dans du CSS. Tout ce qui n'est pas `#rrggbb` retombe sur le
+  // brun Fydelys.
+  const A = accent && /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : "#A06838"
+  const canaux  = (hex:string) => [1,3,5].map(i => parseInt(hex.slice(i,i+2),16))
+  const voile   = (hex:string,a:number) => `rgba(${canaux(hex).join(",")},${a})`
+  const melange = (hex:string,t:number) => "#" + canaux(hex)
+    .map(v => Math.round(t>0 ? v+(255-v)*t : v*(1+t)).toString(16).padStart(2,"0")).join("")
+
   const C = {
     bg:"#F8F2EA",
-    glow:"radial-gradient(ellipse 80% 60% at 50% 0%, rgba(176,120,72,.08) 0%, transparent 70%)",
+    glow:`radial-gradient(ellipse 80% 60% at 50% 0%, ${voile(A,.08)} 0%, transparent 70%)`,
     card:"rgba(255,255,255,.88)", border:"1px solid rgba(221,213,200,.8)",
-    title:"#2A1F14", accent:"#A06838", sub:"#8C7B6C",
-    input:{bg:"#FDFAF7",color:"#2A1F14",border:(f:boolean)=>f?"#A06838":"#DDD5C8"},
-    btn:"linear-gradient(145deg,#B88050,#9A6030)",
-    btnGhost:"rgba(160,104,56,.08)", logo:"#F0EAE0",
+    title:"#2A1F14", accent:A, sub:"#8C7B6C",
+    input:{bg:"#FDFAF7",color:"#2A1F14",border:(f:boolean)=>f?A:"#DDD5C8"},
+    btn:`linear-gradient(145deg,${melange(A,.12)},${melange(A,-.12)})`,
+    btnGhost:voile(A,.08), logo:"#F0EAE0",
     footer:"#B0A090", label:"#8C7B6C",
   }
   const inp=(f=false,err=false)=>({
     width:"100%",padding:"11px 14px",border:`1.5px solid ${err?"#F87171":C.input.border(f)}`,
     borderRadius:10,fontSize:14,outline:"none",color:C.input.color,background:C.input.bg,
-    boxSizing:"border-box" as const,boxShadow:f?"0 0 0 3px rgba(160,104,56,.07)":"none"
+    boxSizing:"border-box" as const,boxShadow:f?`0 0 0 3px ${voile(A,.07)}`:"none"
   })
   const lbl={fontSize:11,fontWeight:700,color:C.label,textTransform:"uppercase" as const,letterSpacing:.8,display:"block",marginBottom:5}
   const btn=(ghost=false)=>({
     width:"100%",padding:"13px",background:ghost?C.btnGhost:C.btn,
-    color:ghost?C.accent:"#fff",border:ghost?"1px solid rgba(160,104,56,.2)":"none",
+    color:ghost?C.accent:"#fff",border:ghost?`1px solid ${voile(A,.2)}`:"none",
     borderRadius:12,fontSize:15,fontWeight:700,cursor:"pointer",letterSpacing:-0.2
   })
 
 
 
-
-  if (!hydrated) return (
-    <div style={{minHeight:"100vh",background:"#F4EFE8",display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{width:56,height:56,borderRadius:"50%",background:"rgba(160,104,56,.12)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>✦</div>
-    </div>
-  )
 
   return (
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'Inter',-apple-system,sans-serif"}}>
