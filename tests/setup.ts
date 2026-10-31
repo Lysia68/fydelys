@@ -59,13 +59,24 @@ vi.mock("@/lib/supabase-server", () => ({
 // ── Mock @supabase/ssr ────────────────────────────────────────────
 vi.mock("@supabase/ssr", () => ({
   createServerClient: vi.fn(() => mockDb),
+  // Utilise par `@/lib/supabase` (cote navigateur). Necessaire des qu'un test
+  // REND un composant client : `createClient()` est appele pendant le rendu.
+  createBrowserClient: vi.fn(() => mockDb),
 }))
 
 // ── Mock next/headers ─────────────────────────────────────────────
+// Les en-tetes de requete que verra le code teste. Un test les pose
+// (`mockRequestHeaders.set("x-tenant-slug", "...")`) puis les vide :
+// `vi.clearAllMocks()` ne touche pas une Map.
+export const mockRequestHeaders = new Map<string, string>()
+
 vi.mock("next/headers", () => ({
   cookies: vi.fn(() => ({
     getAll: () => [],
     set: vi.fn(),
+  })),
+  headers: vi.fn(async () => ({
+    get: (k: string) => mockRequestHeaders.get(k.toLowerCase()) ?? null,
   })),
 }))
 

@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
+import StudioIntrouvable from "@/components/StudioIntrouvable"
 
 // La VITRINE d'un studio, rendue a son adresse propre.
 //
@@ -55,13 +56,10 @@ export default function StudioVitrine({ slug }: { slug: string }) {
     </div>
   )
 
-  if (!studio) return (
-    <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", background:"#F4EFE8", fontFamily:"'Helvetica Neue',Arial,sans-serif", gap:12 }}>
-      <div style={{ fontSize:40 }}>🔍</div>
-      <div style={{ fontSize:18, fontWeight:700, color:"#2A1F14" }}>Studio introuvable</div>
-      <div style={{ fontSize:14, color:"#8C7B6C" }}>Ce lien ne correspond à aucun studio actif.</div>
-    </div>
-  )
+  // Meme bloc que `/login` sur un sous-domaine inconnu, et volontairement le
+  // MEME composant : les deux portes d'entree d'un studio doivent dire la meme
+  // chose a qui se trompe d'adresse.
+  if (!studio) return <StudioIntrouvable/>
 
   const accent = studio.accent_color || "#B07848"
   const accentBg = accent + "18"

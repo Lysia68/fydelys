@@ -17,4 +17,9 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
     },
   },
+  // Next compile le JSX avec le runtime « automatic » (tsconfig : jsx
+  // "preserve", donc c'est le bundler qui tranche). Sans cette ligne, esbuild
+  // retombe sur `React.createElement` et tout module testant un composant
+  // echoue sur « React is not defined » — ce qui n'arrive jamais au build.
+  esbuild: { jsx: "automatic" },
 })
