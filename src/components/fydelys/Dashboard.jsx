@@ -10,6 +10,7 @@ import { Card, SectionHead, Pill, KpiCard, MemberRow, DemoBanner, creditColor, C
 import { PlanningAccordion } from "./accordion";
 import { StatsPresences, useStatsPresences } from "./StatsPresences";
 import { libelleSemaine } from "@/lib/stats-presences";
+import { MembresInactifs, useMembresInactifs } from "./MembresInactifs";
 
 // ── PLANNING ACCORDION ────────────────────────────────────────────────────────
 
@@ -73,6 +74,7 @@ function Dashboard({ isMobile }) {
   const [loading, setLoading] = useState(true);
   const [recentBookings, setRecentBookings] = useState([]);
   const stats = useStatsPresences(studioId);
+  const inactifs = useMembresInactifs(studioId);
 
   const handleToggle = (id) => setExpandedId(prev => prev===id ? null : id);
   const handleChangeStatus = (bid, sid, ns) => {
@@ -223,25 +225,6 @@ function Dashboard({ isMobile }) {
     return { ...future, discName: disc?.name||"Séance", discIcon: disc?.icon||"", discColor: disc?.color||C.accent, booked: bk, countdown };
   })();
 
-  // Membres inactifs (pas de réservation confirmée depuis 30j)
-  const inactiveMembers = (() => {
-    if (isDemo || !members.length) return [];
-    const d30ago = new Date(); d30ago.setDate(d30ago.getDate() - 30);
-    const d30str = d30ago.toISOString().slice(0,10);
-    // Collecter les member IDs qui ont un booking confirmé sur une session récente
-    const activeIds = new Set();
-    sessions.forEach(s => {
-      if (s.date >= d30str) {
-        (bookings[s.id]||[]).forEach(b => {
-          if (b.st === "confirmed" && b.id) activeIds.add(b.id); // b.id = member_id dans le dashboard
-        });
-      }
-    });
-    return members
-      .filter(m => (m.status === "actif" || m.status === "Actif" || m.status === "active") && !activeIds.has(m.id))
-      .slice(0, 5);
-  })();
-
   // Membres récents triés par date d'inscription
   const recentMembers = [...members].sort((a,b)=>{
     const da = a.joinedAt||a.joined_at||a.created_at||"";
@@ -384,28 +367,8 @@ function Dashboard({ isMobile }) {
 
         {/* Sans réservation */}
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:isMobile?12:16 }}>
-          {inactiveMembers.length > 0 && (
-            <Card noPad>
-              <SectionHead><span style={{display:"flex",alignItems:"center",gap:6}}>😴 Sans réservation depuis 30j <span style={{fontSize:11,fontWeight:700,padding:"1px 7px",borderRadius:10,background:C.warnBg,color:C.warn}}>{inactiveMembers.length}</span></span></SectionHead>
-              <div style={{ padding:"0 2px" }}>
-                {inactiveMembers.map(m => (
-                  <div key={m.id} onClick={()=>window.dispatchEvent(new CustomEvent("fydelys:openMember",{detail:m.id}))}
-                    style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 14px", borderBottom:`1px solid ${C.borderSoft}`, cursor:"pointer" }}
-                    onMouseEnter={e=>e.currentTarget.style.background=C.bg}
-                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                    <div style={{ width:28, height:28, borderRadius:"50%", background:C.accentBg, border:`1px solid #DFC0A0`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:C.accent, flexShrink:0 }}>
-                      {(m.first_name||m.firstName||"?")[0]}{(m.last_name||m.lastName||"")[0]}
-                    </div>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:13, fontWeight:600, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.first_name||m.firstName} {m.last_name||m.lastName}</div>
-                      <div style={{ fontSize:11, color:C.textMuted }}>{m.email}</div>
-                    </div>
-                    <span style={{ fontSize:11, color:C.warn, fontWeight:600, flexShrink:0 }}>30j+</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
+          {/* Nombre exact de jours, calculé côté serveur ; orange < 1 an, rouge au-delà ; « Voir tout » = vue complète */}
+          <MembresInactifs inactifs={inactifs} isMobile={isMobile}/>
         </div>
       </div>
     </div>
