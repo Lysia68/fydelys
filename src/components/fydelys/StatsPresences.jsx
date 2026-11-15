@@ -17,15 +17,16 @@ const MOIS = ["janvier","février","mars","avril","mai","juin","juillet","août"
 const COUL_VALIDES = C.ok; // accent vert : présence validée
 
 /**
- * Charge les stats du mois choisi. `validesPrecedente` (carte « Validés
- * semaine précédente ») garde la dernière valeur connue pendant un rechargement.
+ * Charge les stats du mois choisi. `precedente` (carte « Validés semaine
+ * précédente » : semaine ISO + nombre de validés) garde la dernière valeur
+ * connue pendant un rechargement.
  */
 export function useStatsPresences(studioId) {
   const auj = aujourdhuiParis();
   const [periode, setPeriode] = useState({ annee: Number(auj.slice(0, 4)), mois: Number(auj.slice(5, 7)) });
   const [etat, setEtat] = useState("chargement"); // chargement | ok | erreur
   const [donnees, setDonnees] = useState(null);
-  const [validesPrecedente, setValidesPrecedente] = useState(null);
+  const [precedente, setPrecedente] = useState(null);
   const [essai, setEssai] = useState(0);
   const enCours = useRef(null);
 
@@ -43,7 +44,7 @@ export function useStatsPresences(studioId) {
       })
       .then(j => {
         setDonnees(j);
-        setValidesPrecedente(j.semainePrecedente?.valides ?? null);
+        setPrecedente(j.semainePrecedente ?? null);
         setEtat("ok");
       })
       .catch(e => {
@@ -55,7 +56,7 @@ export function useStatsPresences(studioId) {
   }, [studioId, periode.annee, periode.mois, essai]);
 
   const recharger = useCallback(() => setEssai(n => n + 1), []);
-  return { etat, donnees, periode, setPeriode, recharger, validesPrecedente };
+  return { etat, donnees, periode, setPeriode, recharger, precedente };
 }
 
 const selectStyle = {
@@ -142,8 +143,11 @@ export function StatsPresences({ stats, isMobile }) {
             Impossible de charger les statistiques.
           </Message>
         )}
-        {etat === "ok" && donnees?.nbSeances === 0 && <Message>Aucune séance sur la période</Message>}
-        {etat === "ok" && donnees?.nbSeances > 0 && (
+        {/* Le graphique s'arrete a la semaine precedente : un mois futur, ou le
+            debut du mois en cours, n'a encore aucune semaine terminee. */}
+        {etat === "ok" && semaines.length === 0 && <Message>Aucune semaine terminée sur la période</Message>}
+        {etat === "ok" && semaines.length > 0 && donnees?.nbSeances === 0 && <Message>Aucune séance sur la période</Message>}
+        {etat === "ok" && semaines.length > 0 && donnees?.nbSeances > 0 && (
           <>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12, color: C.textSoft, marginBottom: 6 }}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { checkAuth } from "@/lib/auth-check"
 import { createServerSupabase } from "@/lib/supabase-server"
 import {
-  agreger, aujourdhuiParis, finDuMois, semainePrecedente, semainesDuMois,
+  agreger, aujourdhuiParis, semainePrecedente, semainesDuMois, semainesTerminees,
   type LigneReservation,
 } from "@/lib/stats-presences"
 
@@ -63,26 +63,33 @@ export async function GET(req: NextRequest) {
 
   try {
     const sb = await createServerSupabase()
-    const debutMois = `${annee}-${String(mois).padStart(2, "0")}-01`
-    const fin = finDuMois(annee, mois)
     const precedente = semainePrecedente(aujourdhui)
+    // Semaines TERMINEES du mois seulement (jusqu'a la semaine precedente) :
+    // ni la semaine en cours, ni les semaines a venir.
+    const semaines = semainesTerminees(semainesDuMois(annee, mois), precedente)
+    // Periode effectivement affichee : du 1er jour compte au dernier.
+    const du = semaines[0]?.debut
+    const au = semaines[semaines.length - 1]?.fin
 
     const [lignesMois, lignesPrec, seances] = await Promise.all([
-      lireReservations(sb, studioId, debutMois, fin),
+      du ? lireReservations(sb, studioId, du, au) : Promise.resolve([]),
       lireReservations(sb, studioId, precedente.lundi, precedente.dimanche),
-      sb.from("sessions").select("id", { count: "exact", head: true })
-        // `or` et non `neq` : `NULL <> 'cancelled'` n'est pas vrai en SQL, un
-        // `neq` seul ecarterait les seances sans statut.
-        .eq("studio_id", studioId).or("status.is.null,status.neq.cancelled")
-        .gte("session_date", debutMois).lte("session_date", fin),
+      du
+        ? sb.from("sessions").select("id", { count: "exact", head: true })
+          // `or` et non `neq` : `NULL <> 'cancelled'` n'est pas vrai en SQL, un
+          // `neq` seul ecarterait les seances sans statut.
+          .eq("studio_id", studioId).or("status.is.null,status.neq.cancelled")
+          .gte("session_date", du).lte("session_date", au)
+        : Promise.resolve({ count: 0, error: null }),
     ])
     if (seances.error) throw new Error(seances.error.message)
 
     return NextResponse.json({
       annee, mois,
-      // Distingue « aucune seance » (etat vide) de « des seances, aucune presence validee » (zeros).
+      // Distingue « aucune seance » (etat vide) de « des seances, aucune presence
+      // validee » (zeros) — compte sur la periode AFFICHEE, pas le mois entier.
       nbSeances: seances.count ?? 0,
-      semaines: agreger(semainesDuMois(annee, mois), lignesMois),
+      semaines: agreger(semaines, lignesMois),
       semainePrecedente: {
         ...precedente,
         valides: lignesPrec.filter(l => l.attended === true).length,

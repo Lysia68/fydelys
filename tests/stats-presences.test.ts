@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import {
-  aujourdhuiParis, semaineIso, semainePrecedente, semainesDuMois, agreger,
+  aujourdhuiParis, semaineIso, semainePrecedente, semainesDuMois, semainesTerminees, agreger,
   libelleSemaine, infobulleSemaine,
 } from "@/lib/stats-presences"
 
@@ -51,6 +51,15 @@ describe("semaines du mois", () => {
     expect(libelleSemaine(s[0])).toBe("S44 · 01/11")
     expect(infobulleSemaine(s[2])).toBe("Semaine 46 : du 09/11 au 15/11")
     expect(infobulleSemaine(s[0])).toMatch(/seuls les jours du mois choisi sont comptés \(le 01\/11\)/)
+  })
+})
+
+describe("semaines terminees", () => {
+  it("garde les semaines jusqu'a la semaine precedente incluse", () => {
+    const nov = semainesDuMois(2026, 11)
+    expect(semainesTerminees(nov, semainePrecedente("2026-11-15")).map(s => s.numero)).toEqual([44, 45])
+    expect(semainesTerminees(nov, semainePrecedente("2026-12-16"))).toHaveLength(6) // mois passe : tout
+    expect(semainesTerminees(semainesDuMois(2026, 12), semainePrecedente("2026-11-15"))).toEqual([]) // mois futur
   })
 })
 
