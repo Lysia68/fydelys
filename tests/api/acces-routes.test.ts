@@ -452,10 +452,106 @@ describe("POST /api/team/suspend", () => {
     expect(suspensions()).toHaveLength(1)
     expect(suspensions()[0].v.suspended_at).toMatch(/^\d{4}-\d{2}-\d{2}T/)
   })
-  it("DELETE (suppression d'un coach) : 405 explicite, rien n'est ecrit", async () => {
-    const { DELETE } = await import("@/app/api/team/suspend/route")
-    expect((await DELETE()).status).toBe(405)
-    expect(ecritures).toEqual([])
+})
+
+// ── team/suspend DELETE : seulement un coach SANS aucune seance ; suspension :
+// nombre de seances futures a reassigner ──────────────────────────────────────
+describe("/api/team/suspend — suppression et seances du coach", () => {
+  let lignes: Record<string, any[]>
+  let supprimees: { table: string; filtres: [string, any][] }[]
+  beforeEach(() => {
+    supprimees = []
+    lignes = {
+      profiles: [
+        { id: "c1", role: "coach", studio_id: "studio-123", first_name: "Léa", last_name: "Martin" },
+        { id: "a2", role: "admin", studio_id: "studio-123", first_name: "Autre", last_name: "Admin" },
+      ],
+      members: [],
+      sessions: [],
+    }
+    mockDb.from.mockImplementation((table: string) => {
+      const f: { eq: [string, any][]; ilike?: string; gte?: string; neq?: [string, any] } = { eq: [] }
+      let compte = false
+      const c: any = {}
+      const rows = () => (lignes[table] || []).filter(r =>
+        f.eq.every(([k, v]) => r[k] === v)
+        && (f.ilike === undefined || String(r.teacher || "").toLowerCase() === f.ilike.toLowerCase())
+        && (f.gte === undefined || r.session_date >= f.gte)
+        && (f.neq === undefined || r[f.neq[0]] !== f.neq[1]))
+      c.select = vi.fn((_: string, o?: any) => { compte = !!o?.count; return c })
+      c.eq = vi.fn((k: string, v: any) => { f.eq.push([k, v]); return c })
+      c.is = vi.fn((k: string, v: any) => { f.eq.push([k, v ?? undefined]); return c })
+      c.ilike = vi.fn((_k: string, v: string) => { f.ilike = v; return c })
+      c.gte = vi.fn((_k: string, v: string) => { f.gte = v; return c })
+      c.neq = vi.fn((k: string, v: any) => { f.neq = [k, v]; return c })
+      c.limit = vi.fn(() => c)
+      c.maybeSingle = vi.fn(async () => ({ data: rows()[0] ?? null, error: null }))
+      c.then = (ok: any) => Promise.resolve(compte ? { count: rows().length, error: null } : { data: rows(), error: null }).then(ok)
+      c.update = vi.fn(() => ({ eq: async () => ({ error: null }) }))
+      c.delete = vi.fn(() => { const d: any = { filtres: [] as [string, any][] }; supprimees.push({ table, filtres: d.filtres })
+        d.eq = (k: string, v: any) => { d.filtres.push([k, v]); return d }; d.then = (ok: any) => Promise.resolve({ error: null }).then(ok); return d })
+      return c
+    })
+    mockDb.auth.admin.deleteUser.mockResolvedValue({ error: null })
+  })
+  const supprimer = (userId = "c1") => appel("team/suspend", "DELETE", { userId, studioId: "studio-123" })
+  const rienSupprime = () => { expect(supprimees).toEqual([]); expect(mockDb.auth.admin.deleteUser).not.toHaveBeenCalled() }
+
+  for (const [lbl, a, code, cible] of [["sans compte", SANS_COMPTE, 401, "c1"], ["coach", compte("coach"), 403, "c1"], ["adherent", compte("adherent"), 403, "c1"], ["un autre admin", compte("admin"), 403, "a2"]] as const) {
+    it(`DELETE — ${lbl} : ${code}, rien n'est supprime`, async () => {
+      commeSi(a)
+      expect((await supprimer(cible)).res.status).toBe(code)
+      rienSupprime()
+    })
+  }
+  it("DELETE — soi-meme : 403", async () => {
+    commeSi(compte("admin", "studio-123", "c1"))
+    expect((await supprimer("c1")).res.status).toBe(403)
+    rienSupprime()
+  })
+  it("DELETE — coach avec une seance PASSEE : 409 « suspendez-le plutot », rien n'est supprime", async () => {
+    commeSi(compte("admin")); lignes.sessions = [{ id: "s1", studio_id: "studio-123", teacher: "LÉA MARTIN", session_date: "2025-01-10", status: "scheduled" }]
+    const { res, json } = await supprimer()
+    expect(res.status).toBe(409)
+    expect(json.error).toBe("Ce coach a un historique : suspendez-le plutôt.")
+    rienSupprime()
+  })
+  it("DELETE — seance au nom de la FICHE MEMBRE du coach (different du profil) : 409", async () => {
+    commeSi(compte("admin"))
+    lignes.members = [{ id: "m1", auth_user_id: "c1", first_name: "Léa", last_name: "Dupont" }]
+    lignes.sessions = [{ id: "s1", studio_id: "studio-123", teacher: "Léa Dupont", session_date: "2025-01-10", status: "scheduled" }]
+    expect((await supprimer()).res.status).toBe(409)
+    rienSupprime()
+  })
+  it("DELETE — coach avec une seance FUTURE : 409", async () => {
+    commeSi(compte("admin")); lignes.sessions = [{ id: "s1", studio_id: "studio-123", teacher: "Léa Martin", session_date: "2099-01-10", status: "scheduled" }]
+    expect((await supprimer()).res.status).toBe(409)
+    rienSupprime()
+  })
+  it("DELETE — coach SANS seance : profil, disciplines et compte de connexion supprimes", async () => {
+    commeSi(compte("admin")); lignes.sessions = [{ id: "s9", studio_id: "studio-123", teacher: "Quelqu'un d'autre", session_date: "2025-01-10", status: "scheduled" }]
+    const { res } = await supprimer()
+    expect(res.status).toBe(200)
+    expect(supprimees.map(s => s.table).sort()).toEqual(["coach_disciplines", "profiles"])
+    expect(mockDb.auth.admin.deleteUser).toHaveBeenCalledWith("c1")
+  })
+  it("DELETE — coach sans seance mais avec une fiche membre : compte de connexion CONSERVE", async () => {
+    commeSi(compte("admin")); lignes.members = [{ id: "m1", auth_user_id: "c1", first_name: "Léa", last_name: "Martin" }]
+    expect((await supprimer()).res.status).toBe(200)
+    expect(mockDb.auth.admin.deleteUser).not.toHaveBeenCalled()
+  })
+  it("POST (suspension) — renvoie le nombre de seances FUTURES non annulees a reassigner", async () => {
+    commeSi(compte("admin"))
+    lignes.sessions = [
+      { id: "f1", studio_id: "studio-123", teacher: "Léa Martin", session_date: "2099-01-10", status: "scheduled" },
+      { id: "f2", studio_id: "studio-123", teacher: "léa martin", session_date: "2099-02-10", status: "scheduled" },
+      { id: "f3", studio_id: "studio-123", teacher: "Léa Martin", session_date: "2099-03-10", status: "cancelled" },
+      { id: "p1", studio_id: "studio-123", teacher: "Léa Martin", session_date: "2020-01-10", status: "scheduled" },
+      { id: "x1", studio_id: "autre", teacher: "Léa Martin", session_date: "2099-01-10", status: "scheduled" },
+    ]
+    const { res, json } = await appel("team/suspend", "POST", { userId: "c1", studioId: "studio-123" })
+    expect(res.status).toBe(200)
+    expect(json.seancesFutures).toBe(2)
   })
 })
 
