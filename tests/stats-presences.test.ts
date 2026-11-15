@@ -55,7 +55,7 @@ describe("semaines du mois", () => {
 })
 
 describe("agregation", () => {
-  it("presences = toutes les lignes ; valides = attended === true seulement", () => {
+  it("ne compte que les presences validees (attended === true), une seule serie", () => {
     const s = agreger(semainesDuMois(2026, 11), [
       { session_date: "2026-11-10", attended: true },
       { session_date: "2026-11-11", attended: false },
@@ -63,8 +63,9 @@ describe("agregation", () => {
       { session_date: "2026-11-01", attended: true },
       { session_date: "2026-10-31", attended: true }, // hors mois : ignoree
     ])
-    expect(s[2]).toMatchObject({ presences: 3, valides: 1 })
-    expect(s[0]).toMatchObject({ presences: 1, valides: 1 })
-    expect(s.reduce((a, x) => a + x.presences, 0)).toBe(4)
+    expect(s[2].valides).toBe(1)
+    expect(s[0].valides).toBe(1)
+    expect(s.reduce((a, x) => a + x.valides, 0)).toBe(2)
+    expect(s[2]).not.toHaveProperty("presences")
   })
 })

@@ -1,10 +1,11 @@
 // ── Statistiques de presences du tableau de bord ─────────────────────────
 //
-// DEFINITIONS (arbitrees le 15/11/2026) :
-//   - PRESENCES = reservations CONFIRMEES (`bookings.status = 'confirmed'`),
-//     c'est-a-dire les personnes inscrites ;
-//   - VALIDES   = parmi elles, celles dont la presence a ete pointee
-//     (`bookings.attended = true` — le pointage qui debite un credit).
+// DEFINITION (arbitree le 15/11/2026) — seule serie affichee depuis :
+//   - VALIDES = reservations CONFIRMEES (`bookings.status = 'confirmed'`)
+//     dont la presence a ete pointee (`bookings.attended = true` — le
+//     pointage qui debite un credit).
+//   La serie « presences » (tous les inscrits) a ete retiree le meme jour, a
+//   la demande : le graphique ne montre que les presences validees.
 //   Les seances annulees (`sessions.status = 'cancelled'`) ne comptent pas.
 //   Il n'existe PAS de « seance validee » : `sessions.status` ne vaut que
 //   scheduled ou cancelled (`completed` est dans le schema, rien ne l'ecrit).
@@ -26,7 +27,7 @@ export type Semaine = {
   tronquee: boolean   // vrai si une partie de la semaine sort du mois
 }
 
-export type SemaineStats = Semaine & { presences: number; valides: number }
+export type SemaineStats = Semaine & { valides: number }
 
 const JOUR = 86_400_000
 
@@ -98,14 +99,17 @@ export function semainesDuMois(annee: number, mois: number): Semaine[] {
 /** Une reservation, telle que lue en base. */
 export type LigneReservation = { session_date: string; attended: boolean | null }
 
-/** Range chaque reservation dans la semaine qui la contient. */
+/**
+ * Compte, semaine par semaine, les presences VALIDEES. La route ne lit deja
+ * que `attended = true` ; le test est refait ici pour que la definition ne
+ * depende pas du filtre de la requete.
+ */
 export function agreger(semaines: Semaine[], lignes: LigneReservation[]): SemaineStats[] {
-  const stats = semaines.map(s => ({ ...s, presences: 0, valides: 0 }))
+  const stats = semaines.map(s => ({ ...s, valides: 0 }))
   for (const l of lignes) {
+    if (l.attended !== true) continue
     const s = stats.find(x => l.session_date >= x.debut && l.session_date <= x.fin)
-    if (!s) continue
-    s.presences++
-    if (l.attended === true) s.valides++
+    if (s) s.valides++
   }
   return stats
 }
