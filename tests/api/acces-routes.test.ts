@@ -215,3 +215,41 @@ describe("POST /api/bookings", () => {
     expect((await appel("bookings", "POST", pour("m-alice", { force: true }))).res.status).not.toBe(403)
   })
 })
+
+// ── 6. send-reminder : equipe du studio ; destinataires relus en base ─────────
+describe("POST /api/send-reminder", () => {
+  // Ce qu'un attaquant envoyait : une adresse libre et un contenu libre.
+  const corps = { sessId: "sess1", studioId: "studio-123",
+    members: [{ email: "victime@exterieur.com", name: "Victime" }], sess: { teacher: "<a href=https://phish>clic</a>" } }
+  const envois = async () => {
+    const { sendEmail } = await import("@/lib/email")
+    return vi.mocked(sendEmail).mock.calls.map((c: any) => c[0])
+  }
+  beforeEach(() => {
+    donnees.sessions = { studio_id: "studio-123", session_date: "2026-11-20", session_time: "10:00:00", duration_min: 60, teacher: "Lea", room: "A" }
+    donnees.bookings = [{ members: { first_name: "Alice", last_name: "M", email: "alice@studio.fr", studio_id: "studio-123" } }]
+  })
+
+  for (const [lbl, a, code] of [["sans compte", SANS_COMPTE, 401], ["adherent", compte("adherent"), 403], ["admin d'un autre studio", AUTRE_STUDIO, 403]] as const) {
+    it(`${lbl} : ${code}, aucun mail`, async () => {
+      commeSi(a)
+      expect((await appel("send-reminder", "POST", corps)).res.status).toBe(code)
+      expect(await envois()).toEqual([])
+    })
+  }
+  it("seance d'un autre studio : 403, aucun mail", async () => {
+    commeSi(compte("admin")); donnees.sessions = { ...donnees.sessions, studio_id: "autre" }
+    expect((await appel("send-reminder", "POST", corps)).res.status).toBe(403)
+    expect(await envois()).toEqual([])
+  })
+  it("equipe du studio : mail aux SEULS inscrits relus en base, jamais a l'adresse ni au contenu de la requete", async () => {
+    commeSi(compte("coach"))
+    const { res } = await appel("send-reminder", "POST", corps)
+    expect(res.status).toBe(200)
+    const mails = await envois()
+    expect(mails.map((m: any) => m.to)).toEqual(["alice@studio.fr"])
+    expect(JSON.stringify(mails)).not.toContain("victime@exterieur.com")
+    expect(JSON.stringify(mails)).not.toContain("phish")
+    expect(mails[0].html).toContain("Lea")
+  })
+})
