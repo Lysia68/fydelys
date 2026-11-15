@@ -109,8 +109,18 @@ export async function PATCH(request: NextRequest) {
   const auth = await checkAuth(request)
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
-  const { id, payment_mode, ...updates } = await request.json()
+  // `studio_id` jamais modifiable ici : un membre ne change pas de studio.
+  const { id, payment_mode, studio_id: _ignore, ...updates } = await request.json()
   if (!id) return NextResponse.json({ error: "id requis" }, { status: 400 })
+
+  // ── Garde d'acces (ajoutee le 15/11/2026) ─────────────────────────────
+  // Jusqu'ici `checkAuth(request)` etait appele SANS studio : tout compte
+  // connecte — d'un autre studio, ou ADHERENT — pouvait modifier n'importe
+  // quel membre par son id, champs libres, en cle de service (sans RLS). Un
+  // adherent pouvait s'attribuer des credits. Seul l'espace admin
+  // (Members.jsx) appelle cette route.
+  if ((auth as any).profile?.role === "adherent")
+    return NextResponse.json({ error: "Accès refusé" }, { status: 403 })
 
   const db = createServiceSupabase()
 
@@ -118,6 +128,10 @@ export async function PATCH(request: NextRequest) {
   const { data: beforeData } = await db.from("members")
     .select("subscription_id, studio_id, first_name, last_name, credits, credits_total, status, frozen_until")
     .eq("id", id).single()
+  // Membre d'un autre studio : meme reponse qu'un membre inexistant (on ne
+  // confirme pas l'existence d'un id). Le super-admin passe.
+  if (!beforeData || ((auth as any).profile?.role !== "superadmin" && beforeData.studio_id !== (auth as any).profile?.studio_id))
+    return NextResponse.json({ error: "Membre introuvable" }, { status: 404 })
   const oldSubId: string | null = beforeData?.subscription_id || null
   const member: any = beforeData
   const isSubChange = updates.subscription_id !== undefined && updates.subscription_id !== oldSubId
@@ -211,6 +225,11 @@ export async function PATCH(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const auth = await checkAuth(request)
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+
+  // Un adherent ne supprime personne (garde ajoutee le 15/11/2026 : il pouvait
+  // supprimer les membres de son studio, et leur compte de connexion).
+  if ((auth as any).profile?.role === "adherent")
+    return NextResponse.json({ error: "Accès refusé" }, { status: 403 })
 
   const id = request.nextUrl.searchParams.get("id")
   if (!id) return NextResponse.json({ error: "id requis" }, { status: 400 })

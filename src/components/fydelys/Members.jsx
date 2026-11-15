@@ -539,6 +539,89 @@ function Members({ isMobile, onImpersonate, openMemberId, onMemberOpened }) {
     );
   };
 
+  // ── Modifier le solde de séances (valeur EXACTE, à la hausse ou à la baisse) ──
+  // « Offrir des séances » ne sait qu'ajouter ; ici l'admin corrige le solde.
+  // L'API journalise l'écart (credit_add / credit_manual, source admin_manual).
+  // credits_total (le « Y » de X/Y) n'est relevé que si le solde le dépasse.
+  const CreditsModal = () => {
+    const m = modal?.member;
+    const actuel = m?.credits || 0;
+    const [valeur, setValeur] = React.useState(String(actuel));
+    const [saving, setSaving] = React.useState(false);
+    const n = Number(valeur);
+    const valide = valeur.trim() !== "" && Number.isInteger(n) && n >= 0 && n <= 999;
+    const ecart = valide ? n - actuel : 0;
+
+    const enregistrer = async () => {
+      if (!valide || ecart === 0) return;
+      setSaving(true);
+      const newTotal = Math.max(m.creditTotal || 0, n);
+      try {
+        const res = await fetch("/api/members", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: m.id, credits: n, credits_total: newTotal }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          showToast(`Solde non modifié : ${j.error || `erreur ${res.status}`}`, false);
+          setSaving(false);
+          return; // la fenêtre reste ouverte, la saisie est conservée
+        }
+        setMembers(prev => prev.map(mb => mb.id === m.id ? { ...mb, credits: n, creditTotal: newTotal } : mb));
+        if (selected?.id === m.id) setSelected(s => ({ ...s, credits: n, creditTotal: newTotal }));
+        showToast(`Solde de ${m.firstName} : ${n} séance${n > 1 ? "s" : ""}`);
+        setModal(null);
+      } catch {
+        showToast("Solde non modifié : erreur réseau", false);
+      }
+      setSaving(false);
+    };
+
+    return (
+      <Modal>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
+          <div>
+            <div style={{fontSize:17,fontWeight:800,color:C.text}}>✏ Modifier le solde</div>
+            <div style={{fontSize:13,color:C.textSoft,marginTop:2}}>{m?.firstName} {m?.lastName}</div>
+          </div>
+          <button onClick={()=>setModal(null)} style={{background:"none",border:`1.5px solid ${C.border}`,borderRadius:8,padding:"5px 8px",cursor:"pointer",display:"flex",alignItems:"center"}}><IcoX s={16} c={C.textSoft}/></button>
+        </div>
+
+        <div style={{padding:"10px 14px",background:C.accentBg,borderRadius:9,border:`1px solid ${C.border}`,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span style={{fontSize:13,color:C.textSoft}}>Solde actuel</span>
+          <span style={{fontSize:16,fontWeight:800,color:C.accent}}>{actuel} séance{actuel > 1 ? "s" : ""}</span>
+        </div>
+
+        <div style={{marginBottom:14}}>
+          <FieldLabel>Nouveau nombre de séances restantes</FieldLabel>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <button onClick={()=>setValeur(v=>String(Math.max(0,(parseInt(v)||0)-1)))} aria-label="Retirer une séance"
+              style={{width:38,height:38,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,fontSize:18,fontWeight:700,color:C.textMid,cursor:"pointer"}}>−</button>
+            <input type="number" inputMode="numeric" min="0" max="999" value={valeur} onChange={e=>setValeur(e.target.value)}
+              style={{width:80,padding:"8px",border:`1.5px solid ${valide?C.border:"#C43A3A"}`,borderRadius:8,fontSize:16,fontWeight:700,textAlign:"center",outline:"none",color:C.text,background:C.surface}}/>
+            <button onClick={()=>setValeur(v=>String(Math.min(999,(parseInt(v)||0)+1)))} aria-label="Ajouter une séance"
+              style={{width:38,height:38,borderRadius:8,border:`1.5px solid ${C.border}`,background:C.surface,fontSize:18,fontWeight:700,color:C.textMid,cursor:"pointer"}}>+</button>
+          </div>
+          {!valide && <div style={{fontSize:12,color:"#C43A3A",marginTop:6}}>Saisissez un nombre entier entre 0 et 999.</div>}
+        </div>
+
+        {valide && ecart !== 0 && (
+          <div style={{padding:"10px 14px",background:ecart>0?"#F0FDF4":"#FFF7ED",borderRadius:9,border:`1px solid ${ecart>0?"rgba(52,211,153,.25)":"rgba(234,88,12,.25)"}`,marginBottom:18,fontSize:13,color:ecart>0?"#065F46":"#9A3412"}}>
+            {ecart > 0 ? `+${ecart}` : ecart} séance{Math.abs(ecart) > 1 ? "s" : ""} : solde de <strong>{actuel}</strong> → <strong>{n}</strong>
+          </div>
+        )}
+
+        <div style={{display:"flex",gap:10}}>
+          <Button variant="ghost" sm onClick={()=>setModal(null)}>Annuler</Button>
+          <Button variant="primary" sm onClick={enregistrer} disabled={saving || !valide || ecart === 0}>
+            {saving ? "Enregistrement…" : "Enregistrer le solde"}
+          </Button>
+        </div>
+      </Modal>
+    );
+  };
+
   const GiftModal = () => {
     const m = modal?.member;
     const [qty, setQty] = React.useState(1);
@@ -739,6 +822,7 @@ function Members({ isMobile, onImpersonate, openMemberId, onMemberOpened }) {
               {actionBtn(<><IcoTag2 s={13} c={C.textMid}/> Abonnement</>, ()=>setModal({type:"subscription",member:m}))}
               {actionBtn(<><IcoCalendar2 s={13} c={C.textMid}/> Historique</>, ()=>setModal({type:"history",member:m}))}
               {actionBtn(<>🎁 Offrir séances</>, ()=>setModal({type:"gift",member:m}))}
+              {actionBtn(<>✏ Modifier le solde</>, ()=>setModal({type:"credits",member:m}))}
               {actionBtn(<><IcoX s={13} c="#A85030"/> Supprimer</>, ()=>deleteMember(m.id))}
               {isFrozen
                 ? actionBtn(<>&#10052; Dégeler</>, async()=>{
@@ -783,6 +867,7 @@ function Members({ isMobile, onImpersonate, openMemberId, onMemberOpened }) {
       {modal?.type==="subscription" && <SubscriptionModal/>}
       {modal?.type==="history"      && <HistoryModal/>}
       {modal?.type==="gift"         && <GiftModal/>}
+      {modal?.type==="credits"      && <CreditsModal/>}
 
       {/* Confirm modal (remplace window.confirm/prompt) */}
       {confirmModal && (
