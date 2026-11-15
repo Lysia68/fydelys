@@ -39,34 +39,14 @@ double.
 | `/notify-new-member` | **supprimée** → `lib/notify-new-member.ts` (appel serveur direct) | `44c9365` |
 | `/activity`, `/export`, `/disciplines` POST, `/members` GET/POST | adhérent refusé (équipe du studio) | `cd33b7f` |
 | `/member-profile` POST | sa propre fiche, ou l'équipe du studio ; champs fixes ; le nom de l'admin n'est plus écrasé | `cd33b7f` |
-| `/team/suspend` POST | **créée** (appelée par les réglages, inexistante) : admin du studio, sur un coach de son studio, jamais soi-même ni un admin ; coach suspendu bloqué par le middleware et `checkAuth`. Migration `20261115_profiles_suspended_at.sql` à appliquer. DELETE : 405 (non implémenté) | `5b748f9` |
+| `/team/suspend` POST | **créée** (appelée par les réglages, inexistante) : admin du studio, sur un coach de son studio, jamais soi-même ni un admin ; coach suspendu bloqué par le middleware et `checkAuth`. Migration `20261115_profiles_suspended_at.sql` à appliquer. DELETE : voir la ligne dédiée | `5b748f9` |
 | `/cron/*` (birthdays, cleanup, reminders, sms-reset) | `CRON_SECRET` absente = **refus** (avant : `Bearer undefined` passait ; `reminders` ne vérifiait rien) | `a429931` |
+| `/connect/checkout` | adhérent pour SA fiche (équipe : membre du studio) ; abonnement/pack/séance **du studio** et actifs ; montant relu en base ; URL de retour calculées côté serveur | `d7ea3cb` |
+| `/connect/webhook`, `/stripe/webhook` | idempotence sur `event.id` (table `stripe_webhook_events`, migration à appliquer ; repli : paiement déjà enregistré) ; membre crédité = membre du studio du paiement | `3d50f2a` |
+| `/calendar` | **supprimée** (aucun appelant, pas de flux d'agenda) | `a08e8db` |
+| `/team/suspend` DELETE | coach sans aucune séance seulement, sinon 409 « suspendez-le plutôt » ; la suspension annonce les séances futures à réassigner | `72d49fc` |
 
-**Reste ouvert** (constats du 15/11/2026, en attente de décision) :
-- 🟠 `/connect/checkout` — appelant légitime : **l'espace adhérent** connecté
-  (`AdherentView`, achat d'une formule ou d'un pack pour soi), jamais la
-  vitrine. L'appel sans compte n'est donc pas voulu. Montant, produit et compte
-  Stripe sont bien relus en base, mais :
-  - `subscriptionId` / `creditsPackId` / `sessionId` ne sont **pas rattachés au
-    `studioId`** : le produit d'un studio B peut être payé sur le compte Stripe
-    d'un studio A ;
-  - `memberId` vient de la requête et n'est pas vérifié ; le webhook crédite ce
-    membre **par son seul id**, sans contrôle de studio → avec un studio A à
-    soi, on paie sur son propre compte des crédits ajoutés à un membre du
-    studio B ;
-  - `successUrl` / `cancelUrl` viennent de la requête (redirection libre après
-    paiement) ;
-  - réécrit `subscriptions.stripe_price_id` (prix créé sur le compte du
-    studio A pour l'abonnement du studio B).
-  Correction proposée : adhérent connecté du studio (ou équipe), `memberId` =
-  sa fiche, produit du studio, URL de retour calculées côté serveur ; webhook :
-  membre du studio des métadonnées.
-- 🟠 `/calendar` — **aucun appelant dans le code**. `?memberId=` : tout compte
-  connecté, de n'importe quel studio, télécharge les séances à venir et le nom
-  de n'importe quel membre (`checkAuth` sans studio). `?coachName=&studioId=` :
-  tout compte du studio, adhérent compris (planning du studio, semi-public).
-  Un abonnement iCal (Google Agenda…) n'envoie pas de cookie : la route ne peut
-  pas servir de flux d'abonnement en l'état.
+**Reste ouvert** :
 - 🟡 `/albert` — seul appelant : l'Aide de l'espace équipe. Ouverte sans
   compte ; envoie à l'API Anthropic (claude-haiku-4-5, 500 jetons max) la
   question, un historique **de longueur libre** et un `studioName` injecté
