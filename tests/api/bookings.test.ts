@@ -23,16 +23,17 @@ describe("POST /api/bookings", () => {
   })
 
   it("detects already booked member", async () => {
-    // Existing booking found
-    mockDb._chain.maybeSingle.mockResolvedValueOnce({
-      data: { id: "existing-booking" },
-      error: null,
-    })
+    // Depuis la garde d'acces (15/11/2026) : la seance et le membre doivent
+    // appartenir au studio de l'admin simule (studio-123, tests/setup.ts).
+    mockDb._chain.maybeSingle
+      .mockResolvedValueOnce({ data: { studio_id: "studio-123" }, error: null }) // seance
+      .mockResolvedValueOnce({ data: { studio_id: "studio-123" }, error: null }) // membre
+      .mockResolvedValueOnce({ data: { id: "existing-booking" }, error: null })  // reservation existante
 
     const { POST } = await import("@/app/api/bookings/route")
     const req = createMockRequest("https://fydelys.fr/api/bookings", {
       method: "POST",
-      body: { sessionId: "sess-1", memberId: "m-1", studioId: "s-1" },
+      body: { sessionId: "sess-1", memberId: "m-1", studioId: "studio-123" },
     })
     const res = await POST(req)
     const json = await res.json()

@@ -3,6 +3,8 @@ import { createServiceSupabase } from "@/lib/supabase-server"
 import { sendEmail } from "@/lib/email"
 import { rateLimit, getIP } from "@/lib/rate-limit"
 import { logActivity } from "@/lib/activity"
+import { checkAuth } from "@/lib/auth-check"
+import { EQUIPE } from "@/lib/roles"
 
 export const dynamic = "force-dynamic"
 
@@ -54,7 +56,37 @@ export async function POST(req: NextRequest) {
     if (!sessionId || !studioId || (!memberId && !isGuest))
       return NextResponse.json({ error: "sessionId, studioId et (memberId ou guestName+hostMemberId) requis" }, { status: 400 })
 
+    // ── Qui peut reserver pour qui (garde du 15/11/2026) ─────────────────
+    // Avant : aucune authentification — n'importe qui reservait au nom de
+    // n'importe quel membre, et `force=true` (lu dans la requete) contournait
+    // la liste d'attente et le controle de paiement.
+    //   - EQUIPE du studio (admin, coach, staff ; super-admin) : un membre de
+    //     SON studio, ou un invite d'un membre de son studio ; `force` permis ;
+    //   - ADHERENT : uniquement pour LUI-MEME (sa fiche dans ce studio), sans
+    //     `force`, sans invite (le planning de l'equipe est le seul a en creer).
+    // Dans tous les cas, la seance doit appartenir au studio.
+    const auth = await checkAuth(req, studioId)
+    if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+    const role: string = (auth as any).profile?.role || ""
+    const refus = () => NextResponse.json({ error: "Réservation non autorisée" }, { status: 403 })
+
     const db = createServiceSupabase()
+
+    const { data: seance } = await db.from("sessions").select("studio_id").eq("id", sessionId).maybeSingle()
+    if (!seance || seance.studio_id !== studioId) return refus()
+
+    if (role === "superadmin" || EQUIPE.includes(role)) {
+      const cible = isGuest ? hostMemberId : memberId
+      const { data: m } = await db.from("members").select("studio_id").eq("id", cible).maybeSingle()
+      if (!m || m.studio_id !== studioId) return refus()
+    } else if (role === "adherent") {
+      if (force || isGuest) return refus()
+      const { data: moi } = await db.from("members").select("id")
+        .eq("auth_user_id", (auth as any).user?.id).eq("studio_id", studioId).is("deleted_at", null).maybeSingle()
+      if (!moi || moi.id !== memberId) return refus()
+    } else {
+      return refus()
+    }
 
     // ── Guest booking ─────────────────────────────────────────────────
     if (isGuest) {
@@ -144,7 +176,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: bookErr?.message }, { status: 500 })
     }
 
-    await logActivity(db, { memberId, studioId, action: "booking_created", actorRole: force ? "admin" : "adherent", details: { booking_id: booking.id, session_id: sessionId, status, session_date: sess.session_date, session_time: sess.session_time, discipline: (sess as any).disciplines?.name } })
+    // Auteur REEL (depuis le 15/11/2026) : avant, le role etait deduit de `force`
+    // et l'auteur n'etait pas enregistre — une reservation faite au nom d'un
+    // autre n'etait pas tracable.
+    await logActivity(db, { memberId, studioId, action: "booking_created", actorId: (auth as any).user?.id, actorRole: role === "adherent" ? "adherent" : role === "coach" ? "coach" : "admin", details: { booking_id: booking.id, session_id: sessionId, status, session_date: sess.session_date, session_time: sess.session_time, discipline: (sess as any).disciplines?.name } })
 
     // Crédits déduits à la validation des présences (accordion.jsx), pas à la réservation
 

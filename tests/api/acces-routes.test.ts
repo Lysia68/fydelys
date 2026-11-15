@@ -169,3 +169,49 @@ describe("GET /api/sa/studios", () => {
     expect(mockDb.from).toHaveBeenCalledWith("studios")
   })
 })
+
+// ── 5. bookings (creation) : le membre lui-meme, ou l'equipe de son studio ──
+describe("POST /api/bookings", () => {
+  const pour = (memberId: string, extra: any = {}) => ({ sessionId: "sess1", memberId, studioId: "studio-123", ...extra })
+  const aucuneResa = () => expect(ecritures.filter(e => e.table === "bookings" && e.op === "insert")).toEqual([])
+  beforeEach(() => { donnees.sessions = { studio_id: "studio-123", spots: 10 } })
+
+  it("sans compte : 401, aucune reservation", async () => {
+    commeSi(SANS_COMPTE)
+    expect((await appel("bookings", "POST", pour("m-alice"))).res.status).toBe(401)
+    aucuneResa()
+  })
+  it("adherent qui reserve au nom d'un AUTRE membre : 403", async () => {
+    commeSi(compte("adherent")); donnees.members = { id: "m-bob" }
+    expect((await appel("bookings", "POST", pour("m-alice"))).res.status).toBe(403)
+    aucuneResa()
+  })
+  it("adherent qui envoie force=true, meme pour lui-meme : 403", async () => {
+    commeSi(compte("adherent")); donnees.members = { id: "m-alice" }
+    expect((await appel("bookings", "POST", pour("m-alice", { force: true }))).res.status).toBe(403)
+    aucuneResa()
+  })
+  it("adherent qui cree un invite : 403", async () => {
+    commeSi(compte("adherent")); donnees.members = { id: "m-alice" }
+    expect((await appel("bookings", "POST", { sessionId: "sess1", studioId: "studio-123", guestName: "X", hostMemberId: "m-alice" })).res.status).toBe(403)
+    aucuneResa()
+  })
+  it("seance d'un autre studio : 403", async () => {
+    commeSi(compte("admin")); donnees.sessions = { studio_id: "autre" }; donnees.members = { studio_id: "studio-123" }
+    expect((await appel("bookings", "POST", pour("m-alice", { force: true }))).res.status).toBe(403)
+    aucuneResa()
+  })
+  it("equipe : membre d'un autre studio : 403", async () => {
+    commeSi(compte("admin")); donnees.members = { studio_id: "autre" }
+    expect((await appel("bookings", "POST", pour("m-x", { force: true }))).res.status).toBe(403)
+    aucuneResa()
+  })
+  it("adherent pour LUI-MEME : passe le controle d'acces", async () => {
+    commeSi(compte("adherent")); donnees.members = { id: "m-alice", studio_id: "studio-123" }
+    expect((await appel("bookings", "POST", pour("m-alice"))).res.status).not.toBe(403)
+  })
+  it("equipe (coach) pour un membre du studio, avec force : passe le controle d'acces", async () => {
+    commeSi(compte("coach")); donnees.members = { studio_id: "studio-123" }
+    expect((await appel("bookings", "POST", pour("m-alice", { force: true }))).res.status).not.toBe(403)
+  })
+})
