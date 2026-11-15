@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { cronAutorise } from "@/lib/cron-auth"
 import { createServiceSupabase } from "@/lib/supabase-server"
 
 export const dynamic = "force-dynamic"
@@ -6,8 +7,7 @@ export const dynamic = "force-dynamic"
 // GET /api/cron/sms-reset — Reset mensuel des crédits SMS selon le plan
 // Cron Vercel : 0 0 1 * * (1er de chaque mois à minuit UTC)
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization")
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAutorise(request)) { // secret absent = refus (lib/cron-auth.ts)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
