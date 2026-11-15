@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr"
 import { createServiceSupabase } from "./supabase-server"
+import { compteSuspendu } from "./suspension"
 import { NextRequest } from "next/server"
 
 /**
@@ -20,6 +21,13 @@ export async function checkAuth(req: NextRequest, requiredStudioId?: string) {
     .select("studio_id, role").eq("id", user.id).single()
 
   if (!profile) return { error: "Profil introuvable", status: 403 }
+
+  // Coach suspendu (profiles.suspended_at, 15/11/2026) : refuse sur les routes
+  // /api comme le middleware le refuse sur les pages. Lecture a part et
+  // tolerante tant que la migration n'est pas appliquee (lib/suspension.ts).
+  if (profile.role === "coach" && await compteSuspendu(db, user.id)) {
+    return { error: "Compte suspendu", status: 403 }
+  }
 
   // SuperAdmin a accès à tout
   if (profile.role === "superadmin") {

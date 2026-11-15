@@ -412,3 +412,43 @@ describe("POST /api/member-profile", () => {
     expect(majProfils()).toEqual([])
   })
 })
+
+// ── 🟡1. team/suspend : admin du studio, sur un COACH de son studio ──────────
+describe("POST /api/team/suspend", () => {
+  const corps = (userId = "c1") => ({ userId, studioId: "studio-123" })
+  const suspensions = () => ecritures.filter(e => e.table === "profiles" && e.op === "update")
+
+  for (const [lbl, a, code] of [["sans compte", SANS_COMPTE, 401], ["coach", compte("coach"), 403], ["adherent", compte("adherent"), 403], ["admin d'un autre studio", AUTRE_STUDIO, 403]] as const) {
+    it(`${lbl} : ${code}, personne n'est suspendu`, async () => {
+      commeSi(a); donnees.profiles = { role: "coach", studio_id: "studio-123" }
+      expect((await appel("team/suspend", "POST", corps())).res.status).toBe(code)
+      expect(suspensions()).toEqual([])
+    })
+  }
+  it("admin qui se suspend lui-meme : 403", async () => {
+    commeSi(compte("admin", "studio-123", "u-admin")); donnees.profiles = { role: "coach", studio_id: "studio-123" }
+    expect((await appel("team/suspend", "POST", corps("u-admin"))).res.status).toBe(403)
+    expect(suspensions()).toEqual([])
+  })
+  it("cible = un autre ADMIN : 403", async () => {
+    commeSi(compte("admin")); donnees.profiles = { role: "admin", studio_id: "studio-123" }
+    expect((await appel("team/suspend", "POST", corps())).res.status).toBe(403)
+    expect(suspensions()).toEqual([])
+  })
+  it("cible = coach d'un AUTRE studio : 403", async () => {
+    commeSi(compte("admin")); donnees.profiles = { role: "coach", studio_id: "autre" }
+    expect((await appel("team/suspend", "POST", corps())).res.status).toBe(403)
+    expect(suspensions()).toEqual([])
+  })
+  it("admin du studio, coach du studio : suspendu (suspended_at pose)", async () => {
+    commeSi(compte("admin")); donnees.profiles = { role: "coach", studio_id: "studio-123" }
+    expect((await appel("team/suspend", "POST", corps())).res.status).toBe(200)
+    expect(suspensions()).toHaveLength(1)
+    expect(suspensions()[0].v.suspended_at).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+  })
+  it("DELETE (suppression d'un coach) : 405 explicite, rien n'est ecrit", async () => {
+    const { DELETE } = await import("@/app/api/team/suspend/route")
+    expect((await DELETE()).status).toBe(405)
+    expect(ecritures).toEqual([])
+  })
+})
