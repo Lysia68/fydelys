@@ -49,6 +49,7 @@ describe("verify-token : pas de rétrogradation d'un compte d'équipe d'un autre
       const { res, json } = await ouvrirLienDuStudioB()
       expect(res.status).toBe(403)
       expect(json.error).toMatch(/autre studio/)
+      expect(json.code).toBe("autre_studio") // /auth/confirm le transmet a /login
       expect(majProfils).toEqual([])                                   // profil NON réécrit
       expect(insertions.filter(i => i.table === "members")).toEqual([]) // pas de fiche adhérent créée
       expect(res.headers.get("set-cookie")).toBeNull()                 // pas de session posée

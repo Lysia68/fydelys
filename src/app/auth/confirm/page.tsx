@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
+import { codeApresEchecVerification } from "@/lib/erreurs-connexion"
 
 export default function AuthConfirmPage() {
   const [status, setStatus] = useState("Connexion en cours…")
@@ -40,7 +41,10 @@ export default function AuthConfirmPage() {
       if (!res.ok || !result.ok) {
         setIsError(true)
         setStatus(`Erreur: ${result.error || "failed"}`)
-        setTimeout(() => { window.location.href = "/login?error=lien_expire" }, 3000)
+        // Le code renvoye par le serveur decide du message sur /login
+        // (« autre_studio », sinon « lien_expire ») — src/lib/erreurs-connexion.ts.
+        const code = codeApresEchecVerification(result)
+        setTimeout(() => { window.location.href = `/login?error=${code}` }, 3000)
         return null
       }
       return result

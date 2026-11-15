@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createServerClient } from "@supabase/ssr"
 import { createServiceSupabase } from "@/lib/supabase-server"
+import { MESSAGES_CONNEXION } from "@/lib/erreurs-connexion"
 
 export const dynamic = "force-dynamic"
 
@@ -147,8 +148,11 @@ export async function POST(request: NextRequest) {
       if (existing && ["admin", "coach", "staff"].includes(existing.role)
           && existing.studio_id && existing.studio_id !== studio.id) {
         console.warn("[verify-token] Compte d'équipe d'un autre studio — connexion refusée, profil inchangé :", user.id, existing.role)
+        // `code` : /auth/confirm le transmet a /login (?error=autre_studio),
+        // qui affiche ce message au lieu de « lien expiré ».
         return NextResponse.json({
-          error: "Ce compte fait partie de l'équipe d'un autre studio. Connectez-vous depuis l'adresse de votre studio, ou utilisez une autre adresse e-mail pour celui-ci.",
+          error: MESSAGES_CONNEXION.autre_studio,
+          code: "autre_studio",
         }, { status: 403 })
       }
 
