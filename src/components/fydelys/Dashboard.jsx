@@ -9,6 +9,7 @@ import { IcoUsers2, IcoCalendar2, IcoBarChart2, IcoEuro2, IcoChevron, IcoCheck }
 import { Card, SectionHead, Pill, KpiCard, MemberRow, DemoBanner, creditColor, CreditBadge } from "./ui";
 import { PlanningAccordion } from "./accordion";
 import { StatsPresences, useStatsPresences } from "./StatsPresences";
+import { libelleSemaine } from "@/lib/stats-presences";
 
 // ── PLANNING ACCORDION ────────────────────────────────────────────────────────
 
@@ -297,7 +298,7 @@ function Dashboard({ isMobile }) {
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:isMobile?8:14, marginBottom:isMobile?12:20 }}>
           <KpiCard icon={<IcoUsers2 s={isMobile?16:18} c={C.ok}/>}      label="Membres actifs" value={activeMembers>0?String(activeMembers):"—"}  delta={null} accentColor={C.ok}     isMobile={isMobile}/>
           {/* Présences VALIDÉES (pointées) du lundi au dimanche de la semaine ISO précédente, heure de Paris. */}
-          <KpiCard icon={<IcoCheck s={isMobile?16:18} c="#6B9E7A"/>} label="Validés semaine précédente" value={stats.validesPrecedente===null?(stats.etat==="erreur"?"—":"…"):String(stats.validesPrecedente)} delta={null} accentColor="#6B9E7A"  isMobile={isMobile}/>
+          <KpiCard icon={<IcoCheck s={isMobile?16:18} c="#6B9E7A"/>} label={stats.precedente ? `Validés semaine précédente (${libelleSemaine(stats.precedente)})` : "Validés semaine précédente"} value={stats.precedente===null?(stats.etat==="erreur"?"—":"…"):String(stats.precedente.valides)} delta={null} accentColor="#6B9E7A"  isMobile={isMobile}/>
           <KpiCard icon={<IcoBarChart2 s={isMobile?16:18} c="#6A8FAE"/>} label="Taux remplissage" value={totalCap>0?fillRate+" %":"—"}                 delta={null} accentColor="#6A8FAE"  isMobile={isMobile}/>
           <KpiCard icon={<IcoEuro2 s={isMobile?16:18} c={C.accent}/>}   label="CA du mois"        value={monthRevenue>0?monthRevenue.toLocaleString("fr-FR")+" €":"—"} delta={null} accentColor={C.accent} isMobile={isMobile}/>
         </div>

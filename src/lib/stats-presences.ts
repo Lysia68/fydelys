@@ -96,6 +96,15 @@ export function semainesDuMois(annee: number, mois: number): Semaine[] {
   return semaines
 }
 
+/**
+ * Ne garde que les semaines TERMINEES : jusqu'a la semaine precedente
+ * incluse. La semaine en cours (incomplete) et les semaines a venir ne sont
+ * pas affichees (demande du 15/11/2026). Pour un mois futur : liste vide.
+ */
+export function semainesTerminees(semaines: Semaine[], precedente: Semaine): Semaine[] {
+  return semaines.filter(s => s.lundi <= precedente.lundi)
+}
+
 /** Une reservation, telle que lue en base. */
 export type LigneReservation = { session_date: string; attended: boolean | null }
 

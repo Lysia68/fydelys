@@ -1,9 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { createMockRequest } from "../helpers"
 import { mockDb } from "../setup"
 import { checkAuth } from "@/lib/auth-check"
 import { createServiceSupabase } from "@/lib/supabase-server"
-import { aujourdhuiParis, semainePrecedente } from "@/lib/stats-presences"
 
 // GET /api/dashboard/stats-presences — agregats serveur du tableau de bord.
 // Les lectures passent par le client de l'UTILISATEUR (RLS), jamais par la
@@ -23,7 +22,15 @@ const ligne = (session_date: string, attended: boolean | null, status = "schedul
 // unique les melangerait.
 let reponsesReservations: Record<string, any[][]>
 
+// Date figee : le resultat depend de la semaine en cours (le graphique
+// s'arrete a la semaine precedente). Par defaut, mercredi 16/12/2026 :
+// semaine precedente = S50 (07 → 13/12), novembre 2026 entierement termine.
+const maintenant = (iso: string) => vi.setSystemTime(new Date(iso))
+afterEach(() => vi.useRealTimers())
+
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] })
+  maintenant("2026-12-16T10:00:00Z")
   vi.clearAllMocks()
   const c = mockDb._chain
   ;["select", "eq", "gte", "lte", "order", "or", "neq"].forEach(m => c[m].mockReturnValue(c))
@@ -54,8 +61,8 @@ describe("GET /api/dashboard/stats-presences", () => {
     reponsesReservations = {
       "2026-11-01": [[ligne("2026-11-10", true), ligne("2026-11-11", false), ligne("2026-11-12", null), ligne("2026-11-01", true),
         ligne("2026-11-13", true, "cancelled")]], // seance annulee : ne compte pas
-      // semaine precedente : calculee depuis la date du jour reelle
-      [semainePrecedente(aujourdhuiParis()).lundi]: [[ligne("2026-11-03", true), ligne("2026-11-04", true), ligne("2026-11-05", null)]],
+      // semaine precedente (S50, 07 → 13/12)
+      "2026-12-07": [[ligne("2026-12-08", true), ligne("2026-12-09", true), ligne("2026-12-10", null)]],
     }
     const { res, json } = await appeler("studioId=studio-123&annee=2026&mois=11")
     expect(res.status).toBe(200)
@@ -65,6 +72,34 @@ describe("GET /api/dashboard/stats-presences", () => {
     expect(json.semaines[0]).toMatchObject({ numero: 44, valides: 1 })
     expect(json.semaines[2]).not.toHaveProperty("presences")
     expect(json.semainePrecedente.valides).toBe(2)
+  })
+
+  it("mois en cours : s'arrete a la semaine precedente (ni semaine en cours, ni a venir)", async () => {
+    maintenant("2026-11-15T10:00:00Z") // dimanche 15/11 (S46, en cours) → semaine precedente S45
+    const c = mockDb._chain
+    const { json } = await appeler("studioId=studio-123&annee=2026&mois=11")
+    expect(json.semaines.map((s: any) => s.numero)).toEqual([44, 45])
+    expect(json.semaines[1]).toMatchObject({ debut: "2026-11-02", fin: "2026-11-08" })
+    expect(json.semainePrecedente).toMatchObject({ numero: 45, lundi: "2026-11-02", dimanche: "2026-11-08" })
+    // la lecture du mois s'arrete au dernier jour affiche
+    expect(c.lte).toHaveBeenCalledWith("sessions.session_date", "2026-11-08")
+    expect(c.lte).not.toHaveBeenCalledWith("sessions.session_date", "2026-11-30")
+  })
+
+  it("mois futur : aucune semaine, ni lecture du mois ni comptage des seances", async () => {
+    maintenant("2026-11-15T10:00:00Z")
+    const { res, json } = await appeler("studioId=studio-123&annee=2026&mois=12")
+    expect(res.status).toBe(200)
+    expect(json.semaines).toEqual([])
+    expect(json.nbSeances).toBe(0)
+    expect(mockDb.from).not.toHaveBeenCalledWith("sessions")
+    expect(mockDb._chain.range).toHaveBeenCalledTimes(1) // la seule semaine precedente (carte)
+  })
+
+  it("debut du mois en cours, aucune semaine terminee : liste vide", async () => {
+    maintenant("2026-12-02T10:00:00Z") // mercredi, S49 (30/11 → 06/12) ; precedente = S48
+    const { json } = await appeler("studioId=studio-123&annee=2026&mois=12")
+    expect(json.semaines).toEqual([])
   })
 
   it("studio vide : nbSeances = 0 et zeros partout (le widget affiche l'etat vide)", async () => {
