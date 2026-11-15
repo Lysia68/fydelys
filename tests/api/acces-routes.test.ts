@@ -346,3 +346,69 @@ describe("/api/team", () => {
     expect(ecritures.some(e => e.table === "coach_disciplines" && e.op === "insert")).toBe(true)
   })
 })
+
+// ── 8. Routes de l'equipe : l'adherent est refuse ────────────────────────────
+describe("routes de l'equipe — adherent refuse, equipe acceptee", () => {
+  const cas: [string, () => Promise<Response>][] = [
+    ["GET /api/activity", async () => (await import("@/app/api/activity/route")).GET(createMockRequest("https://s.fydelys.fr/api/activity?studioId=studio-123"))],
+    ["GET /api/export", async () => (await import("@/app/api/export/route")).GET(createMockRequest("https://s.fydelys.fr/api/export?studioId=studio-123&type=members"))],
+    ["POST /api/disciplines", async () => (await import("@/app/api/disciplines/route")).POST(createMockRequest("https://s.fydelys.fr/api/disciplines", { method: "POST", body: { studioId: "studio-123", name: "Yoga" } }))],
+    ["GET /api/members", async () => (await import("@/app/api/members/route")).GET(createMockRequest("https://s.fydelys.fr/api/members?studioId=studio-123"))],
+    ["POST /api/members", async () => (await import("@/app/api/members/route")).POST(createMockRequest("https://s.fydelys.fr/api/members", { method: "POST", body: { studioId: "studio-123", email: "n@t.fr", first_name: "N" } }))],
+  ]
+  for (const [lbl, f] of cas) {
+    it(`${lbl} : adherent du studio → 403, rien n'est ecrit`, async () => {
+      commeSi(compte("adherent"))
+      expect((await f()).status).toBe(403)
+      expect(ecritures).toEqual([])
+    })
+    it(`${lbl} : coach du studio → pas de refus d'acces`, async () => {
+      commeSi(compte("coach"))
+      // Une exception APRES le controle (bouchon de base minimal) prouve aussi
+      // que l'acces a ete accorde : un refus repond 403 avant toute lecture.
+      const r = await f().catch(() => null)
+      expect(r?.status).not.toBe(403)
+    })
+  }
+})
+
+// ── 8 bis. member-profile : sa propre fiche, ou l'equipe du studio ───────────
+describe("POST /api/member-profile", () => {
+  const corps = (memberId?: string) => ({ studioId: "studio-123", ...(memberId ? { memberId } : {}), first_name: "Nouveau", last_name: "Nom", role: "admin", credits: 999 })
+  const poster = async (b: any) => (await import("@/app/api/member-profile/route")).POST(createMockRequest("https://s.fydelys.fr/api/member-profile", { method: "POST", body: b }))
+  const majMembres = () => ecritures.filter(e => e.table === "members" && e.op === "update")
+  const majProfils = () => ecritures.filter(e => e.table === "profiles" && e.op === "update")
+  beforeEach(() => { mockDb.auth.getUser.mockResolvedValue({ data: { user: { id: "u-alice", email: "alice@t.fr" } } }) })
+
+  it("sans compte : 401", async () => {
+    mockDb.auth.getUser.mockResolvedValueOnce({ data: { user: null } })
+    expect((await poster(corps("m-bob"))).status).toBe(401)
+  })
+  it("adherent qui vise la fiche d'un AUTRE membre : 403, rien n'est ecrit", async () => {
+    donnees.members = { studio_id: "studio-123", auth_user_id: "u-bob" }
+    donnees.profiles = { role: "adherent", studio_id: "studio-123" }
+    expect((await poster(corps("m-bob"))).status).toBe(403)
+    expect(majMembres()).toEqual([])
+  })
+  it("fiche d'un autre studio : 403", async () => {
+    donnees.members = { studio_id: "autre", auth_user_id: "u-alice" }
+    expect((await poster(corps("m-x"))).status).toBe(403)
+    expect(majMembres()).toEqual([])
+  })
+  it("sa propre fiche : ecrite, champs autorises seulement, profil synchronise", async () => {
+    donnees.members = { studio_id: "studio-123", auth_user_id: "u-alice" }
+    expect((await poster(corps("m-alice"))).status).toBe(200)
+    const ecrit = majMembres()[0].v
+    expect(ecrit.first_name).toBe("Nouveau")
+    expect(ecrit).not.toHaveProperty("role")
+    expect(ecrit).not.toHaveProperty("credits")
+    expect(majProfils()).toHaveLength(1)
+  })
+  it("admin du studio sur la fiche d'un membre : ecrite, et le profil de l'ADMIN n'est PAS reecrit", async () => {
+    donnees.members = { studio_id: "studio-123", auth_user_id: "u-bob" }
+    donnees.profiles = { role: "admin", studio_id: "studio-123" }
+    expect((await poster(corps("m-bob"))).status).toBe(200)
+    expect(majMembres()).toHaveLength(1)
+    expect(majProfils()).toEqual([])
+  })
+})
