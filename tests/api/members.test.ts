@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { createMockRequest } from "../helpers"
 import { mockDb } from "../setup"
+import { checkAuth } from "@/lib/auth-check"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -104,7 +105,8 @@ describe("PATCH /api/members", () => {
   it("creates member_payments when subscription is assigned", async () => {
     // Current member (no subscription) — 1st .single()
     mockDb._chain.single.mockResolvedValueOnce({
-      data: { subscription_id: null, studio_id: "s1", first_name: "Test", last_name: "User" },
+      // studio de l'admin simule (tests/setup.ts) : la garde refuse tout autre studio
+      data: { subscription_id: null, studio_id: "studio-123", first_name: "Test", last_name: "User" },
       error: null,
     })
     // Subscription lookup — 2nd .single()
@@ -128,5 +130,53 @@ describe("PATCH /api/members", () => {
     const res = await PATCH(req)
     const json = await res.json()
     expect(json.ok).toBe(true)
+  })
+})
+
+// ── Garde d'acces du PATCH (15/11/2026) ──────────────────────────────────
+// Avant : tout compte connecte (autre studio, adherent) pouvait modifier
+// n'importe quel membre — un adherent pouvait s'attribuer des credits.
+describe("PATCH /api/members — garde d'acces", () => {
+  const patcher = async (body: any) => {
+    const { PATCH } = await import("@/app/api/members/route")
+    return PATCH(createMockRequest("https://fydelys.fr/api/members", { method: "PATCH", body }))
+  }
+
+  it("adherent : 403, rien n'est ecrit", async () => {
+    vi.mocked(checkAuth).mockResolvedValueOnce({ user: { id: "a" }, profile: { studio_id: "studio-123", role: "adherent" }, studioId: "studio-123" } as any)
+    const res = await patcher({ id: "member-123", credits: 999 })
+    expect(res.status).toBe(403)
+    expect(mockDb._chain.update).not.toHaveBeenCalled()
+  })
+
+  it("membre d'un autre studio : 404, rien n'est ecrit", async () => {
+    mockDb._chain.single.mockResolvedValueOnce({ data: { studio_id: "autre-studio", credits: 2 }, error: null })
+    const res = await patcher({ id: "member-autre", credits: 999 })
+    expect(res.status).toBe(404)
+    expect(mockDb._chain.update).not.toHaveBeenCalled()
+  })
+
+  it("membre inexistant : 404", async () => {
+    mockDb._chain.single.mockResolvedValueOnce({ data: null, error: null })
+    expect((await patcher({ id: "fantome", credits: 1 })).status).toBe(404)
+  })
+
+  it("DELETE par un adherent : 403, rien n'est supprime", async () => {
+    vi.mocked(checkAuth).mockResolvedValueOnce({ user: { id: "a" }, profile: { studio_id: "studio-123", role: "adherent" }, studioId: "studio-123" } as any)
+    // Membre du MEME studio : seule la garde de role peut bloquer (sans ce
+    // membre, la verification de studio repondait 403 et le test ne prouvait rien).
+    mockDb._chain.single.mockResolvedValueOnce({ data: { studio_id: "studio-123", auth_user_id: "u-x" }, error: null })
+    const { DELETE } = await import("@/app/api/members/route")
+    const res = await DELETE(createMockRequest("https://fydelys.fr/api/members?id=member-123", { method: "DELETE" }))
+    expect(res.status).toBe(403)
+    expect(mockDb._chain.update).not.toHaveBeenCalled()
+    expect(mockDb.auth.admin.deleteUser).not.toHaveBeenCalled()
+  })
+
+  it("admin du studio : le solde est ecrit ; studio_id n'est jamais modifiable", async () => {
+    mockDb._chain.single.mockResolvedValueOnce({ data: { studio_id: "studio-123", credits: 2, credits_total: 10 }, error: null })
+    const res = await patcher({ id: "member-123", credits: 5, studio_id: "autre-studio" })
+    expect(res.status).toBe(200)
+    expect(mockDb._chain.update).toHaveBeenCalledWith({ credits: 5 })
   })
 })
