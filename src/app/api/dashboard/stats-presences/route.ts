@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic"
 
 // GET /api/dashboard/stats-presences?studioId=…&annee=2026&mois=11
 //
-// Agrege COTE SERVEUR les presences (reservations confirmees) et les valides
-// (presence pointee) — definitions dans lib/stats-presences.ts.
+// Agrege COTE SERVEUR les presences VALIDEES (reservation confirmee ET
+// presence pointee) — definition dans lib/stats-presences.ts.
 //
 // Les donnees sont lues avec le client de l'UTILISATEUR (cle anonyme + ses
 // cookies) : les policies RLS s'appliquent comme dans le reste du tableau de
@@ -32,6 +32,7 @@ async function lireReservations(
       .gte("sessions.session_date", du)
       .lte("sessions.session_date", au)
       .eq("status", "confirmed")
+      .eq("attended", true)              // seules les presences validees sont affichees
       .order("id")                       // tri sur cle unique : pagination stable
       .range(depart, depart + PAGE - 1)
     if (error) throw new Error(error.message)
@@ -79,7 +80,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       annee, mois,
-      // Distingue « aucune seance » (etat vide) de « des seances, aucun inscrit » (zeros).
+      // Distingue « aucune seance » (etat vide) de « des seances, aucune presence validee » (zeros).
       nbSeances: seances.count ?? 0,
       semaines: agreger(semainesDuMois(annee, mois), lignesMois),
       semainePrecedente: {

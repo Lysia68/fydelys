@@ -50,7 +50,7 @@ beforeEach(() => {
 let nbSeances = 3
 
 describe("GET /api/dashboard/stats-presences", () => {
-  it("studio avec donnees : semaines du mois agregees, presences vs valides", async () => {
+  it("studio avec donnees : presences validees par semaine du mois", async () => {
     reponsesReservations = {
       "2026-11-01": [[ligne("2026-11-10", true), ligne("2026-11-11", false), ligne("2026-11-12", null), ligne("2026-11-01", true),
         ligne("2026-11-13", true, "cancelled")]], // seance annulee : ne compte pas
@@ -61,8 +61,9 @@ describe("GET /api/dashboard/stats-presences", () => {
     expect(res.status).toBe(200)
     expect(json.nbSeances).toBe(3)
     expect(json.semaines).toHaveLength(6)
-    expect(json.semaines[2]).toMatchObject({ numero: 46, presences: 3, valides: 1 })
-    expect(json.semaines[0]).toMatchObject({ numero: 44, presences: 1, valides: 1 })
+    expect(json.semaines[2]).toMatchObject({ numero: 46, valides: 1 })
+    expect(json.semaines[0]).toMatchObject({ numero: 44, valides: 1 })
+    expect(json.semaines[2]).not.toHaveProperty("presences")
     expect(json.semainePrecedente.valides).toBe(2)
   })
 
@@ -71,15 +72,16 @@ describe("GET /api/dashboard/stats-presences", () => {
     const { res, json } = await appeler("studioId=studio-123&annee=2026&mois=11")
     expect(res.status).toBe(200)
     expect(json.nbSeances).toBe(0)
-    expect(json.semaines.every((s: any) => s.presences === 0 && s.valides === 0)).toBe(true)
+    expect(json.semaines.every((s: any) => s.valides === 0)).toBe(true)
     expect(json.semainePrecedente.valides).toBe(0)
   })
 
-  it("filtre explicitement par studio, ne compte que les reservations confirmees", async () => {
+  it("filtre explicitement par studio, ne lit que les reservations confirmees ET pointees", async () => {
     await appeler("studioId=studio-123&annee=2026&mois=11")
     const c = mockDb._chain
     expect(c.eq).toHaveBeenCalledWith("sessions.studio_id", "studio-123")
     expect(c.eq).toHaveBeenCalledWith("status", "confirmed")
+    expect(c.eq).toHaveBeenCalledWith("attended", true)
     expect(c.gte).toHaveBeenCalledWith("sessions.session_date", "2026-11-01")
     expect(c.lte).toHaveBeenCalledWith("sessions.session_date", "2026-11-30")
   })
@@ -94,7 +96,7 @@ describe("GET /api/dashboard/stats-presences", () => {
     const plein = Array.from({ length: 1000 }, () => ligne("2026-11-10", true))
     reponsesReservations = { "2026-11-01": [plein, [ligne("2026-11-10", true)]] }
     const { json } = await appeler("studioId=studio-123&annee=2026&mois=11")
-    expect(json.semaines[2].presences).toBe(1001)
+    expect(json.semaines[2].valides).toBe(1001)
   })
 
   it("adherent : 403", async () => {
