@@ -12,6 +12,19 @@ vi.mock("@/lib/email", () => ({
   emailProviderConfigured: () => true,
 }))
 
+// Stripe : aucun appel reseau ; on observe seulement s'il est sollicite.
+const stripeAppels: string[] = []
+vi.mock("stripe", () => ({
+  default: class {
+    accounts = {
+      createLoginLink: async () => { stripeAppels.push("createLoginLink"); return { url: "https://connect.stripe.com/express/x" } },
+      create: async () => { stripeAppels.push("create"); return { id: "acct_1" } },
+      retrieve: async () => { stripeAppels.push("retrieve"); return { charges_enabled: true, details_submitted: true } },
+    }
+    accountLinks = { create: async () => { stripeAppels.push("accountLinks"); return { url: "https://connect.stripe.com/setup/x" } } }
+  },
+}))
+
 const SANS_COMPTE = { error: "Non authentifié", status: 401 }
 const AUTRE_STUDIO = { error: "Accès refusé — studio non autorisé", status: 403 }
 const compte = (role: string, studio_id = "studio-123", id = "u1") =>
@@ -23,6 +36,7 @@ let donnees: Record<string, any>
 let ecritures: { table: string; op: string; v: any }[]
 beforeEach(() => {
   vi.clearAllMocks()
+  stripeAppels.length = 0
   donnees = {}
   ecritures = []
   mockDb.from.mockImplementation((table: string) => {
@@ -84,5 +98,47 @@ describe("POST /api/invite-coach", () => {
     const { res } = await appel("invite-coach", "POST", corps)
     expect(res.status).toBe(200)
     expect(ecritures.some(e => e.table === "invitations" && e.op === "insert")).toBe(true)
+  })
+})
+
+// ── 3. connect/onboard, connect/disconnect, connect/status : ADMIN du studio ─
+describe("Stripe Connect (onboard, disconnect, status)", () => {
+  const routes: [string, string, any][] = [
+    ["connect/onboard", "POST", { studioId: "studio-123" }],
+    ["connect/disconnect", "POST", { studioId: "studio-123" }],
+  ]
+  const studioActif = { id: "studio-123", name: "S", slug: "s", stripe_connect_id: "acct_1", stripe_connect_status: "active" }
+
+  for (const [chemin, m, corps] of routes) {
+    for (const [lbl, a, code] of [["sans compte", SANS_COMPTE, 401], ["adherent", compte("adherent"), 403], ["coach", compte("coach"), 403], ["admin d'un autre studio", AUTRE_STUDIO, 403]] as const) {
+      it(`${chemin} — ${lbl} : ${code}, ni Stripe ni base`, async () => {
+        commeSi(a); donnees.studios = studioActif
+        expect((await appel(chemin, m, corps)).res.status).toBe(code)
+        expect(stripeAppels).toEqual([])
+        expect(ecritures).toEqual([])
+      })
+    }
+  }
+
+  it("connect/status — sans compte : 401 ; adherent : 403", async () => {
+    const { GET } = await import("@/app/api/connect/status/route")
+    const req = () => createMockRequest("https://studio.fydelys.fr/api/connect/status?studioId=studio-123")
+    commeSi(SANS_COMPTE); expect((await GET(req())).status).toBe(401)
+    commeSi(compte("adherent")); expect((await GET(req())).status).toBe(403)
+    expect(stripeAppels).toEqual([])
+  })
+
+  it("admin du studio : onboard renvoie le lien, disconnect deconnecte, status repond", async () => {
+    donnees.studios = studioActif
+    commeSi(compte("admin"))
+    const on = await appel("connect/onboard", "POST", { studioId: "studio-123" })
+    expect(on.res.status).toBe(200)
+    expect(on.json.url).toMatch(/stripe\.com/)
+    commeSi(compte("admin"))
+    expect((await appel("connect/disconnect", "POST", { studioId: "studio-123" })).res.status).toBe(200)
+    expect(ecritures).toContainEqual({ table: "studios", op: "update", v: { stripe_connect_id: null, stripe_connect_status: "not_connected" } })
+    commeSi(compte("admin"))
+    const { GET } = await import("@/app/api/connect/status/route")
+    expect((await GET(createMockRequest("https://studio.fydelys.fr/api/connect/status?studioId=studio-123"))).status).toBe(200)
   })
 })
