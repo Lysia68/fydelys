@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
       type:       "magiclink",
       email,
       options: {
-        redirect_to: `${origin}/dashboard`,
+        redirectTo: `${origin}/dashboard`,
       },
     })
     if (magicErr) {

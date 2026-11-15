@@ -31,7 +31,9 @@ export async function POST(req: NextRequest) {
 
   // Vérifier limite du plan
   const limit = await checkPlanLimit(studioId, "add_discipline")
-  if (!limit.ok) return NextResponse.json({ error: limit.error, limit: true }, { status: 403 })
+  // `=== false` et non `!limit.ok` : sans `strictNullChecks` (tsconfig en
+  // `strict: false`), seule la comparaison explicite retrecit l'union.
+  if (limit.ok === false) return NextResponse.json({ error: limit.error, limit: true }, { status: 403 })
 
   const db = createServiceSupabase()
   const { data, error } = await db.from("disciplines")

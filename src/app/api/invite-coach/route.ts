@@ -51,7 +51,8 @@ export async function POST(request: NextRequest) {
 
   // Vérifier limite du plan
   const limit = await checkPlanLimit(studioIdToUse, "add_coach")
-  if (!limit.ok) return NextResponse.json({ error: limit.error, limit: true }, { status: 403 })
+  // `=== false` : voir api/disciplines/route.ts (retrecissement sans strictNullChecks).
+  if (limit.ok === false) return NextResponse.json({ error: limit.error, limit: true }, { status: 403 })
 
   const studioName = studio.name || "Votre studio"
   const studioSlug = studio.slug
