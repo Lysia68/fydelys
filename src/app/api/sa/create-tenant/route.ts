@@ -78,7 +78,9 @@ export async function POST(req: NextRequest) {
     // Créer le compte Auth pour l'admin du studio
     const { data: authData, error: authErr } = await db.auth.admin.createUser({
       email,
-      email_confirm: false, // envoi d'un email de confirmation
+      // `createUser` (API admin) n'envoie AUCUN e-mail, confirmation comprise :
+      // le compte est seulement cree, non confirme.
+      email_confirm: false,
       user_metadata: {
         first_name: firstName,
         last_name:  lastName,
@@ -114,7 +116,12 @@ export async function POST(req: NextRequest) {
       console.log("[create-tenant] Profil admin créé")
     }
 
-    // Envoyer un magic link d'invitation à l'admin
+    // ⚠ `generateLink` GENERE le lien mais ne l'ENVOIE PAS : il le renvoie a
+    // l'appelant, a charge pour lui de l'expedier. Ici le lien est jete — aucun
+    // e-mail ne part. Jusqu'au 15/11/2026 le log affirmait « Magic link envoyé ».
+    // L'envoi reel est a decider (inviteUserByEmail, ou generateLink + sendEmail
+    // comme invite-coach). En attendant, l'admin n'a de lien que s'il va DE LUI-
+    // MEME sur fydelys.fr/login (signInWithOtp : Supabase envoie alors son mail).
     const origin = req.headers.get("origin") || "https://fydelys.fr"
     const { error: magicErr } = await db.auth.admin.generateLink({
       type:       "magiclink",
@@ -124,9 +131,9 @@ export async function POST(req: NextRequest) {
       },
     })
     if (magicErr) {
-      console.warn("[create-tenant] Magic link non envoyé:", magicErr.message)
+      console.warn("[create-tenant] Magic link non généré:", magicErr.message)
     } else {
-      console.log("[create-tenant] Magic link envoyé à", email)
+      console.warn("[create-tenant] Magic link généré mais NON envoyé (aucun e-mail ne part) pour", email)
     }
 
     return NextResponse.json({
