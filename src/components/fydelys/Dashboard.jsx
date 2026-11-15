@@ -5,9 +5,10 @@ import { createClient } from "@/lib/supabase";
 import { AppCtx } from "./context";
 import { C } from "./theme";
 import { DISCIPLINES, SESSIONS_INIT, BOOKINGS_INIT, MEMBERS, PAYMENTS } from "./demoData";
-import { IcoUsers2, IcoCalendar2, IcoBarChart2, IcoEuro2, IcoAlert2, IcoChevron } from "./icons";
+import { IcoUsers2, IcoCalendar2, IcoBarChart2, IcoEuro2, IcoChevron } from "./icons";
 import { Card, SectionHead, Pill, KpiCard, MemberRow, DemoBanner, creditColor, CreditBadge } from "./ui";
 import { PlanningAccordion } from "./accordion";
+import { StatsPresences, useStatsPresences } from "./StatsPresences";
 
 // ── PLANNING ACCORDION ────────────────────────────────────────────────────────
 
@@ -70,8 +71,7 @@ function Dashboard({ isMobile }) {
   const [isDemo, setIsDemo] = useState(false);
   const [loading, setLoading] = useState(true);
   const [recentBookings, setRecentBookings] = useState([]);
-  const [publicPageEnabled, setPublicPageEnabled] = useState(null); // null=loading
-  const [closures, setClosures] = useState([]);
+  const stats = useStatsPresences(studioId);
 
   const handleToggle = (id) => setExpandedId(prev => prev===id ? null : id);
   const handleChangeStatus = (bid, sid, ns) => {
@@ -81,16 +81,7 @@ function Dashboard({ isMobile }) {
   useEffect(() => {
     if (!studioId) return;
     const sb = createClient();
-    const _d = new Date();
-    const today = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,"0")}-${String(_d.getDate()).padStart(2,"0")}`;
-    const monthStart = today.slice(0,7);
 
-    // Charger le flag page publique
-    sb.from("studios").select("public_page_enabled, slug").eq("id", studioId).single()
-      .then(({ data }) => setPublicPageEnabled(data?.public_page_enabled === true ? { enabled:true, slug:data.slug } : { enabled:false, slug:data?.slug||"" }));
-    // Charger les fermetures
-    sb.from("studio_closures").select("*").eq("studio_id", studioId).gte("date_end", today).order("date_start")
-      .then(({ data }) => setClosures(data || []));
     // Charger les dernières réservations (triées par created_at)
     sb.from("bookings")
       .select("id, created_at, status, member_id, guest_name, sessions!inner(session_date, session_time, discipline_id, disciplines(name, icon, color)), members!bookings_member_id_fkey(first_name, last_name)")
@@ -197,35 +188,11 @@ function Dashboard({ isMobile }) {
   // KPIs
   const monthStr = todayStr.slice(0,7);
   const activeMembers = members.filter(m=>m.status==="active"||m.status==="actif"||m.status==="Actif").length;
-  const monthSessions = sessions.filter(s=>s.date?.startsWith(monthStr)).length;
   const monthSessionsList = sessions.filter(s=>s.date?.startsWith(monthStr));
   const totalBooked = monthSessionsList.reduce((acc,s)=>{ const bks=bookings[s.id]||[]; return acc+(bks.length?bks.filter(b=>b.st==="confirmed").length:s.booked||0); },0);
   const totalCap = monthSessionsList.reduce((acc,s)=>acc+(s.spots||0),0);
   const fillRate = totalCap>0 ? Math.round(totalBooked/totalCap*100) : 0;
   const monthRevenue = payments.filter(p=>p.date?.startsWith(monthStr)&&(p.status==="payé"||p.status==="paid")).reduce((s,p)=>s+(p.amount||0),0);
-
-  // Alertes calculées depuis les vraies données
-  const unpaidAmount = payments.filter(p=>p.status==="impayé"||p.status==="unpaid").reduce((s,p)=>s+(p.amount||0),0);
-  const waitlistCount = Object.values(bookings).reduce((acc,bl)=>acc+(bl||[]).filter(b=>b.st==="waitlist").length,0);
-  // Fermetures à venir (dans les 14 prochains jours ou en cours)
-  const upcomingClosures = closures.filter(c => {
-    const start = new Date(c.date_start);
-    const diffDays = (start - new Date()) / (1000*60*60*24);
-    return diffDays <= 14 || c.date_start <= todayStr;
-  });
-
-  const alerts = [
-    ...upcomingClosures.map(c => {
-      const isNow = c.date_start <= todayStr && c.date_end >= todayStr;
-      const startFmt = new Date(c.date_start+"T12:00:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"});
-      const endFmt = new Date(c.date_end+"T12:00:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"});
-      const label = c.date_start === c.date_end ? `${c.label||"Fermeture"} · ${startFmt}` : `${c.label||"Fermeture"} · ${startFmt} → ${endFmt}`;
-      return { label:"closure", closureLabel:label, isNow, c:isNow?"#C43A3A":"#8B6914", bg:isNow?"#FDE8E8":"#FFF8E8" };
-    }),
-    unpaidAmount > 0 && { label:"Impayés en cours", value:`${unpaidAmount.toLocaleString("fr-FR")} €`, c:C.warn, bg:C.warnBg },
-    waitlistCount > 0 && { label:"Liste d'attente", value:`${waitlistCount} membre${waitlistCount>1?"s":""}`, c:C.info, bg:C.infoBg },
-    publicPageEnabled !== null && !publicPageEnabled.enabled && { label:"page_publique", c:C.accent, bg:C.accentBg, slug:publicPageEnabled.slug },
-  ].filter(Boolean);
 
   // Prochaine séance (future la plus proche)
   const nextSession = (() => {
@@ -329,7 +296,8 @@ function Dashboard({ isMobile }) {
         {/* KPIs */}
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:isMobile?8:14, marginBottom:isMobile?12:20 }}>
           <KpiCard icon={<IcoUsers2 s={isMobile?16:18} c={C.ok}/>}      label="Membres actifs" value={activeMembers>0?String(activeMembers):"—"}  delta={null} accentColor={C.ok}     isMobile={isMobile}/>
-          <KpiCard icon={<IcoCalendar2 s={isMobile?16:18} c="#6B9E7A"/>} label="Séances ce mois"  value={monthSessions>0?String(monthSessions):"—"}   delta={null} accentColor="#6B9E7A"  isMobile={isMobile}/>
+          {/* Présences VALIDÉES (pointées) du lundi au dimanche de la semaine ISO précédente, heure de Paris. */}
+          <KpiCard icon={<IcoCalendar2 s={isMobile?16:18} c="#6B9E7A"/>} label="Validés semaine précédente" value={stats.validesPrecedente===null?(stats.etat==="erreur"?"—":"…"):String(stats.validesPrecedente)} delta={null} accentColor="#6B9E7A"  isMobile={isMobile}/>
           <KpiCard icon={<IcoBarChart2 s={isMobile?16:18} c="#6A8FAE"/>} label="Taux remplissage" value={totalCap>0?fillRate+" %":"—"}                 delta={null} accentColor="#6A8FAE"  isMobile={isMobile}/>
           <KpiCard icon={<IcoEuro2 s={isMobile?16:18} c={C.accent}/>}   label="CA du mois"        value={monthRevenue>0?monthRevenue.toLocaleString("fr-FR")+" €":"—"} delta={null} accentColor={C.accent} isMobile={isMobile}/>
         </div>
@@ -410,34 +378,11 @@ function Dashboard({ isMobile }) {
           </Card>
         </div>
 
-        {/* Alertes + Sans réservation */}
+        {/* Stats présences et validés (agrégats serveur, filtres Mois / Année) */}
+        <StatsPresences stats={stats} isMobile={isMobile}/>
+
+        {/* Sans réservation */}
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:isMobile?12:16 }}>
-          {alerts.length > 0 && (
-            <Card noPad>
-              <SectionHead><span style={{display:"flex",alignItems:"center",gap:6}}><IcoAlert2 s={15} c={C.warn}/>Alertes</span></SectionHead>
-              {alerts.map((a,i)=>(
-                a.label === "closure"
-                  ? <div key={`closure-${i}`} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 16px", borderBottom:`1px solid ${C.borderSoft}`, background:a.bg }}>
-                      <span style={{ fontSize:16 }}>🔒</span>
-                      <span style={{ fontSize:13, fontWeight:600, color:a.c, flex:1 }}>{a.closureLabel}</span>
-                      {a.isNow && <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:8, background:"#C43A3A", color:"#fff" }}>En cours</span>}
-                    </div>
-                : a.label === "page_publique"
-                  ? <div key="page_publique" style={{ padding:"12px 16px", borderBottom:`1px solid ${C.borderSoft}` }}>
-                      <div style={{ fontSize:13, color:C.text, fontWeight:600, marginBottom:2 }}>Site vitrine non activé</div>
-                      <div style={{ fontSize:12, color:C.textSoft, marginBottom:8, lineHeight:1.5 }}>Activez votre page vitrine gratuite pour présenter votre studio.</div>
-                      <button onClick={()=>{ window.dispatchEvent(new CustomEvent("fydelys:nav", { detail:"settings" })); }}
-                        style={{ fontSize:12, fontWeight:700, color:C.accent, background:C.accentBg, border:`1px solid ${C.accent}40`, borderRadius:7, padding:"6px 14px", cursor:"pointer" }}>
-                        Configurer →
-                      </button>
-                    </div>
-                  : <div key={a.label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 16px", borderBottom:`1px solid ${C.borderSoft}` }}>
-                      <span style={{ fontSize:13, color:C.textMid }}>{a.label}</span>
-                      <span style={{ fontSize:12, fontWeight:700, color:a.c, background:a.bg, padding:"3px 10px", borderRadius:12 }}>{a.value}</span>
-                    </div>
-              ))}
-            </Card>
-          )}
           {inactiveMembers.length > 0 && (
             <Card noPad>
               <SectionHead><span style={{display:"flex",alignItems:"center",gap:6}}>😴 Sans réservation depuis 30j <span style={{fontSize:11,fontWeight:700,padding:"1px 7px",borderRadius:10,background:C.warnBg,color:C.warn}}>{inactiveMembers.length}</span></span></SectionHead>
