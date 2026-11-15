@@ -634,11 +634,19 @@ function Members({ isMobile, onImpersonate, openMemberId, onMemberOpened }) {
       const newCredits = (m.credits || 0) + parseInt(qty);
       const newTotal   = (m.creditTotal || 0) + parseInt(qty);
       try {
-        await fetch("/api/members", {
+        const res = await fetch("/api/members", {
           method: "PATCH",
           headers: {"Content-Type":"application/json"},
           body: JSON.stringify({ id: m.id, credits: newCredits, credits_total: newTotal }),
         });
+        // Avant le 15/11/2026, la réponse n'était pas lue : « séances offertes »
+        // s'affichait même quand l'enregistrement avait échoué.
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          showToast(`Séances non offertes : ${j.error || `erreur ${res.status}`}`, false);
+          setSaving(false);
+          return; // la fenêtre reste ouverte, la saisie (nombre, motif) est conservée
+        }
         // Log activité "offre de séances" (plus précis que le log auto PATCH)
         await createClient().from("member_activity").insert({
           member_id: m.id, studio_id: studioId,
@@ -652,7 +660,7 @@ function Members({ isMobile, onImpersonate, openMemberId, onMemberOpened }) {
         if (selected?.id === m.id) setSelected(s => ({ ...s, credits: newCredits, creditTotal: newTotal }));
         showToast(`🎁 ${qty} séance${qty > 1 ? "s" : ""} offerte${qty > 1 ? "s" : ""} à ${m.firstName}`);
         setModal(null);
-      } catch { showToast("Erreur lors de l'attribution", false); }
+      } catch { showToast("Séances non offertes : erreur réseau", false); }
       setSaving(false);
     };
 

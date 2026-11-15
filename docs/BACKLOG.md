@@ -6,13 +6,38 @@ Ce fichier vit **dans le dépôt** et non dans une mémoire d'assistant : une
 mémoire locale ne suit pas les sessions cloud, et ces notes sont justement
 celles qui coûtent un aller-retour quand on ne les a pas.
 
-Tenu à jour au fil de l'eau. Dernière mise à jour : 31/10/2026.
+Tenu à jour au fil de l'eau. Dernière mise à jour : 15/11/2026.
+
+Le contrôle d'accès des routes `/api` a son propre relevé :
+[`AUDIT-ACCES-API.md`](AUDIT-ACCES-API.md) (15/11/2026, failles à prioriser).
 
 ---
 
-## 🔴 Monter Next — avis de sécurité, dont trois critiques
+## 🟠 Sauvegarde de la base : aucune alerte si elle s'arrête
 
-**Rien n'est fait.** Constat du 31/10/2026, chiffres relevés sur le poste
+La base est sauvegardée chaque jour vers Cloudflare R2 (compartiment
+`fydelys-backups`) par `.github/workflows/backup-fydelys.yml`, qui envoie un
+mail « ✅ Backup Fydelys OK » à chaque exécution réussie.
+
+**Le trou : rien ne signale l'ABSENCE de ce mail.** Si le workflow cesse de
+tourner (désactivé, secret expiré, échec avant l'envoi), personne ne le
+remarque — un mail qui n'arrive pas ne se voit pas.
+
+Garde-fou proposé, non codé : un contrôle quotidien indépendant qui vérifie
+que le dernier objet de `fydelys-backups/db/` a moins de 48 h, et alerte sinon.
+
+> Le risque de **désactivation après 60 jours sans activité** ne s'applique
+> plus : GitHub ne l'applique qu'aux dépôts **publics**, et celui-ci est privé
+> depuis le 15/11/2026.
+
+---
+
+## ✅ Monter Next — FAIT le 15/11/2026 (`next@15.5.28`, en production)
+
+Section conservée pour l'historique et pour la future montée en 16 (plus bas).
+Après la montée : **0 avis propre à Next** dans `npm audit`.
+
+Constat initial du 31/10/2026, chiffres relevés sur le poste
 (`npm audit`, et les plages d'avis confrontées à la version installée avec
 `semver`).
 
