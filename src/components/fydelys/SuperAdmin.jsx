@@ -153,11 +153,12 @@ function TenantFormModal({ editing, setModal, showToast, setTenants, createClien
       };
       setTenants(prev=>[newT, ...prev]);
 
-      // Afficher warning si compte admin non créé (email déjà utilisé, etc.)
-      if (result.warning) {
-        showToast(`⚠️ Studio créé mais : ${result.warning}`, false);
+      // Dire ce qui s'est REELLEMENT passe. Jusqu'au 15/11/2026 ce toast
+      // affirmait « Magic link envoyé » alors qu'aucun mail ne partait.
+      if (result.invitationEnvoyee) {
+        showToast(`🚀 "${f.name}" créé — invitation envoyée à ${f.email}`);
       } else {
-        showToast(`🚀 "${f.name}" créé ! Magic link envoyé à ${f.email}`);
+        showToast(`⚠️ ${result.warning || `"${f.name}" créé, mais l'invitation n'est pas partie. Utilisez « Renvoyer l'invitation ».`}`, false);
       }
     }
     setModal(null);
@@ -402,6 +403,7 @@ function SuperAdminView({ onSwitch, isMobile, onSignOut, onImpersonateStudio }) 
   const [testResult, setTestResult]   = useState(null);
   const [testLoading, setTestLoading] = useState(false);
   const [expandedTenant, setExpandedTenant] = useState(null);
+  const [resendingId, setResendingId] = useState(null);
   const [toast, setToast]     = useState(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -728,6 +730,22 @@ function SuperAdminView({ onSwitch, isMobile, onSignOut, onImpersonateStudio }) 
                     </button>
                     <button onClick={()=>setModal({type:"edit",tenant:t})}
                       style={{fontSize:12,padding:"6px 14px",borderRadius:8,border:"1px solid #DDD5C8",background:"#fff",color:"#8C5E38",cursor:"pointer",fontWeight:600}}>✏ Modifier</button>
+                    <button disabled={resendingId===t.id} onClick={async()=>{
+                        setResendingId(t.id);
+                        try {
+                          const res = await fetch("/api/sa/resend-admin-invite",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({studioId:t.id})});
+                          const r = await res.json().catch(()=>({}));
+                          if (res.ok && r.ok) showToast(`✉ Invitation renvoyée à ${r.email}`);
+                          else showToast(`Invitation non envoyée : ${r.error || `erreur ${res.status}`}`, false);
+                        } catch {
+                          showToast("Invitation non envoyée : erreur réseau", false);
+                        } finally {
+                          setResendingId(null);
+                        }
+                      }}
+                      style={{fontSize:12,padding:"6px 14px",borderRadius:8,border:"1px solid #DDD5C8",background:"#fff",color:"#8C5E38",cursor:resendingId===t.id?"wait":"pointer",fontWeight:600,opacity:resendingId===t.id?.6:1}}>
+                      {resendingId===t.id?"Envoi…":"✉ Renvoyer l'invitation"}
+                    </button>
                     {t.status==="actif"
                       ? <button onClick={async()=>{
                           const sb=createClient();

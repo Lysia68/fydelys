@@ -21,6 +21,20 @@ const FROM_EMAIL = "noreply@fydelys.fr"
 const FROM_NAME_DEFAULT = "Fydelys"
 const UNSUBSCRIBE_HEADER = `<mailto:${FROM_EMAIL}?subject=unsubscribe>`
 
+/**
+ * Vrai si `sendEmail()` dispose d'au moins un fournisseur (Brevo OU SendGrid).
+ *
+ * C'est LE critere pour decider de se replier sur le mail de Supabase
+ * (`signInWithOtp`). Jusqu'au 15/11/2026, invite-coach et send-magic-link ne
+ * testaient que SENDGRID_API_KEY : avec Brevo seul (le fournisseur principal),
+ * ils seraient partis sur Supabase sans raison.
+ *
+ * Lu a l'appel, pas au chargement du module : l'environnement fait foi.
+ */
+export function emailProviderConfigured(): boolean {
+  return Boolean(process.env.BREVO_API_KEY || process.env.SENDGRID_API_KEY)
+}
+
 type SendEmailOptions = {
   to: string | { email: string; name?: string }
   subject: string

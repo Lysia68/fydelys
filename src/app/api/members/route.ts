@@ -18,23 +18,24 @@ export async function GET(request: NextRequest) {
   const search = request.nextUrl.searchParams.get("search")
   const db = createServiceSupabase()
 
-  let query = db.from("members")
-  if (search) {
+  // Une constante par branche : `db.from()` (QueryBuilder) et `.select()`
+  // (FilterBuilder) n'ont pas le meme type, une seule variable `let` ne peut
+  // pas porter les deux.
+  const members = db.from("members")
+  const query = search
     // Recherche légère pour la BookingModal
-    query = query
+    ? members
       .select("id, first_name, last_name, email, phone")
       .eq("studio_id", studioId)
       .is("deleted_at", null)
       .or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%`)
       .limit(8)
-  } else {
     // Liste complète pour la page Adhérents
-    query = query
+    : members
       .select("id, first_name, last_name, email, phone, address, postal_code, city, birth_date, status, credits, credits_total, joined_at, next_payment, notes, subscription_id, profile_complete, profession, facebook, frozen_until, subscriptions(name, period)")
       .eq("studio_id", studioId)
       .is("deleted_at", null)
       .order("last_name")
-  }
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -58,7 +59,8 @@ export async function POST(request: NextRequest) {
 
   // Vérifier limite du plan
   const limit = await checkPlanLimit(studioId, "add_member")
-  if (!limit.ok) return NextResponse.json({ error: limit.error, limit: true }, { status: 403 })
+  // `=== false` : voir api/disciplines/route.ts (retrecissement sans strictNullChecks).
+  if (limit.ok === false) return NextResponse.json({ error: limit.error, limit: true }, { status: 403 })
 
   const db = createServiceSupabase()
   const { data: existing } = await db.from("members")

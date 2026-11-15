@@ -8,6 +8,7 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     include: ["tests/**/*.test.ts"],
     coverage: {
+      provider: "v8", // le defaut de vitest, rendu explicite (exige par le typage)
       reporter: ["text", "html"],
       include: ["src/app/api/**/*.ts", "src/middleware.ts"],
     },
