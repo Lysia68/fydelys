@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
-import { sendEmail } from "@/lib/email"
+import { sendEmail, emailProviderConfigured } from "@/lib/email"
 import { createServerClient } from "@supabase/ssr"
 import { checkPlanLimit } from "@/lib/plan-limits"
 
@@ -12,8 +12,6 @@ export async function POST(request: NextRequest) {
   if (!email) {
     return NextResponse.json({ error: "Email requis" }, { status: 400 })
   }
-
-  const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY
 
   const db = createServiceSupabase()
 
@@ -96,6 +94,29 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // ── Repli : AUCUN fournisseur (ni Brevo ni SendGrid) → mail de Supabase ──
+  // Teste AVANT generateLink : inutile de fabriquer un lien qui ne partira pas.
+  if (!emailProviderConfigured()) {
+    // Erreur explicite : en production, c'est une panne de configuration.
+    // Jamais de lien ni de jeton dans ce log.
+    console.error("[invite-coach] Aucun fournisseur d'e-mail configuré (BREVO_API_KEY et SENDGRID_API_KEY absentes) — repli sur le mail Supabase (signInWithOtp)")
+    const { createClient } = await import("@supabase/supabase-js")
+    const anonClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    const redirectTo = `https://fydelys.fr/auth/confirm?tenant=${studioSlug}`
+    const { error: otpErr } = await anonClient.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: redirectTo }
+    })
+    if (otpErr) {
+      console.error("OTP fallback error:", otpErr)
+      return NextResponse.json({ error: "Erreur envoi email" }, { status: 500 })
+    }
+    return NextResponse.json({ ok: true, studioName, email, fallback: true })
+  }
+
   // Générer le magic link via Supabase Admin API
   const { data: linkData, error: linkError } = await db.auth.admin.generateLink({
     type: "magiclink",
@@ -120,7 +141,10 @@ export async function POST(request: NextRequest) {
     : token
       ? `${actionUrl.origin}${actionUrl.pathname}?token=${token}&type=magiclink&redirect_to=${encodeURIComponent(`https://fydelys.fr/auth/confirm?tenant=${studioSlug}`)}`
       : linkData.properties.action_link
-  console.log("INVITE | magicLinkUrl:", magicLinkUrl)
+  // ⚠ Ne JAMAIS loguer `magicLinkUrl` (ni action_link, token, token_hash) : il
+  // suffit a se connecter comme le coach tant qu'il est valable. Jusqu'au
+  // 15/11/2026 il partait en clair dans les logs Vercel.
+  // Couvert par tests/api/no-link-in-logs.test.ts.
 
   // Email brandé au nom du studio
   const coachFirstName = firstName || email.split("@")[0]
@@ -181,25 +205,6 @@ export async function POST(request: NextRequest) {
   </table>
 </body>
 </html>`
-
-  // ── Fallback Supabase OTP si SendGrid non configuré ─────────────────────────
-  if (!SENDGRID_API_KEY) {
-    const { createClient } = await import("@supabase/supabase-js")
-    const anonClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-    const redirectTo = `https://fydelys.fr/auth/confirm?tenant=${studioSlug}`
-    const { error: otpErr } = await anonClient.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: redirectTo }
-    })
-    if (otpErr) {
-      console.error("OTP fallback error:", otpErr)
-      return NextResponse.json({ error: "Erreur envoi email" }, { status: 500 })
-    }
-    return NextResponse.json({ ok: true, studioName, email, fallback: true })
-  }
 
   const result = await sendEmail({
     to: { email, name: `${firstName || ""} ${lastName || ""}`.trim() || email },

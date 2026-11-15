@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
-import { sendEmail } from "@/lib/email"
+import { sendEmail, emailProviderConfigured } from "@/lib/email"
 import { rateLimit, getIP } from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
@@ -40,10 +40,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Vérification requise. Rechargez la page." }, { status: 403 })
   }
 
-  const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY
-
-  // ── Fallback : si SendGrid non configuré, on utilise Supabase OTP directement ──
-  if (!SENDGRID_API_KEY) {
+  // ── Repli : AUCUN fournisseur (ni Brevo ni SendGrid) → mail de Supabase ──
+  if (!emailProviderConfigured()) {
+    // Une erreur et non un simple repli : en production, c'est une panne de
+    // configuration (mail non brande, plafond d'envoi de Supabase). Jamais de
+    // lien ni de jeton dans ce log.
+    console.error("[send-magic-link] Aucun fournisseur d'e-mail configuré (BREVO_API_KEY et SENDGRID_API_KEY absentes) — repli sur le mail Supabase (signInWithOtp)")
     const db = createServiceSupabase()
     const { data: studio } = await db.from("studios").select("id").eq("slug", tenantSlug).single()
     const redirectTo = `https://fydelys.fr/auth/confirm?tenant=${tenantSlug}`
@@ -131,13 +133,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Impossible de générer le lien" }, { status: 500 })
   }
 
-  // Logger pour diagnostiquer ce que retourne generateLink
-  console.log("generateLink properties:", JSON.stringify(linkData.properties))
-
+  // ⚠ Ne JAMAIS loguer `linkData.properties`, `action_link`, `token_hash` ni
+  // `hashed_token` : chacun suffit a se connecter a la place de l'utilisateur
+  // tant que le lien est valable. Jusqu'au 15/11/2026 ils partaient en clair
+  // dans les logs Vercel. Couvert par tests/api/no-link-in-logs.test.ts.
   const actionUrl = new URL(linkData.properties.action_link)
   const tokenHash = actionUrl.searchParams.get("token_hash")
   const hashedToken = (linkData.properties as any).hashed_token
-  console.log("tokenHash from URL:", tokenHash, "| hashed_token:", hashedToken)
 
   const magicLinkUrl = tokenHash
     ? `https://fydelys.fr/auth/confirm?token_hash=${tokenHash}&type=magiclink&tenant=${tenantSlug}`

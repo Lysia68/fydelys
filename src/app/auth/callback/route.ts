@@ -38,8 +38,10 @@ export async function GET(request: NextRequest) {
   const tokenHash    = searchParams.get("token_hash")
   const type         = searchParams.get("type")
 
-  const urlShort = request.url.replace(/token_hash=[^&]+/, "token_hash=***")
-  console.log("[CB]", urlShort.slice(0, 200))
+  // Le chemin et les NOMS des parametres, jamais leurs valeurs. Jusqu'au
+  // 15/11/2026 l'URL entiere etait loguee, `token_hash` masque mais PAS `code`
+  // (ni un eventuel `token`) : une liste noire oublie toujours quelqu'un.
+  console.log("[CB]", new URL(request.url).pathname, "params:", [...searchParams.keys()].join(","))
   console.log("[CB] reg:", isRegister, "slug:", registerSlug, "tenant:", tenantSlug, "hash:", !!tokenHash, "code:", !!code)
 
   // ── Cas 1 : ni code ni token_hash → page de confirmation ─────────────────
