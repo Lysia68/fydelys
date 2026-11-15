@@ -197,7 +197,11 @@ export async function POST(req: NextRequest) {
             .eq("session_id", sessionId).eq("member_id", memberId).maybeSingle()
           if (existing) { L.warn("Booking déjà existant — ignoré"); break }
           const { error: bErr } = await db.from("bookings").insert({
-            session_id: sessionId, member_id: memberId, status: "confirmed", attended: false,
+            session_id: sessionId, member_id: memberId, status: "confirmed",
+            // attended : NULL (« pas encore pointé »), comme toute réservation.
+            // Avant le 15/11/2026 : false, soit « absent » — la séance achetée
+            // apparaissait pointée absente avant même d'avoir eu lieu.
+            attended: null,
           })
           if (bErr) L.err("Échec insert booking", bErr)
           else L.ok("Booking créé")
