@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { createServiceSupabase } from "@/lib/supabase-server"
+import { reserverEvenement, libererEvenement, membreDuStudio } from "@/lib/stripe-webhook"
 import { logActivity } from "@/lib/activity"
 
 export const dynamic = "force-dynamic"
@@ -78,6 +79,14 @@ export async function POST(req: NextRequest) {
   const connectAccount = (event as any).account
   L.info(`Event reçu`, { type: event.type, account: connectAccount || "platform", usedSecret })
 
+  // ── Idempotence sur event.id (15/11/2026) : un meme evenement rejoue par
+  // Stripe ne credite pas deux fois. Voir lib/stripe-webhook.ts.
+  const reservation = await reserverEvenement(db, event.id, event.type)
+  if (reservation === "deja") {
+    L.warn(`Événement ${event.id} déjà traité — ignoré`)
+    return NextResponse.json({ received: true, duplicate: true })
+  }
+
   try {
     switch (event.type) {
 
@@ -97,6 +106,19 @@ export async function POST(req: NextRequest) {
           break
         }
         if (!studioId) { L.warn("studioId absent dans metadata — ignoré"); break }
+        // Le membre credite doit etre du studio des metadonnees (15/11/2026).
+        if (memberId && !(await membreDuStudio(db, memberId, studioId))) {
+          L.err(`Membre ${memberId} hors du studio ${studioId} — ignoré`)
+          break
+        }
+        // Garde-fou secondaire : paiement deja enregistre (rejeu sans la table
+        // d'idempotence, ou evenement different pour le meme paiement).
+        const paymentRef = (session.payment_intent as string) || session.id
+        if (paymentRef) {
+          const { data: alreadyDone } = await db.from("member_payments")
+            .select("id").eq("stripe_payment_id", paymentRef).maybeSingle()
+          if (alreadyDone) { L.warn(`Paiement ${paymentRef} déjà traité — ignoré`); break }
+        }
 
         // ── Achat à l'unité (séance) ────────────────────────────────────────
         if (type === "subscription_once" && memberId) {
@@ -223,6 +245,10 @@ export async function POST(req: NextRequest) {
           L.warn("studioId ou memberId absent dans metadata subscription", { studioId, memberId })
           break
         }
+        if (!(await membreDuStudio(db, memberId, studioId))) {
+          L.err(`Membre ${memberId} hors du studio ${studioId} — ignoré`)
+          break
+        }
 
         // Prochain prélèvement = fin de la période Stripe (vraie périodicité : mois, trimestre, an…),
         // en date de Paris. Repli sur +1 mois si Stripe ne la fournit pas.
@@ -319,6 +345,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true })
   } catch (err: any) {
     L.err(`Exception non gérée — ${err.message}`, err.stack?.slice(0, 300))
+    // Echec : liberer la reservation pour que la tentative suivante de Stripe repasse.
+    if (reservation === "nouveau") await libererEvenement(db, event.id).catch(() => {})
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
