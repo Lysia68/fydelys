@@ -1,10 +1,22 @@
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
+import { checkAuth } from "@/lib/auth-check"
+import { exigerRole } from "@/lib/roles"
 
 export const dynamic = "force-dynamic"
 
 // GET /api/sa/studios — liste tous les studios avec les profils admins (service role)
-export async function GET() {
+//
+// SUPER-ADMIN uniquement (garde du 15/11/2026). Seule route /sa/* sans
+// controle jusque-la : sans compte, n'importe qui obtenait tous les studios
+// (adresse, e-mail, telephone, notes, facturation), le nom et le telephone de
+// leurs admins et leur derniere connexion.
+export async function GET(req: NextRequest) {
+  const auth = await checkAuth(req)
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const refus = exigerRole(auth, []) // [] : aucun role ne suffit, seul le super-admin passe
+  if (refus) return refus
+
   try {
     const db = createServiceSupabase()
 

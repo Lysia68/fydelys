@@ -7,6 +7,10 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./tests/setup.ts"],
     include: ["tests/**/*.test.ts"],
+    // 20 s au lieu de 5 : le PREMIER test d'un fichier importe dynamiquement
+    // la route (et ses dependances, Stripe compris) ; suite complete en
+    // parallele, cet import a depasse 5 s (15/11/2026) — faux echecs.
+    testTimeout: 20_000,
     coverage: {
       provider: "v8", // le defaut de vitest, rendu explicite (exige par le typage)
       reporter: ["text", "html"],

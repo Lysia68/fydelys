@@ -36,6 +36,10 @@ let donnees: Record<string, any>
 let ecritures: { table: string; op: string; v: any }[]
 beforeEach(() => {
   vi.clearAllMocks()
+  // `clearAllMocks` ne vide PAS la file des mockResolvedValueOnce : un test
+  // interrompu laisserait son compte au suivant. On repart du compte par defaut.
+  vi.mocked(checkAuth).mockReset()
+  vi.mocked(checkAuth).mockImplementation((async () => compte("admin", "studio-123", "test-uid")) as any)
   stripeAppels.length = 0
   donnees = {}
   ecritures = []
@@ -140,5 +144,28 @@ describe("Stripe Connect (onboard, disconnect, status)", () => {
     commeSi(compte("admin"))
     const { GET } = await import("@/app/api/connect/status/route")
     expect((await GET(createMockRequest("https://studio.fydelys.fr/api/connect/status?studioId=studio-123"))).status).toBe(200)
+  })
+})
+
+// ── 4. sa/studios : SUPER-ADMIN uniquement ───────────────────────────────────
+describe("GET /api/sa/studios", () => {
+  const lire = async () => {
+    const { GET } = await import("@/app/api/sa/studios/route")
+    return GET(createMockRequest("https://fydelys.fr/api/sa/studios"))
+  }
+  for (const [lbl, a, code] of [["sans compte", SANS_COMPTE, 401], ["admin de studio", compte("admin"), 403], ["coach", compte("coach"), 403], ["adherent", compte("adherent"), 403]] as const) {
+    it(`${lbl} : ${code}, aucune lecture`, async () => {
+      commeSi(a)
+      expect((await lire()).status).toBe(code)
+      expect(mockDb.from).not.toHaveBeenCalled()
+      expect(mockDb.auth.admin.listUsers).not.toHaveBeenCalled()
+    })
+  }
+  it("super-admin : liste renvoyee", async () => {
+    commeSi(compte("superadmin", ""))
+    donnees.studios = [{ id: "s1", name: "S" }]
+    const res = await lire()
+    expect(res.status).toBe(200)
+    expect(mockDb.from).toHaveBeenCalledWith("studios")
   })
 })
