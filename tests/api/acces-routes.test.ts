@@ -14,8 +14,14 @@ vi.mock("@/lib/email", () => ({
 
 // Stripe : aucun appel reseau ; on observe seulement s'il est sollicite.
 const stripeAppels: string[] = []
+const checkoutsCrees: any[] = []
 vi.mock("stripe", () => ({
   default: class {
+    checkout = { sessions: { create: async (p: any) => { stripeAppels.push("checkout"); checkoutsCrees.push(p); return { url: "https://checkout.stripe.com/x", id: "cs_1" } } } }
+    prices = {
+      retrieve: async () => ({ id: "price_1" }),
+      create: async () => { stripeAppels.push("prices.create"); return { id: "price_new" } },
+    }
     accounts = {
       createLoginLink: async () => { stripeAppels.push("createLoginLink"); return { url: "https://connect.stripe.com/express/x" } },
       create: async () => { stripeAppels.push("create"); return { id: "acct_1" } },
@@ -450,5 +456,75 @@ describe("POST /api/team/suspend", () => {
     const { DELETE } = await import("@/app/api/team/suspend/route")
     expect((await DELETE()).status).toBe(405)
     expect(ecritures).toEqual([])
+  })
+})
+
+// ── connect/checkout : adherent pour lui-meme, produit DU studio, tout relu en base ──
+describe("POST /api/connect/checkout", () => {
+  // Base qui APPLIQUE les filtres eq : sans cela, le rattachement du produit au
+  // studio ne serait pas teste.
+  let lignes: Record<string, any[]>
+  beforeEach(() => {
+    checkoutsCrees.length = 0
+    lignes = {
+      studios: [{ id: "studio-123", name: "S", slug: "studiotest", payment_mode: "connect", stripe_connect_id: "acct_1", stripe_connect_status: "active" }],
+      members: [
+        { id: "m-alice", studio_id: "studio-123", auth_user_id: "u-alice", deleted_at: null },
+        { id: "m-bob", studio_id: "studio-123", auth_user_id: "u-bob", deleted_at: null },
+        { id: "m-x", studio_id: "autre", auth_user_id: "u-x", deleted_at: null },
+      ],
+      credits_packs: [
+        { id: "pk-1", studio_id: "studio-123", active: true, name: "Pack 10", price: 90, credits_amount: 10 },
+        { id: "pk-autre", studio_id: "autre", active: true, name: "Pack pas cher", price: 1, credits_amount: 100 },
+      ],
+    }
+    mockDb.from.mockImplementation((table: string) => {
+      const filtres: [string, any][] = []
+      const c: any = {}
+      ;["select", "order", "limit", "neq", "in", "not", "or", "gte", "lte"].forEach(k => { c[k] = vi.fn(() => c) })
+      c.eq = vi.fn((k: string, v: any) => { filtres.push([k, v]); return c })
+      c.is = vi.fn((k: string, v: any) => { filtres.push([k, v]); return c })
+      const premier = () => (lignes[table] || []).find(r => filtres.every(([k, v]) => r[k] === v)) ?? null
+      c.single = vi.fn(async () => ({ data: premier(), error: null }))
+      c.maybeSingle = vi.fn(async () => ({ data: premier(), error: null }))
+      c.update = vi.fn(() => c)
+      return c
+    })
+  })
+  const acheter = (b: any) => appel("connect/checkout", "POST", { studioId: "studio-123", type: "credits", creditsPackId: "pk-1", ...b })
+
+  it("sans compte : 401, aucune session de paiement", async () => {
+    commeSi(SANS_COMPTE)
+    expect((await acheter({ memberId: "m-alice" })).res.status).toBe(401)
+    expect(checkoutsCrees).toEqual([])
+  })
+  it("adherent qui paie au nom d'un AUTRE membre : 403", async () => {
+    commeSi(compte("adherent", "studio-123", "u-alice"))
+    expect((await acheter({ memberId: "m-bob" })).res.status).toBe(403)
+    expect(checkoutsCrees).toEqual([])
+  })
+  it("equipe : membre d'un autre studio : 403", async () => {
+    commeSi(compte("admin"))
+    expect((await acheter({ memberId: "m-x" })).res.status).toBe(403)
+    expect(checkoutsCrees).toEqual([])
+  })
+  it("pack d'un AUTRE studio : refuse (introuvable), aucune session", async () => {
+    commeSi(compte("adherent", "studio-123", "u-alice"))
+    const { res } = await acheter({ memberId: "m-alice", creditsPackId: "pk-autre" })
+    expect(res.status).toBe(404)
+    expect(checkoutsCrees).toEqual([])
+  })
+  it("adherent pour lui-meme : montant, produit et URL de retour viennent de la base / du serveur, jamais de la requete", async () => {
+    commeSi(compte("adherent", "studio-123", "u-alice"))
+    const { res } = await acheter({ memberId: "m-alice", price: 1, amount: 1, credits: 999,
+      successUrl: "https://hameconnage.example/ok", cancelUrl: "https://hameconnage.example/ko" })
+    expect(res.status).toBe(200)
+    const p = checkoutsCrees[0]
+    expect(p.line_items[0].price_data.unit_amount).toBe(9000)       // 90 € en base
+    expect(p.metadata.credits).toBe("10")                            // credits du pack en base
+    expect(p.metadata.memberId).toBe("m-alice")
+    expect(p.success_url).toBe("https://studiotest.fydelys.fr/?payment=success")
+    expect(p.cancel_url).toBe("https://studiotest.fydelys.fr/?payment=canceled")
+    expect(JSON.stringify(p)).not.toContain("hameconnage")
   })
 })
