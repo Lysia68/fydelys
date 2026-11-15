@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
-import { sendEmail } from "@/lib/email"
+import { sendEmail, emailProviderConfigured } from "@/lib/email"
 
 export const dynamic = "force-dynamic"
 
@@ -9,8 +9,10 @@ export async function POST(req: NextRequest) {
     const { memberId, studioId } = await req.json()
     if (!memberId || !studioId) return NextResponse.json({ error: "memberId et studioId requis" }, { status: 400 })
 
-    if (!process.env.SENDGRID_API_KEY) {
-      console.warn("[notify-new-member] SENDGRID_API_KEY absent — simulé")
+    // Un fournisseur configure (Brevo OU SendGrid). Avant : SendGrid seul —
+    // avec Brevo seul (le principal), aucun mail de bienvenue ne partait.
+    if (!emailProviderConfigured()) {
+      console.error("[notify-new-member] Aucun fournisseur d'e-mail configuré (BREVO_API_KEY et SENDGRID_API_KEY absentes) — mails non envoyés")
       return NextResponse.json({ ok: true, simulated: true })
     }
 
