@@ -39,16 +39,40 @@ double.
 | `/notify-new-member` | **supprimée** → `lib/notify-new-member.ts` (appel serveur direct) | `44c9365` |
 | `/activity`, `/export`, `/disciplines` POST, `/members` GET/POST | adhérent refusé (équipe du studio) | `cd33b7f` |
 | `/member-profile` POST | sa propre fiche, ou l'équipe du studio ; champs fixes ; le nom de l'admin n'est plus écrasé | `cd33b7f` |
+| `/team/suspend` POST | **créée** (appelée par les réglages, inexistante) : admin du studio, sur un coach de son studio, jamais soi-même ni un admin ; coach suspendu bloqué par le middleware et `checkAuth`. Migration `20261115_profiles_suspended_at.sql` à appliquer. DELETE : 405 (non implémenté) | `5b748f9` |
+| `/cron/*` (birthdays, cleanup, reminders, sms-reset) | `CRON_SECRET` absente = **refus** (avant : `Bearer undefined` passait ; `reminders` ne vérifiait rien) | `a429931` |
 
-**Reste ouvert** (🟡, non traité) :
-- `/connect/checkout` : création de session de paiement Stripe sans compte, et
-  écriture de `subscriptions.stripe_price_id` ;
-- `/calendar` : adhérent accepté — usage à préciser ;
-- crons : vérifier que `CRON_SECRET` est posée en production (`/cron/reminders`
-  saute la vérification sans elle ; les autres attendent alors `Bearer undefined`) ;
-- `/albert` : assistant IA public, limite de débit en mémoire seulement ;
-- `/check-availability` : révèle si un e-mail a un compte (faible).
-- Hors sécurité : `Settings.jsx` appelle `/api/team/suspend`, **qui n'existe pas**.
+**Reste ouvert** (constats du 15/11/2026, en attente de décision) :
+- 🟠 `/connect/checkout` — appelant légitime : **l'espace adhérent** connecté
+  (`AdherentView`, achat d'une formule ou d'un pack pour soi), jamais la
+  vitrine. L'appel sans compte n'est donc pas voulu. Montant, produit et compte
+  Stripe sont bien relus en base, mais :
+  - `subscriptionId` / `creditsPackId` / `sessionId` ne sont **pas rattachés au
+    `studioId`** : le produit d'un studio B peut être payé sur le compte Stripe
+    d'un studio A ;
+  - `memberId` vient de la requête et n'est pas vérifié ; le webhook crédite ce
+    membre **par son seul id**, sans contrôle de studio → avec un studio A à
+    soi, on paie sur son propre compte des crédits ajoutés à un membre du
+    studio B ;
+  - `successUrl` / `cancelUrl` viennent de la requête (redirection libre après
+    paiement) ;
+  - réécrit `subscriptions.stripe_price_id` (prix créé sur le compte du
+    studio A pour l'abonnement du studio B).
+  Correction proposée : adhérent connecté du studio (ou équipe), `memberId` =
+  sa fiche, produit du studio, URL de retour calculées côté serveur ; webhook :
+  membre du studio des métadonnées.
+- 🟠 `/calendar` — **aucun appelant dans le code**. `?memberId=` : tout compte
+  connecté, de n'importe quel studio, télécharge les séances à venir et le nom
+  de n'importe quel membre (`checkAuth` sans studio). `?coachName=&studioId=` :
+  tout compte du studio, adhérent compris (planning du studio, semi-public).
+  Un abonnement iCal (Google Agenda…) n'envoie pas de cookie : la route ne peut
+  pas servir de flux d'abonnement en l'état.
+- 🟡 `/albert` — seul appelant : l'Aide de l'espace équipe. Ouverte sans
+  compte ; envoie à l'API Anthropic (claude-haiku-4-5, 500 jetons max) la
+  question, un historique **de longueur libre** et un `studioName` injecté
+  dans le prompt système, tous lus dans la requête. Limite de débit en
+  mémoire, par instance serverless.
+- 🟡 `/check-availability` : révèle si un e-mail a un compte (faible).
 
 ## Légende
 
