@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabase, createServiceSupabase } from "@/lib/supabase-server"
+import { envoyerInvitationAdmin, trouverCompteParEmail } from "@/lib/invitation-admin"
 
 export const dynamic = "force-dynamic"
 
@@ -33,6 +34,20 @@ export async function POST(req: NextRequest) {
     // Vérifier que le slug est libre
     const { data: existing } = await db.from("studios").select("id").eq("slug", slug).maybeSingle()
     if (existing) return NextResponse.json({ error: "Ce sous-domaine est déjà pris" }, { status: 409 })
+
+    // ── L'e-mail de l'admin ne doit appartenir a AUCUN compte existant ──
+    // Verifie AVANT de creer quoi que ce soit. Un compte = un profil
+    // (`profiles.id` = id du compte) = un seul studio : rattacher un compte
+    // existant a ce nouveau studio lui ferait perdre l'autre, ou le ferait
+    // retrograder en adherent par /api/verify-token. Jusqu'au 15/11/2026, le
+    // studio etait cree d'abord, et l'echec de `createUser` ne laissait qu'un
+    // avertissement — un studio sans admin.
+    const compteExistant = await trouverCompteParEmail(db, email)
+    if (compteExistant) {
+      return NextResponse.json({
+        error: `L'adresse ${email} est déjà associée à un compte Fydelys. Un compte ne peut administrer qu'un seul studio : utilisez une autre adresse pour l'admin de ce studio.`,
+      }, { status: 409 })
+    }
 
     // Période de trial : 30 jours
     const trialEndsAt = new Date()
@@ -88,59 +103,63 @@ export async function POST(req: NextRequest) {
     })
 
     if (authErr || !authData?.user) {
+      // Ne devrait plus arriver (e-mail verifie plus haut) sauf course entre
+      // deux creations, ou refus de Supabase (adresse invalide…).
       console.error("[create-tenant] Erreur création user auth:", authErr?.message)
-      // On ne bloque pas — le studio existe, l'admin peut être créé manuellement
       return NextResponse.json({
         ok: true,
         studioId: studio.id,
         slug: studio.slug,
-        warning: `Studio créé mais compte admin non créé : ${authErr?.message || "email déjà utilisé ?"}. Envoyez un magic link manuellement.`,
+        invitationEnvoyee: false,
+        warning: `Studio créé, mais le compte de l'admin n'a pas pu être créé (${authErr?.message || "raison inconnue"}). Aucune invitation n'est partie.`,
       })
     }
 
     const authUserId = authData.user.id
     console.log("[create-tenant] Auth user créé:", authUserId)
 
-    // Créer le profil admin
-    const { error: profileErr } = await db.from("profiles").insert({
+    // Créer le profil admin — `upsert` et non `insert` : si un declencheur
+    // sur auth.users a deja cree une ligne pour ce compte (l'ancien
+    // `handle_new_user` en creait une, role admin SANS studio), un `insert`
+    // echouerait, et au premier clic /api/verify-token retrograderait l'admin
+    // en adherent. Sans risque ici : ce compte vient d'etre cree ci-dessus.
+    const { error: profileErr } = await db.from("profiles").upsert({
       id:         authUserId,
       studio_id:  studio.id,
       role:       "admin",
       first_name: firstName,
       last_name:  lastName,
       is_coach:   isCoach || false,
-    })
+    }, { onConflict: "id" })
     if (profileErr) {
+      // Pas d'invitation sans profil admin : le lien creerait un ADHERENT.
       console.error("[create-tenant] Erreur création profil:", profileErr.message)
-    } else {
-      console.log("[create-tenant] Profil admin créé")
+      return NextResponse.json({
+        ok: true,
+        studioId: studio.id,
+        slug: studio.slug,
+        adminId: authUserId,
+        invitationEnvoyee: false,
+        warning: `Studio et compte créés, mais le profil admin n'a pas pu être enregistré (${profileErr.message}). Invitation NON envoyée : le lien aurait ouvert un compte adhérent.`,
+      })
     }
+    console.log("[create-tenant] Profil admin créé")
 
-    // ⚠ `generateLink` GENERE le lien mais ne l'ENVOIE PAS : il le renvoie a
-    // l'appelant, a charge pour lui de l'expedier. Ici le lien est jete — aucun
-    // e-mail ne part. Jusqu'au 15/11/2026 le log affirmait « Magic link envoyé ».
-    // L'envoi reel est a decider (inviteUserByEmail, ou generateLink + sendEmail
-    // comme invite-coach). En attendant, l'admin n'a de lien que s'il va DE LUI-
-    // MEME sur fydelys.fr/login (signInWithOtp : Supabase envoie alors son mail).
-    const origin = req.headers.get("origin") || "https://fydelys.fr"
-    const { error: magicErr } = await db.auth.admin.generateLink({
-      type:       "magiclink",
-      email,
-      options: {
-        redirectTo: `${origin}/dashboard`,
-      },
+    // ── Invitation : lien genere PUIS envoye (Brevo, SendGrid en secours) ──
+    const invitation = await envoyerInvitationAdmin(db, {
+      email, prenom: firstName, studioName, slug: studio.slug,
     })
-    if (magicErr) {
-      console.warn("[create-tenant] Magic link non généré:", magicErr.message)
-    } else {
-      console.warn("[create-tenant] Magic link généré mais NON envoyé (aucun e-mail ne part) pour", email)
-    }
 
     return NextResponse.json({
       ok: true,
       studioId: studio.id,
       slug: studio.slug,
       adminId: authUserId,
+      invitationEnvoyee: invitation.envoyee,
+      // `=== false` : seul retrecissement possible sans strictNullChecks.
+      ...(invitation.envoyee === false ? {
+        warning: `Studio créé, mais l'invitation n'est pas partie : ${invitation.raison} Utilisez « Renvoyer l'invitation ».`,
+      } : {}),
     })
 
   } catch (err: any) {
