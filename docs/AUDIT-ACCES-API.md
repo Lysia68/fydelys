@@ -13,6 +13,43 @@ manque, rien d'autre ne protège.
 vérifie la session et que le studio demandé est celui du profil — **mais pas le
 rôle** : un **adhérent** de ce studio passe.
 
+## Statut des corrections — 15/11/2026, sur `dev` (pas encore en production)
+
+Toutes les failles 🔴 et 🟠 du relevé ci-dessous sont **corrigées sur `dev`**.
+Chaque correction a ses tests de refus et son cas légitime, rejoués contre la
+version d'avant (rouges) et vérifiés par mutation. Le contrôle de rôle se fait
+après `checkAuth`, via [`src/lib/roles.ts`](../src/lib/roles.ts) (`exigerRole`,
+`estEquipeDuStudio`) — pas dans `checkAuth`, que les tests remplacent par un
+double.
+
+| Route | Correction | Commit |
+|---|---|---|
+| `/members` PATCH, DELETE | équipe du studio du membre | `1ff863b` |
+| `/bookings/cancel` | équipe du studio / l'adhérent pour SA réservation | `237539d` |
+| `/create-profile` | **supprimée** (aucun appelant) | `4ca9088` |
+| `/invite-coach` | admin du studio visé | `d94ec4c` |
+| `/connect/onboard`, `/connect/disconnect`, `/connect/status` | admin du studio | `5568dc7` |
+| `/sa/studios` | super-admin | `eb3ac36` |
+| `/bookings` POST | le membre lui-même ; l'équipe de son studio ; `force` réservé à l'équipe ; auteur réel journalisé | `0db550c` |
+| `/send-reminder` | équipe du studio ; destinataires et contenu relus en base | `cde8f75` |
+| `/bookings` GET | l'adhérent pour lui-même ; l'équipe (planning filtré sur le studio) | `44c9365` |
+| `/members/history` | équipe du studio du membre | `44c9365` |
+| `/invoice` | équipe du studio du paiement, ou le payeur | `44c9365` |
+| `/team` GET, POST | GET équipe ; POST admin, coach du même studio | `44c9365` |
+| `/notify-new-member` | **supprimée** → `lib/notify-new-member.ts` (appel serveur direct) | `44c9365` |
+| `/activity`, `/export`, `/disciplines` POST, `/members` GET/POST | adhérent refusé (équipe du studio) | `cd33b7f` |
+| `/member-profile` POST | sa propre fiche, ou l'équipe du studio ; champs fixes ; le nom de l'admin n'est plus écrasé | `cd33b7f` |
+
+**Reste ouvert** (🟡, non traité) :
+- `/connect/checkout` : création de session de paiement Stripe sans compte, et
+  écriture de `subscriptions.stripe_price_id` ;
+- `/calendar` : adhérent accepté — usage à préciser ;
+- crons : vérifier que `CRON_SECRET` est posée en production (`/cron/reminders`
+  saute la vérification sans elle ; les autres attendent alors `Bearer undefined`) ;
+- `/albert` : assistant IA public, limite de débit en mémoire seulement ;
+- `/check-availability` : révèle si un e-mail a un compte (faible).
+- Hors sécurité : `Settings.jsx` appelle `/api/team/suspend`, **qui n'existe pas**.
+
 ## Légende
 
 - 🔴 **faille critique** : exploitable sans compte, ou prise de contrôle / argent / données de tous les studios
@@ -20,7 +57,7 @@ rôle** : un **adhérent** de ce studio passe.
 - 🟡 **à préciser** : dépend d'un réglage ou d'un choix produit
 - ✅ **OK**
 
-## Tableau
+## Tableau — relevé initial (avant corrections)
 
 | Route | Méthode | Qui peut appeler aujourd'hui | Qui devrait pouvoir | Verdict |
 |---|---|---|---|---|
