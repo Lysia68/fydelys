@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
 import { sendEmail, emailProviderConfigured } from "@/lib/email"
-import { createServerClient } from "@supabase/ssr"
 import { checkPlanLimit } from "@/lib/plan-limits"
+import { checkAuth } from "@/lib/auth-check"
+import { exigerRole, ADMIN } from "@/lib/roles"
 
 export const dynamic = "force-dynamic"
 
@@ -13,25 +14,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Email requis" }, { status: 400 })
   }
 
+  // ── Seul un ADMIN du studio vise invite un coach (garde du 15/11/2026) ──
+  // Avant : aucune authentification, `studioId` du corps pris tel quel — un
+  // inconnu creait une invitation coach dans n'importe quel studio et
+  // recevait le lien : il obtenait un compte coach.
+  // `checkAuth(request, studioId)` : session + studio = celui du profil
+  // (super-admin : tout studio) ; sans studioId, celui du profil.
+  const auth = await checkAuth(request, clientStudioId || undefined)
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const refus = exigerRole(auth, ADMIN)
+  if (refus) return refus
+
   const db = createServiceSupabase()
-
-  // Récupérer le studio : priorité au studioId envoyé par le client
-  // (évite les problèmes de cookies cross-subdomain)
-  let studioIdToUse: string | null = clientStudioId || null
-
-  if (!studioIdToUse) {
-    // Fallback : lire depuis la session cookie
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { getAll() { return request.cookies.getAll() }, setAll() {} } }
-    )
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      const { data: profile } = await db.from("profiles").select("studio_id").eq("id", user.id).single()
-      studioIdToUse = profile?.studio_id || null
-    }
-  }
+  const studioIdToUse: string | null = (auth as any).studioId || null
 
   if (!studioIdToUse) {
     return NextResponse.json({ error: "Studio introuvable" }, { status: 404 })
