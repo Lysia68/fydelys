@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
+import { checkAuth } from "@/lib/auth-check"
+import { estEquipeDuStudio } from "@/lib/roles"
 import Stripe from "stripe"
 
 export const dynamic = "force-dynamic"
@@ -17,7 +19,18 @@ export async function GET(req: NextRequest) {
     .select("id, amount, payment_date, payment_type, notes, status, source, studio_id, member_id, stripe_payment_id, members(first_name, last_name, email, address, postal_code, city)")
     .eq("id", paymentId).single()
 
-  if (!pay) return NextResponse.json({ error: "Paiement introuvable" }, { status: 404 })
+  // ── Garde (15/11/2026) : l'equipe du studio du paiement, ou le membre payeur.
+  // Avant : sans compte, n'importe quelle facture par son id (nom, adresse,
+  // montant). Inexistant ou non autorise : meme reponse.
+  const auth = await checkAuth(req)
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const refus = () => NextResponse.json({ error: "Facture introuvable ou accès refusé" }, { status: 403 })
+  if (!pay) return refus()
+  if (!estEquipeDuStudio(auth, pay.studio_id)) {
+    const { data: moi } = await db.from("members").select("id")
+      .eq("auth_user_id", (auth as any).user?.id).eq("studio_id", pay.studio_id).maybeSingle()
+    if (!moi || moi.id !== pay.member_id) return refus()
+  }
 
   const { data: studio } = await db.from("studios")
     .select("name, address, city, postal_code, email, phone, slug, stripe_sk, payment_mode, stripe_connect_id")

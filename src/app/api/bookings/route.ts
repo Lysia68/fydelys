@@ -4,7 +4,7 @@ import { sendEmail } from "@/lib/email"
 import { rateLimit, getIP } from "@/lib/rate-limit"
 import { logActivity } from "@/lib/activity"
 import { checkAuth } from "@/lib/auth-check"
-import { EQUIPE } from "@/lib/roles"
+import { EQUIPE, exigerRole } from "@/lib/roles"
 
 export const dynamic = "force-dynamic"
 
@@ -14,10 +14,31 @@ export async function GET(req: NextRequest) {
   const sessionIds = req.nextUrl.searchParams.get("sessionIds")
   const studioId = req.nextUrl.searchParams.get("studioId")
 
+  if (!studioId) return NextResponse.json({ error: "(memberId ou sessionIds) + studioId requis" }, { status: 400 })
+
+  // ── Garde de lecture (15/11/2026) ─────────────────────────────────────
+  // Avant : aucune authentification — n'importe qui lisait les reservations
+  // d'un membre, ou celles de seances avec NOMS et COORDONNEES des inscrits.
+  //   Mode 1 (memberId) : l'adherent pour LUI-MEME ; l'equipe pour un membre
+  //   de son studio. Mode 2 (sessionIds, planning) : l'equipe, et seulement
+  //   les seances de son studio.
+  const auth = await checkAuth(req, studioId)
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const estEquipe = exigerRole(auth, EQUIPE) === null
+  const refus = () => NextResponse.json({ error: "Accès refusé" }, { status: 403 })
+
   const db = createServiceSupabase()
 
   // Mode 1 : bookings d'un membre
   if (memberId && studioId) {
+    if (estEquipe) {
+      const { data: m } = await db.from("members").select("studio_id").eq("id", memberId).maybeSingle()
+      if (!m || m.studio_id !== studioId) return refus()
+    } else {
+      const { data: moi } = await db.from("members").select("id")
+        .eq("auth_user_id", (auth as any).user?.id).eq("studio_id", studioId).is("deleted_at", null).maybeSingle()
+      if (!moi || moi.id !== memberId) return refus()
+    }
     const { data } = await db.from("bookings")
       .select("id, session_id, status")
       .eq("member_id", memberId)
@@ -29,11 +50,13 @@ export async function GET(req: NextRequest) {
 
   // Mode 2 : bookings de plusieurs sessions (pour le planning admin)
   if (sessionIds && studioId) {
+    if (!estEquipe) return refus()
     const ids = sessionIds.split(",").filter(Boolean)
     if (ids.length === 0) return NextResponse.json({ bookings: [] })
     const { data } = await db.from("bookings")
-      .select("id, session_id, member_id, status, attended, cancelled_by, guest_name, host_member_id, members!bookings_member_id_fkey(id, first_name, last_name, email, phone, credits, credits_total, subscription_id, subscriptions(period))")
+      .select("id, session_id, member_id, status, attended, cancelled_by, guest_name, host_member_id, members!bookings_member_id_fkey(id, first_name, last_name, email, phone, credits, credits_total, subscription_id, subscriptions(period)), sessions!inner(studio_id)")
       .in("session_id", ids)
+      .eq("sessions.studio_id", studioId) // seulement les seances du studio
     const res2 = NextResponse.json({ bookings: data || [] })
     res2.headers.set("Cache-Control", "private, s-maxage=10, stale-while-revalidate=20")
     return res2

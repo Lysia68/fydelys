@@ -253,3 +253,96 @@ describe("POST /api/send-reminder", () => {
     expect(mails[0].html).toContain("Lea")
   })
 })
+
+// ── 7. Fuites sans compte ────────────────────────────────────────────────────
+const get = async (chemin: string, qs: string) => {
+  const mod: any = await import(`@/app/api/${chemin}/route`)
+  const res = await mod.GET(createMockRequest(`https://studio.fydelys.fr/api/${chemin}?${qs}`))
+  return { res, json: await res.json().catch(() => ({})) }
+}
+
+describe("GET /api/bookings", () => {
+  it("sans compte : 401", async () => {
+    commeSi(SANS_COMPTE)
+    expect((await get("bookings", "memberId=m-alice&studioId=studio-123")).res.status).toBe(401)
+  })
+  it("adherent qui lit les reservations d'un AUTRE membre : 403", async () => {
+    commeSi(compte("adherent")); donnees.members = { id: "m-bob" }
+    expect((await get("bookings", "memberId=m-alice&studioId=studio-123")).res.status).toBe(403)
+  })
+  it("adherent : ses propres reservations", async () => {
+    commeSi(compte("adherent")); donnees.members = { id: "m-alice" }
+    expect((await get("bookings", "memberId=m-alice&studioId=studio-123")).res.status).toBe(200)
+  })
+  it("equipe : membre d'un autre studio : 403", async () => {
+    commeSi(compte("admin")); donnees.members = { studio_id: "autre" }
+    expect((await get("bookings", "memberId=m-x&studioId=studio-123")).res.status).toBe(403)
+  })
+  it("planning (sessionIds) : adherent 403 ; equipe 200, filtre sur les seances du studio", async () => {
+    commeSi(compte("adherent"))
+    expect((await get("bookings", "sessionIds=s1,s2&studioId=studio-123")).res.status).toBe(403)
+    commeSi(compte("coach")); donnees.bookings = []
+    expect((await get("bookings", "sessionIds=s1,s2&studioId=studio-123")).res.status).toBe(200)
+  })
+})
+
+describe("GET /api/members/history", () => {
+  it("sans compte : 401 ; adherent : 403 ; equipe d'un autre studio : 403", async () => {
+    commeSi(SANS_COMPTE); expect((await get("members/history", "memberId=m1")).res.status).toBe(401)
+    donnees.members = { studio_id: "studio-123" }
+    commeSi(compte("adherent")); expect((await get("members/history", "memberId=m1")).res.status).toBe(403)
+    commeSi(compte("admin", "autre")); expect((await get("members/history", "memberId=m1")).res.status).toBe(403)
+  })
+  it("equipe du studio du membre : 200", async () => {
+    commeSi(compte("coach")); donnees.members = { studio_id: "studio-123" }
+    expect((await get("members/history", "memberId=m1")).res.status).toBe(200)
+  })
+})
+
+describe("GET /api/invoice", () => {
+  beforeEach(() => {
+    donnees.member_payments = { id: "p1", amount: 10, studio_id: "studio-123", member_id: "m-alice", members: { first_name: "A" } }
+    donnees.studios = { name: "S" }
+  })
+  it("sans compte : 401", async () => {
+    commeSi(SANS_COMPTE); expect((await get("invoice", "paymentId=p1")).res.status).toBe(401)
+  })
+  it("adherent qui n'est pas le payeur : 403", async () => {
+    commeSi(compte("adherent")); donnees.members = { id: "m-bob" }
+    expect((await get("invoice", "paymentId=p1")).res.status).toBe(403)
+  })
+  it("equipe d'un autre studio : 403", async () => {
+    commeSi(compte("admin", "autre")); donnees.members = null
+    expect((await get("invoice", "paymentId=p1")).res.status).toBe(403)
+  })
+  it("le payeur lui-meme, et l'equipe du studio : 200", async () => {
+    commeSi(compte("adherent")); donnees.members = { id: "m-alice" }
+    expect((await get("invoice", "paymentId=p1")).res.status).toBe(200)
+    commeSi(compte("admin"))
+    expect((await get("invoice", "paymentId=p1")).res.status).toBe(200)
+  })
+})
+
+describe("/api/team", () => {
+  it("GET : sans compte 401 ; adherent 403 ; coach du studio 200", async () => {
+    commeSi(SANS_COMPTE); expect((await get("team", "studioId=studio-123")).res.status).toBe(401)
+    commeSi(compte("adherent")); expect((await get("team", "studioId=studio-123")).res.status).toBe(403)
+    commeSi(compte("coach")); donnees.profiles = []
+    expect((await get("team", "studioId=studio-123")).res.status).toBe(200)
+  })
+  it("POST : sans compte 401 ; coach 403 ; rien n'est ecrit", async () => {
+    commeSi(SANS_COMPTE); expect((await appel("team", "POST", { coachId: "c1", discIds: ["d1"], studioId: "studio-123" })).res.status).toBe(401)
+    commeSi(compte("coach")); expect((await appel("team", "POST", { coachId: "c1", discIds: ["d1"], studioId: "studio-123" })).res.status).toBe(403)
+    expect(ecritures).toEqual([])
+  })
+  it("POST : admin, mais coach d'un AUTRE studio : 403, rien n'est ecrit", async () => {
+    commeSi(compte("admin")); donnees.profiles = { studio_id: "autre" }
+    expect((await appel("team", "POST", { coachId: "c1", discIds: ["d1"], studioId: "studio-123" })).res.status).toBe(403)
+    expect(ecritures).toEqual([])
+  })
+  it("POST : admin du studio, coach du studio : disciplines enregistrees", async () => {
+    commeSi(compte("admin")); donnees.profiles = { studio_id: "studio-123" }
+    expect((await appel("team", "POST", { coachId: "c1", discIds: ["d1"], studioId: "studio-123" })).res.status).toBe(200)
+    expect(ecritures.some(e => e.table === "coach_disciplines" && e.op === "insert")).toBe(true)
+  })
+})

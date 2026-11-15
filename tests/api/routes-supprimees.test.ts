@@ -15,7 +15,10 @@ import { resolve } from "path"
 //   La creation de profil est assuree par /api/verify-token, /api/exchange-code
 //   et /auth/callback.
 
-const SUPPRIMEES = ["src/app/api/create-profile/route.ts"]
+// /api/notify-new-member (supprimee le 15/11/2026) : sans authentification,
+// elle declenchait des mails de bienvenue vers n'importe quel membre. Seul
+// appelant : le serveur (member-profile) — devenue lib/notify-new-member.ts.
+const SUPPRIMEES = ["src/app/api/create-profile/route.ts", "src/app/api/notify-new-member/route.ts"]
 
 describe("routes supprimees pour raison de securite", () => {
   for (const f of SUPPRIMEES) {

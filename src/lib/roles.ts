@@ -19,6 +19,17 @@ import { NextResponse } from "next/server"
 export const ADMIN = ["admin"]
 export const EQUIPE = ["admin", "coach", "staff"]
 
+/**
+ * Vrai si le compte est de l'EQUIPE du studio donne (ou super-admin). Pour les
+ * routes ou le studio n'est pas dans la requete mais se deduit de l'objet
+ * demande (membre, paiement) : lire l'objet, puis comparer.
+ */
+export function estEquipeDuStudio(auth: any, studioId: string | null | undefined): boolean {
+  const p = auth?.profile
+  if (p?.role === "superadmin") return true
+  return !!studioId && EQUIPE.includes(p?.role) && p?.studio_id === studioId
+}
+
 export function exigerRole(auth: any, roles: string[]): NextResponse | null {
   const role = auth?.profile?.role
   if (role === "superadmin" || roles.includes(role)) return null

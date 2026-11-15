@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@supabase/ssr"
 import { createServiceSupabase } from "@/lib/supabase-server"
+import { notifierNouveauMembre } from "@/lib/notify-new-member"
 
 export const dynamic = "force-dynamic"
 
@@ -85,12 +86,10 @@ export async function POST(req: NextRequest) {
     console.log("[member-profile] Updated for user:", user.id, "studio:", studioId)
 
     // Envoyer email de bienvenue uniquement au premier remplissage (nouveau → actif)
+    // Appel direct de la fonction serveur (plus de route HTTP publique, 15/11/2026).
     if (targetId && wasNew) {
-      fetch(`${req.nextUrl.origin}/api/notify-new-member`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ memberId: targetId, studioId }),
-      }).catch(e => console.warn("[member-profile] notify error:", e.message))
+      await notifierNouveauMembre(db, targetId, studioId)
+        .catch(e => console.warn("[member-profile] notify error:", e.message))
     }
 
     return NextResponse.json({ ok: true })
