@@ -1,6 +1,7 @@
 "use client"
 import React, { useState, useEffect, useRef, useCallback } from "react"
 import { createClient } from "@/lib/supabase"
+import { messageErreurConnexion } from "@/lib/erreurs-connexion"
 
 // Cloudflare Turnstile CAPTCHA invisible
 function useTurnstile() {
@@ -299,16 +300,9 @@ export default function LoginPage({
     }
     // Afficher message si redirect depuis callback avec erreur
     const params = new URLSearchParams(window.location.search)
-    const errParam = params.get("error")
-    if(errParam === "lien_expire") {
-      setError("Ce lien de connexion a expiré ou a déjà été utilisé. Entrez votre email pour recevoir un nouveau lien.")
-    } else if(errParam === "compte_suspendu") {
-      setError("Votre compte a été suspendu. Contactez votre studio pour plus d'informations.")
-    } else if(errParam === "compte_supprime") {
-      setError("Ce compte n'existe plus. Contactez votre studio pour plus d'informations.")
-    } else if(errParam) {
-      setError("Erreur de connexion. Veuillez réessayer.")
-    }
+    // Codes et messages : src/lib/erreurs-connexion.ts (dont « autre_studio »).
+    const msgErreur = messageErreurConnexion(params.get("error"))
+    if(msgErreur) setError(msgErreur)
   },[ctx])
 
   const toSlug = (s:string) =>

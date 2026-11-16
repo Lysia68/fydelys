@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
 import { checkAuth } from "@/lib/auth-check"
+import { exigerRole, EQUIPE } from "@/lib/roles"
 import { checkPlanLimit } from "@/lib/plan-limits"
 import { rateLimit, getIP } from "@/lib/rate-limit"
 import { logActivity } from "@/lib/activity"
@@ -14,6 +15,10 @@ export async function GET(request: NextRequest) {
 
   const auth = await checkAuth(request, studioId)
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  // Equipe du studio uniquement (garde du 15/11/2026) : checkAuth verifie le
+  // studio, pas le role — un ADHERENT du studio passait.
+  const refusRole = exigerRole(auth, EQUIPE)
+  if (refusRole) return refusRole
 
   const search = request.nextUrl.searchParams.get("search")
   const db = createServiceSupabase()
@@ -56,6 +61,10 @@ export async function POST(request: NextRequest) {
 
   const auth = await checkAuth(request, studioId)
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  // Equipe du studio uniquement (garde du 15/11/2026) : checkAuth verifie le
+  // studio, pas le role — un ADHERENT du studio passait.
+  const refusRole = exigerRole(auth, EQUIPE)
+  if (refusRole) return refusRole
 
   // Vérifier limite du plan
   const limit = await checkPlanLimit(studioId, "add_member")

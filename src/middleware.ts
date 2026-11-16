@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
+import { compteSuspendu } from "@/lib/suspension"
 
 export async function middleware(request: NextRequest) {
   const hostname = request.headers.get("host") || ""
@@ -152,6 +153,14 @@ export async function middleware(request: NextRequest) {
         await supabase.auth.signOut()
         return safeRedirect(new URL(`/login?error=${errType}`, request.url))
       }
+    }
+
+    // Bloquer les coachs suspendus (profiles.suspended_at, 15/11/2026) — meme
+    // traitement qu'un adherent suspendu. Lecture A PART et tolerante : tant
+    // que la migration n'est pas appliquee, personne n'est suspendu.
+    if (profile?.role === "coach" && await compteSuspendu(supabase, user.id)) {
+      await supabase.auth.signOut()
+      return safeRedirect(new URL(`/login?error=compte_suspendu`, request.url))
     }
 
     // ── Billing guard : vérifier l'accès du studio ──────────────────────────

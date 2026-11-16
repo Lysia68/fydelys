@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
 import { checkAuth } from "@/lib/auth-check"
+import { exigerRole, EQUIPE } from "@/lib/roles"
 import { checkPlanLimit } from "@/lib/plan-limits"
 
 export const dynamic = "force-dynamic"
@@ -28,6 +29,10 @@ export async function POST(req: NextRequest) {
 
   const auth = await checkAuth(req, studioId)
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  // Equipe du studio uniquement (garde du 15/11/2026) : checkAuth verifie le
+  // studio, pas le role — un ADHERENT du studio passait.
+  const refusRole = exigerRole(auth, EQUIPE)
+  if (refusRole) return refusRole
 
   // Vérifier limite du plan
   const limit = await checkPlanLimit(studioId, "add_discipline")

@@ -62,9 +62,7 @@ function DashboardSessionCard({ sess, expandedId, bookings, onToggle, onChangeSt
 
 function Dashboard({ isMobile }) {
   const p = isMobile?12:28;
-  const { studioId, discs: ctxDiscs, setDiscs } = useContext(AppCtx);
-  const [localDiscs, setLocalDiscs] = useState([]);
-  const discs = localDiscs.length ? localDiscs : ctxDiscs;
+  const { studioId, setDiscs } = useContext(AppCtx);
   const [expandedId, setExpandedId] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [bookings, setBookings] = useState({});
@@ -172,10 +170,9 @@ function Dashboard({ isMobile }) {
           credits_total: m.credits_total ?? 0,
         })));
         setPayments(payData.map(p=>({...p, date:p.payment_date, status:p.status, member: p.members ? `${p.members.first_name||""} ${p.members.last_name||""}`.trim() : "", payment_type: p.payment_type||"" })));
-        if (discData.length > 0) {
-          setLocalDiscs(discData);
-          setDiscs(discData);
-        }
+        // Les disciplines ne servaient localement qu'à « Prochaine séance »
+        // (retirée le 15/11/2026) ; on alimente seulement le contexte partagé.
+        if (discData.length > 0) setDiscs(discData);
         setIsDemo(false);
       }
       setLoading(false);
@@ -197,33 +194,6 @@ function Dashboard({ isMobile }) {
   const fillRate = totalCap>0 ? Math.round(totalBooked/totalCap*100) : 0;
   const monthRevenue = payments.filter(p=>p.date?.startsWith(monthStr)&&(p.status==="payé"||p.status==="paid")).reduce((s,p)=>s+(p.amount||0),0);
 
-  // Prochaine séance (future la plus proche)
-  const nextSession = (() => {
-    const now = new Date();
-    const future = sessions
-      .filter(s => s.status !== "cancelled" && s.date >= todayStr)
-      .sort((a,b) => {
-        if (a.date !== b.date) return a.date > b.date ? 1 : -1;
-        return (a.time||"").localeCompare(b.time||"");
-      })
-      .find(s => {
-        const [y,m,d] = (s.date||"").split("-").map(Number);
-        const [h,mi] = (s.time||"00:00").split(":").map(Number);
-        return new Date(y, m-1, d, h, mi) > now;
-      });
-    if (!future) return null;
-    const allD = discs.length ? discs : localDiscs;
-    const disc = allD.find(d => String(d.id) === String(future.disciplineId));
-    const bk = (bookings[future.id]||[]).filter(b=>b.st==="confirmed").length;
-    const [y,m,d] = (future.date||"").split("-").map(Number);
-    const [h,mi] = (future.time||"00:00").split(":").map(Number);
-    const sessDate = new Date(y, m-1, d, h, mi);
-    const diffMs = sessDate - now;
-    const diffH = Math.floor(diffMs / 3600000);
-    const diffMin = Math.floor((diffMs % 3600000) / 60000);
-    const countdown = diffH > 24 ? `dans ${Math.ceil(diffH/24)}j` : diffH > 0 ? `dans ${diffH}h${diffMin>0?String(diffMin).padStart(2,"0"):""}` : `dans ${diffMin} min`;
-    return { ...future, discName: disc?.name||"Séance", discIcon: disc?.icon||"", discColor: disc?.color||C.accent, booked: bk, countdown };
-  })();
 
   // Membres récents triés par date d'inscription
   const recentMembers = [...members].sort((a,b)=>{
@@ -286,28 +256,9 @@ function Dashboard({ isMobile }) {
           <KpiCard icon={<IcoEuro2 s={isMobile?16:18} c={C.accent}/>}   label="CA du mois"        value={monthRevenue>0?monthRevenue.toLocaleString("fr-FR")+" €":"—"} delta={null} accentColor={C.accent} isMobile={isMobile}/>
         </div>
 
-        {/* Prochaine séance + Derniers paiements */}
+        {/* Sans venir depuis plus d'un an (à la place de « Prochaine séance », 15/11/2026) + Derniers paiements */}
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:isMobile?12:16, marginBottom:isMobile?12:16 }}>
-          {nextSession && (
-            <Card style={{ borderLeft:`3px solid ${nextSession.discColor}` }}>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-                <div style={{ fontSize:12, fontWeight:700, color:C.textMuted, textTransform:"uppercase", letterSpacing:.5 }}>Prochaine séance</div>
-                <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:8, background:C.accentBg, color:C.accent }}>{nextSession.countdown}</span>
-              </div>
-              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                <div style={{ width:40, height:40, borderRadius:10, background:`${nextSession.discColor}18`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>{nextSession.discIcon}</div>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:16, fontWeight:700, color:C.text }}>{nextSession.discName}</div>
-                  <div style={{ fontSize:13, color:C.textSoft }}>{new Date(nextSession.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})} · {nextSession.time}</div>
-                  <div style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>{nextSession.teacher} · {nextSession.room}</div>
-                </div>
-                <div style={{ textAlign:"right", flexShrink:0 }}>
-                  <div style={{ fontSize:18, fontWeight:800, color:nextSession.booked>=nextSession.spots?C.warn:C.ok }}>{nextSession.booked}/{nextSession.spots}</div>
-                  <div style={{ fontSize:11, color:C.textMuted }}>inscrits</div>
-                </div>
-              </div>
-            </Card>
-          )}
+          <MembresInactifs inactifs={inactifs} isMobile={isMobile}/>
           <Card noPad>
             <SectionHead><span style={{display:"flex",alignItems:"center",gap:6}}><IcoEuro2 s={15} c={C.accent}/>Derniers paiements</span></SectionHead>
             {payments.length === 0
@@ -364,12 +315,6 @@ function Dashboard({ isMobile }) {
 
         {/* Stats présences et validés (agrégats serveur, filtres Mois / Année) */}
         <StatsPresences stats={stats} isMobile={isMobile}/>
-
-        {/* Sans réservation */}
-        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:isMobile?12:16 }}>
-          {/* Nombre exact de jours, calculé côté serveur ; orange < 1 an, rouge au-delà ; « Voir tout » = vue complète */}
-          <MembresInactifs inactifs={inactifs} isMobile={isMobile}/>
-        </div>
       </div>
     </div>
   );

@@ -1,0 +1,13 @@
+-- Suspension d'un compte d'equipe (coach) : date de suspension, NULL = actif.
+--
+-- Utilisee par POST /api/team/suspend (reglages > utilisateurs), par le
+-- middleware (un coach suspendu est deconnecte et renvoye sur /login, comme un
+-- adherent suspendu) et par checkAuth (les routes /api le refusent).
+--
+-- A appliquer A LA MAIN dans le SQL Editor de Supabase. Le code tolere son
+-- absence : tant qu'elle n'est pas appliquee, aucun coach n'est considere comme
+-- suspendu, et la route de suspension repond une erreur explicite.
+--
+-- Reactivation (pas d'ecran pour l'instant) :
+--   UPDATE public.profiles SET suspended_at = NULL WHERE id = '<id du coach>';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS suspended_at timestamptz DEFAULT NULL;

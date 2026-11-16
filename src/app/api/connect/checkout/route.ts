@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { createServiceSupabase } from "@/lib/supabase-server"
+import { checkAuth } from "@/lib/auth-check"
+import { estEquipeDuStudio } from "@/lib/roles"
 
 export const dynamic = "force-dynamic"
 
@@ -13,6 +15,17 @@ const FYDELYS_COMMISSION_PCT = parseFloat(process.env.FYDELYS_COMMISSION_PCT || 
 // mode "subscription" → abonnement mensuel
 // mode "payment"      → achat crédits ou séance unique
 
+// ── Garde (15/11/2026) ──────────────────────────────────────────────────────
+// Appelant legitime : l'espace ADHERENT connecte (achat pour soi). Avant :
+// aucune authentification ; produit non rattache au studio (le produit d'un
+// studio B payable sur le compte Stripe d'un studio A) ; `memberId` libre,
+// credite tel quel par le webhook ; URL de retour libres.
+//   - adherent : le membre credite est SA fiche dans ce studio (le `memberId`
+//     de la requete doit etre celui-la) ; equipe : un membre de son studio ;
+//   - abonnement / pack / seance : relus en base ET du studio (et actifs) ;
+//     montant et libelle viennent de la base, jamais de la requete ;
+//   - URL de retour calculees ici (sous-domaine du studio) ; `successUrl` et
+//     `cancelUrl` de la requete sont ignores.
 export async function POST(req: NextRequest) {
   try {
     const {
@@ -22,13 +35,26 @@ export async function POST(req: NextRequest) {
       subscriptionId, // pour type=subscription
       creditsPackId,  // pour type=credits
       sessionId,      // pour type=session
-      successUrl,
-      cancelUrl,
     } = await req.json()
 
-    if (!studioId || !type) return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 })
+    if (!studioId || !type || !memberId) return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 })
+
+    const auth = await checkAuth(req, studioId)
+    if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
     const db = createServiceSupabase()
+
+    const refus = () => NextResponse.json({ error: "Paiement non autorisé" }, { status: 403 })
+    if (estEquipeDuStudio(auth, studioId)) {
+      const { data: m } = await db.from("members").select("studio_id").eq("id", memberId).maybeSingle()
+      if (!m || m.studio_id !== studioId) return refus()
+    } else if ((auth as any).profile?.role === "adherent") {
+      const { data: moi } = await db.from("members").select("id")
+        .eq("auth_user_id", (auth as any).user?.id).eq("studio_id", studioId).is("deleted_at", null).maybeSingle()
+      if (!moi || moi.id !== memberId) return refus()
+    } else {
+      return refus()
+    }
 
     // Récupérer le studio + mode paiement
     const { data: studio } = await db
@@ -39,7 +65,11 @@ export async function POST(req: NextRequest) {
     if (!studio) return NextResponse.json({ error: "Studio introuvable" }, { status: 404 })
 
     const paymentMode = studio.payment_mode || "connect"
-    const origin = successUrl ? new URL(successUrl).origin : `https://${studio.slug}.fydelys.fr`
+    // Retour apres paiement : TOUJOURS le sous-domaine du studio (jamais une
+    // URL fournie par la requete — redirection libre).
+    const origin = `https://${studio.slug}.fydelys.fr`
+    const successUrl = `${origin}/?payment=success`
+    const cancelUrl  = `${origin}/?payment=canceled`
 
     // Stripe à utiliser selon le mode
     let stripeInstance = stripe // Stripe Fydelys par défaut (Connect)
@@ -70,7 +100,7 @@ export async function POST(req: NextRequest) {
       const { data: sub, error: subErr } = await db
         .from("subscriptions")
         .select("id, name, price, period, stripe_price_id, stripe_product_id")
-        .eq("id", subscriptionId).single()
+        .eq("id", subscriptionId).eq("studio_id", studioId).eq("active", true).single() // produit DU studio
 
       if (!sub || subErr) {
         console.error("[connect/checkout] Abonnement introuvable:", subscriptionId, "err:", subErr?.message)
@@ -103,8 +133,8 @@ export async function POST(req: NextRequest) {
             application_fee_amount: connectAccountId ? feeCents : undefined,
             metadata: { studioId, memberId: memberId || "", subscriptionId, credits: String(creditsAmount), type: "subscription_once" },
           },
-          success_url: successUrl || `${origin}/?payment=success`,
-          cancel_url:  cancelUrl  || `${origin}/?payment=canceled`,
+          success_url: successUrl,
+          cancel_url:  cancelUrl,
           metadata: { studioId, memberId: memberId || "", subscriptionId, credits: String(creditsAmount), type: "subscription_once" },
           locale: "fr",
         }
@@ -142,8 +172,8 @@ export async function POST(req: NextRequest) {
             application_fee_percent: connectAccountId ? FYDELYS_COMMISSION_PCT : undefined,
             metadata: { studioId, memberId: memberId || "", subscriptionId, type: "subscription" },
           },
-          success_url: successUrl || `${origin}/?payment=success`,
-          cancel_url:  cancelUrl  || `${origin}/?payment=canceled`,
+          success_url: successUrl,
+          cancel_url:  cancelUrl,
           metadata: { studioId, memberId: memberId || "", type: "subscription" },
           locale: "fr",
         }
@@ -155,7 +185,7 @@ export async function POST(req: NextRequest) {
       const { data: pack } = await db
         .from("credits_packs")
         .select("name, price, credits_amount")
-        .eq("id", creditsPackId).single()
+        .eq("id", creditsPackId).eq("studio_id", studioId).eq("active", true).single() // pack DU studio
 
       if (!pack) return NextResponse.json({ error: "Pack introuvable" }, { status: 404 })
 
@@ -177,8 +207,8 @@ export async function POST(req: NextRequest) {
           application_fee_amount: connectAccountId ? feeCents : undefined,
           metadata: { studioId, memberId: memberId || "", creditsPackId, credits: pack.credits_amount, type: "credits" },
         },
-        success_url: successUrl || `${origin}/?payment=success`,
-        cancel_url:  cancelUrl  || `${origin}/?payment=canceled`,
+        success_url: successUrl,
+        cancel_url:  cancelUrl,
         metadata: { studioId, memberId: memberId || "", type: "credits", creditsPackId, credits: String(pack.credits_amount) },
         locale: "fr",
       }
@@ -189,7 +219,7 @@ export async function POST(req: NextRequest) {
       const { data: sess } = await db
         .from("sessions")
         .select("id, session_date, session_time, duration_min, price_override, disciplines(name, icon), spots")
-        .eq("id", sessionId).single()
+        .eq("id", sessionId).eq("studio_id", studioId).single() // seance DU studio
 
       if (!sess) return NextResponse.json({ error: "Séance introuvable" }, { status: 404 })
 
@@ -219,8 +249,8 @@ export async function POST(req: NextRequest) {
           application_fee_amount: connectAccountId ? feeCents : undefined,
           metadata: { studioId, memberId: memberId || "", sessionId, type: "session" },
         },
-        success_url: successUrl || `${origin}/?payment=success`,
-        cancel_url:  cancelUrl  || `${origin}/?payment=canceled`,
+        success_url: successUrl,
+        cancel_url:  cancelUrl,
         metadata: { studioId, memberId: memberId || "", type: "session", sessionId },
         locale: "fr",
       }

@@ -516,6 +516,9 @@ function AdherentView({ onSwitch, isMobile, studioName = "", impersonateUserId =
         setMyBookings(p=>p.filter(id=>id!==s.id));
         setSessions(p=>p.map(x=>x.id===s.id?{...x,booked:Math.max(0,x.booked-1)}:x));
         showToast("Réservation annulée");
+      } else {
+        // Avant : un refus ne disait rien, la réservation restait affichée sans explication.
+        showToast("Annulation impossible. Réessayez ou contactez votre studio.", false);
       }
     };
 

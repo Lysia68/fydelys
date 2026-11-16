@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { cronAutorise } from "@/lib/cron-auth"
 import { createServiceSupabase } from "@/lib/supabase-server"
 import { sendSMS, smsReminder } from "@/lib/sms"
 import { sendEmail } from "@/lib/email"
@@ -9,9 +10,7 @@ export const dynamic = "force-dynamic"
 // Envoie les rappels X heures avant chaque séance (selon reminder_hours_default du studio)
 export async function GET(request: Request) {
   // Sécurité : vérifier le header Vercel Cron
-  const cronSecret = process.env.CRON_SECRET
-  const authHeader = request.headers.get("authorization")
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronAutorise(request)) { // secret absent = refus (lib/cron-auth.ts)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

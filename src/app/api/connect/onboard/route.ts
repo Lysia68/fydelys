@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { createServiceSupabase } from "@/lib/supabase-server"
+import { checkAuth } from "@/lib/auth-check"
+import { exigerRole, ADMIN } from "@/lib/roles"
 
 export const dynamic = "force-dynamic"
 
@@ -11,8 +13,15 @@ export async function POST(req: NextRequest) {
     const { studioId } = await req.json()
     if (!studioId) return NextResponse.json({ error: "studioId requis" }, { status: 400 })
 
-    // Utiliser le service role directement — l'auth est vérifiée côté client
-    // (TabPayments n'est accessible qu'aux admins)
+    // ── Seul un ADMIN du studio (garde du 15/11/2026) ──────────────────────
+    // Avant : « l'auth est vérifiée côté client » — donc par personne. Sans
+    // compte, n'importe qui obtenait un lien de connexion au TABLEAU DE BORD
+    // STRIPE EXPRESS du studio (versements, coordonnees bancaires).
+    const auth = await checkAuth(req, studioId)
+    if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+    const refus = exigerRole(auth, ADMIN)
+    if (refus) return refus
+
     const db = createServiceSupabase()
 
     const { data: studio, error: studioErr } = await db

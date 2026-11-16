@@ -1,91 +1,97 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
-import { sendEmail } from "@/lib/email"
+import { sendEmail, emailProviderConfigured } from "@/lib/email"
 import { sendSMS, smsConfirmation } from "@/lib/sms"
 import { checkAuth } from "@/lib/auth-check"
 import { logActivity } from "@/lib/activity"
 
 export const dynamic = "force-dynamic"
 
+// ── Qui peut annuler quoi (garde ajoutee le 15/11/2026) ────────────────────
+// Avant : tout compte connecte annulait N'IMPORTE QUELLE reservation, de
+// n'importe quel studio, par son id (cle de service, sans RLS).
+//   - EQUIPE du studio (admin, coach, staff) : une reservation de SON studio ;
+//   - ADHERENT : SA reservation — booking.member_id = la fiche membre liee a
+//     son compte DANS son studio, et la seance est de son studio ;
+//   - super-admin : tout.
+// Tout autre cas → 403, avec le MEME message que pour une reservation
+// inexistante : on ne revele pas si un id existe.
+const ROLES_EQUIPE = ["admin", "coach", "staff"]
+const REFUS = () => NextResponse.json({ error: "Réservation introuvable ou accès refusé" }, { status: 403 })
+
 // POST /api/bookings/cancel — annule un booking + promeut le 1er en waitlist
+//   { bookingId }            : planning (equipe du studio)
+//   { sessionId, memberId }  : espace adherent
 export async function POST(req: NextRequest) {
   try {
     const auth = await checkAuth(req)
     if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+    const role: string = (auth as any).profile?.role || ""
+    const studioDuCompte: string | null = (auth as any).profile?.studio_id || null
+    const userId: string = (auth as any).user?.id
 
     const { bookingId, sessionId, memberId } = await req.json()
-    if (!bookingId && !sessionId) {
-      return NextResponse.json({ error: "bookingId ou sessionId requis" }, { status: 400 })
+    if (!bookingId && !(sessionId && memberId)) {
+      return NextResponse.json({ error: "bookingId, ou sessionId et memberId, requis" }, { status: 400 })
     }
 
     const db = createServiceSupabase()
 
-    // Si on a un bookingId direct, l'annuler
-    if (bookingId) {
-      const { data: booking } = await db.from("bookings")
-        .select("id, session_id, member_id, status, attended, host_member_id, guest_name")
-        .eq("id", bookingId).single()
+    // 1. Retrouver la reservation (et le studio de sa seance)
+    const champs = "id, session_id, member_id, status, attended, host_member_id, guest_name, sessions!inner(studio_id)"
+    const { data: booking } = bookingId
+      ? await db.from("bookings").select(champs).eq("id", bookingId).maybeSingle()
+      : await db.from("bookings").select(champs)
+          .eq("session_id", sessionId).eq("member_id", memberId)
+          .neq("status", "cancelled").maybeSingle()
+    if (!booking) return REFUS()
+    const sess: any = Array.isArray((booking as any).sessions) ? (booking as any).sessions[0] : (booking as any).sessions
+    const studioDeLaResa: string | undefined = sess?.studio_id
 
-      if (!booking) return NextResponse.json({ error: "Booking introuvable" }, { status: 404 })
-      if (booking.status === "cancelled") return NextResponse.json({ ok: true, already: true })
-
-      // Annuler le booking (admin)
-      await db.from("bookings").update({ status: "cancelled", cancelled_by: "admin" }).eq("id", bookingId)
-
-      // Log
-      const { data: sessForLog } = await db.from("sessions").select("session_date, session_time, studio_id, disciplines(name)").eq("id", booking.session_id).maybeSingle()
-      // Logguer sur le membre direct OU sur l'hôte si c'est un invité
-      const logMemberId = booking.member_id || booking.host_member_id
-      if (sessForLog && logMemberId) {
-        await logActivity(db, { memberId: logMemberId, studioId: (sessForLog as any).studio_id, action: "booking_cancelled", actorRole: "admin", details: { booking_id: bookingId, session_id: booking.session_id, by: "admin", session_date: (sessForLog as any).session_date, session_time: (sessForLog as any).session_time, discipline: (sessForLog as any).disciplines?.name, ...(booking.guest_name ? { guest_booking: true, guest_name: booking.guest_name } : {}) } })
-      }
-
-      // Restituer le crédit si applicable — seulement si la présence avait été validée
-      // (les crédits sont déduits à la validation des présences, pas à la réservation)
-      // Pour un invité : restitution sur le membre hôte
-      const creditMemberId = booking.host_member_id || booking.member_id
-      if (booking.attended === true && creditMemberId) {
-        await restoreCredit(db, creditMemberId)
-      }
-
-      // Promouvoir le 1er en waitlist
-      const promoted = await promoteWaitlist(db, booking.session_id)
-
-      // Email d'annulation au membre + admin (fire-and-forget)
-      sendCancellationEmails(db, booking.session_id, booking.member_id, "admin").catch(() => {})
-
-      return NextResponse.json({ ok: true, promoted: promoted?.memberName || null })
+    // 2. Decider
+    let par: "admin" | "membre"
+    if (role === "superadmin") {
+      par = "admin"
+    } else if (ROLES_EQUIPE.includes(role)) {
+      if (!studioDeLaResa || studioDeLaResa !== studioDuCompte) return REFUS()
+      par = "admin"
+    } else if (role === "adherent") {
+      if (!studioDeLaResa || studioDeLaResa !== studioDuCompte) return REFUS()
+      const { data: moi } = await db.from("members").select("id")
+        .eq("auth_user_id", userId).eq("studio_id", studioDuCompte).is("deleted_at", null).maybeSingle()
+      if (!moi || booking.member_id !== moi.id) return REFUS()
+      par = "membre"
+    } else {
+      return REFUS()
     }
 
-    // Si on a sessionId + memberId (cas adhérent)
-    if (sessionId && memberId) {
-      const { data: booking } = await db.from("bookings")
-        .select("id, status, attended")
-        .eq("session_id", sessionId).eq("member_id", memberId)
-        .neq("status", "cancelled").maybeSingle()
+    if (booking.status === "cancelled") return NextResponse.json({ ok: true, already: true })
 
-      if (!booking) return NextResponse.json({ error: "Booking introuvable" }, { status: 404 })
+    // 3. Annuler
+    await db.from("bookings").update({ status: "cancelled", cancelled_by: par }).eq("id", booking.id)
 
-      await db.from("bookings").update({ status: "cancelled", cancelled_by: "membre" }).eq("id", booking.id)
-
-      const { data: sessForLog } = await db.from("sessions").select("session_date, session_time, studio_id, disciplines(name)").eq("id", sessionId).maybeSingle()
-      if (sessForLog) {
-        await logActivity(db, { memberId, studioId: (sessForLog as any).studio_id, action: "booking_cancelled", actorRole: "adherent", details: { booking_id: booking.id, session_id: sessionId, by: "membre", session_date: (sessForLog as any).session_date, session_time: (sessForLog as any).session_time, discipline: (sessForLog as any).disciplines?.name } })
-      }
-
-      // Restituer seulement si la présence avait été validée (crédit effectivement déduit)
-      if (booking.attended === true) {
-        await restoreCredit(db, memberId)
-      }
-      const promoted = await promoteWaitlist(db, sessionId)
-
-      // Email d'annulation au membre + admin (fire-and-forget)
-      sendCancellationEmails(db, sessionId, memberId, "membre").catch(() => {})
-
-      return NextResponse.json({ ok: true, promoted: promoted?.memberName || null })
+    const { data: sessForLog } = await db.from("sessions").select("session_date, session_time, studio_id, disciplines(name)").eq("id", booking.session_id).maybeSingle()
+    // Logguer sur le membre direct OU sur l'hôte si c'est un invité
+    const logMemberId = booking.member_id || booking.host_member_id
+    if (sessForLog && logMemberId) {
+      await logActivity(db, { memberId: logMemberId, studioId: (sessForLog as any).studio_id, action: "booking_cancelled", actorRole: par === "membre" ? "adherent" : role === "coach" ? "coach" : "admin", details: { booking_id: booking.id, session_id: booking.session_id, by: par, session_date: (sessForLog as any).session_date, session_time: (sessForLog as any).session_time, discipline: (sessForLog as any).disciplines?.name, ...(booking.guest_name ? { guest_booking: true, guest_name: booking.guest_name } : {}) } })
     }
 
-    return NextResponse.json({ error: "Paramètres insuffisants" }, { status: 400 })
+    // Restituer le crédit si applicable — seulement si la présence avait été validée
+    // (les crédits sont déduits à la validation des présences, pas à la réservation)
+    // Pour un invité : restitution sur le membre hôte
+    const creditMemberId = booking.host_member_id || booking.member_id
+    if (booking.attended === true && creditMemberId) {
+      await restoreCredit(db, creditMemberId)
+    }
+
+    // Promouvoir le 1er en waitlist
+    const promoted = await promoteWaitlist(db, booking.session_id)
+
+    // Email d'annulation au membre + admin (fire-and-forget)
+    if (booking.member_id) sendCancellationEmails(db, booking.session_id, booking.member_id, par).catch(() => {})
+
+    return NextResponse.json({ ok: true, promoted: promoted?.memberName || null })
   } catch (err: any) {
     console.error("POST /api/bookings/cancel error:", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
@@ -148,7 +154,9 @@ async function promoteWaitlist(db: any, sessionId: string): Promise<{ memberName
     .select("name, slug, email, sms_enabled, sms_credits_balance")
     .eq("id", sess.studio_id).single()
 
-  if (studio && member?.email && process.env.SENDGRID_API_KEY) {
+  // Critere : un fournisseur configure (Brevo OU SendGrid). Avant : SendGrid
+  // seul — avec Brevo seul, le mail « place disponible » ne partait pas.
+  if (studio && member?.email && emailProviderConfigured()) {
     const disc = sess.disciplines as any
     const discName = disc?.name || "Séance"
     const sessDate = new Date(sess.session_date).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })

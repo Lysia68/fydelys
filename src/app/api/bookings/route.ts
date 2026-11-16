@@ -3,6 +3,8 @@ import { createServiceSupabase } from "@/lib/supabase-server"
 import { sendEmail } from "@/lib/email"
 import { rateLimit, getIP } from "@/lib/rate-limit"
 import { logActivity } from "@/lib/activity"
+import { checkAuth } from "@/lib/auth-check"
+import { EQUIPE, exigerRole } from "@/lib/roles"
 
 export const dynamic = "force-dynamic"
 
@@ -12,10 +14,31 @@ export async function GET(req: NextRequest) {
   const sessionIds = req.nextUrl.searchParams.get("sessionIds")
   const studioId = req.nextUrl.searchParams.get("studioId")
 
+  if (!studioId) return NextResponse.json({ error: "(memberId ou sessionIds) + studioId requis" }, { status: 400 })
+
+  // ── Garde de lecture (15/11/2026) ─────────────────────────────────────
+  // Avant : aucune authentification — n'importe qui lisait les reservations
+  // d'un membre, ou celles de seances avec NOMS et COORDONNEES des inscrits.
+  //   Mode 1 (memberId) : l'adherent pour LUI-MEME ; l'equipe pour un membre
+  //   de son studio. Mode 2 (sessionIds, planning) : l'equipe, et seulement
+  //   les seances de son studio.
+  const auth = await checkAuth(req, studioId)
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const estEquipe = exigerRole(auth, EQUIPE) === null
+  const refus = () => NextResponse.json({ error: "Accès refusé" }, { status: 403 })
+
   const db = createServiceSupabase()
 
   // Mode 1 : bookings d'un membre
   if (memberId && studioId) {
+    if (estEquipe) {
+      const { data: m } = await db.from("members").select("studio_id").eq("id", memberId).maybeSingle()
+      if (!m || m.studio_id !== studioId) return refus()
+    } else {
+      const { data: moi } = await db.from("members").select("id")
+        .eq("auth_user_id", (auth as any).user?.id).eq("studio_id", studioId).is("deleted_at", null).maybeSingle()
+      if (!moi || moi.id !== memberId) return refus()
+    }
     const { data } = await db.from("bookings")
       .select("id, session_id, status")
       .eq("member_id", memberId)
@@ -27,11 +50,13 @@ export async function GET(req: NextRequest) {
 
   // Mode 2 : bookings de plusieurs sessions (pour le planning admin)
   if (sessionIds && studioId) {
+    if (!estEquipe) return refus()
     const ids = sessionIds.split(",").filter(Boolean)
     if (ids.length === 0) return NextResponse.json({ bookings: [] })
     const { data } = await db.from("bookings")
-      .select("id, session_id, member_id, status, attended, cancelled_by, guest_name, host_member_id, members!bookings_member_id_fkey(id, first_name, last_name, email, phone, credits, credits_total, subscription_id, subscriptions(period))")
+      .select("id, session_id, member_id, status, attended, cancelled_by, guest_name, host_member_id, members!bookings_member_id_fkey(id, first_name, last_name, email, phone, credits, credits_total, subscription_id, subscriptions(period)), sessions!inner(studio_id)")
       .in("session_id", ids)
+      .eq("sessions.studio_id", studioId) // seulement les seances du studio
     const res2 = NextResponse.json({ bookings: data || [] })
     res2.headers.set("Cache-Control", "private, s-maxage=10, stale-while-revalidate=20")
     return res2
@@ -54,7 +79,37 @@ export async function POST(req: NextRequest) {
     if (!sessionId || !studioId || (!memberId && !isGuest))
       return NextResponse.json({ error: "sessionId, studioId et (memberId ou guestName+hostMemberId) requis" }, { status: 400 })
 
+    // ── Qui peut reserver pour qui (garde du 15/11/2026) ─────────────────
+    // Avant : aucune authentification — n'importe qui reservait au nom de
+    // n'importe quel membre, et `force=true` (lu dans la requete) contournait
+    // la liste d'attente et le controle de paiement.
+    //   - EQUIPE du studio (admin, coach, staff ; super-admin) : un membre de
+    //     SON studio, ou un invite d'un membre de son studio ; `force` permis ;
+    //   - ADHERENT : uniquement pour LUI-MEME (sa fiche dans ce studio), sans
+    //     `force`, sans invite (le planning de l'equipe est le seul a en creer).
+    // Dans tous les cas, la seance doit appartenir au studio.
+    const auth = await checkAuth(req, studioId)
+    if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+    const role: string = (auth as any).profile?.role || ""
+    const refus = () => NextResponse.json({ error: "Réservation non autorisée" }, { status: 403 })
+
     const db = createServiceSupabase()
+
+    const { data: seance } = await db.from("sessions").select("studio_id").eq("id", sessionId).maybeSingle()
+    if (!seance || seance.studio_id !== studioId) return refus()
+
+    if (role === "superadmin" || EQUIPE.includes(role)) {
+      const cible = isGuest ? hostMemberId : memberId
+      const { data: m } = await db.from("members").select("studio_id").eq("id", cible).maybeSingle()
+      if (!m || m.studio_id !== studioId) return refus()
+    } else if (role === "adherent") {
+      if (force || isGuest) return refus()
+      const { data: moi } = await db.from("members").select("id")
+        .eq("auth_user_id", (auth as any).user?.id).eq("studio_id", studioId).is("deleted_at", null).maybeSingle()
+      if (!moi || moi.id !== memberId) return refus()
+    } else {
+      return refus()
+    }
 
     // ── Guest booking ─────────────────────────────────────────────────
     if (isGuest) {
@@ -144,7 +199,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: bookErr?.message }, { status: 500 })
     }
 
-    await logActivity(db, { memberId, studioId, action: "booking_created", actorRole: force ? "admin" : "adherent", details: { booking_id: booking.id, session_id: sessionId, status, session_date: sess.session_date, session_time: sess.session_time, discipline: (sess as any).disciplines?.name } })
+    // Auteur REEL (depuis le 15/11/2026) : avant, le role etait deduit de `force`
+    // et l'auteur n'etait pas enregistre — une reservation faite au nom d'un
+    // autre n'etait pas tracable.
+    await logActivity(db, { memberId, studioId, action: "booking_created", actorId: (auth as any).user?.id, actorRole: role === "adherent" ? "adherent" : role === "coach" ? "coach" : "admin", details: { booking_id: booking.id, session_id: sessionId, status, session_date: sess.session_date, session_time: sess.session_time, discipline: (sess as any).disciplines?.name } })
 
     // Crédits déduits à la validation des présences (accordion.jsx), pas à la réservation
 

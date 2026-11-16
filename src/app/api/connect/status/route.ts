@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { createServiceSupabase } from "@/lib/supabase-server"
+import { checkAuth } from "@/lib/auth-check"
+import { exigerRole, ADMIN } from "@/lib/roles"
 
 export const dynamic = "force-dynamic"
 
@@ -9,6 +11,13 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2024-06
 export async function GET(req: NextRequest) {
   const studioId = req.nextUrl.searchParams.get("studioId")
   if (!studioId) return NextResponse.json({ error: "studioId requis" }, { status: 400 })
+
+  // Seul un ADMIN du studio (garde du 15/11/2026) — appelee par les Reglages ;
+  // elle lit l'etat Stripe Connect et le reecrit en base.
+  const auth = await checkAuth(req, studioId)
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const refus = exigerRole(auth, ADMIN)
+  if (refus) return refus
 
   const db = createServiceSupabase()
   const { data: studio } = await db

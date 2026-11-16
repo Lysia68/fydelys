@@ -2,14 +2,16 @@ import { NextResponse, type NextRequest } from "next/server"
 import { checkAuth } from "@/lib/auth-check"
 import { createServerSupabase } from "@/lib/supabase-server"
 import { aujourdhuiParis } from "@/lib/stats-presences"
-import { membresInactifs, STATUTS_ACTIFS, type MembreLu, type ReservationLue } from "@/lib/membres-inactifs"
+import { membresInactifs, STATUTS_ACTIFS, type MembreLu, type PresenceLue } from "@/lib/membres-inactifs"
 
 export const dynamic = "force-dynamic"
 
 // GET /api/dashboard/membres-inactifs?studioId=…
 //
-// Membres actifs sans reservation confirmee depuis plus de 30 jours, avec le
-// nombre EXACT de jours (definitions : lib/membres-inactifs.ts).
+// Membres actifs AVEC DU CREDIT, sans presence pointee depuis plus d'un an
+// (ou jamais venus et inscrits depuis plus d'un an), avec le nombre EXACT de
+// jours. Definitions : lib/membres-inactifs.ts (changees le 15/11/2026 : avant,
+// derniere reservation, seuil 30 jours, sans condition de credit).
 //
 // Calcul serveur et pagine : la carte le faisait dans le navigateur sur des
 // seances chargees SANS pagination — au-dela de 1 000 lignes, la « derniere
@@ -43,25 +45,27 @@ export async function GET(req: NextRequest) {
     const sb: Client = await createServerSupabase()
     const [membres, brutes] = await Promise.all([
       toutesLesPages<MembreLu>((de, a) => sb.from("members")
-        .select("id, first_name, last_name, email, joined_at")
+        .select("id, first_name, last_name, email, joined_at, credits")
         .eq("studio_id", studioId).is("deleted_at", null).in("status", STATUTS_ACTIFS)
+        .gt("credits", 0)                          // seuls les membres qui ont du credit
         .order("id").range(de, a)),
       toutesLesPages<any>((de, a) => sb.from("bookings")
         .select("id, member_id, sessions!inner(session_date, studio_id)")
         .eq("sessions.studio_id", studioId)
         .eq("status", "confirmed")
+        .eq("attended", true)                      // « venir » = presence POINTEE
         .not("member_id", "is", null)
         .order("id").range(de, a)),
     ])
-    const reservations: ReservationLue[] = brutes.flatMap(b => {
+    const presences: PresenceLue[] = brutes.flatMap(b => {
       const s = Array.isArray(b.sessions) ? b.sessions[0] : b.sessions
       return s?.session_date ? [{ member_id: b.member_id, session_date: s.session_date }] : []
     })
 
-    const inactifs = membresInactifs(membres, reservations, aujourdhuiParis())
+    const inactifs = membresInactifs(membres, presences, aujourdhuiParis())
     return NextResponse.json({ total: inactifs.length, membres: inactifs })
   } catch (e: any) {
     console.error("[dashboard/membres-inactifs]", e?.message)
-    return NextResponse.json({ error: "Impossible de charger les membres sans réservation" }, { status: 500 })
+    return NextResponse.json({ error: "Impossible de charger les membres absents depuis plus d'un an" }, { status: 500 })
   }
 }

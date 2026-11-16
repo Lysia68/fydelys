@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { cronAutorise } from "@/lib/cron-auth"
 import { createServiceSupabase } from "@/lib/supabase-server"
 
 export const dynamic = "force-dynamic"
@@ -6,8 +7,7 @@ export const dynamic = "force-dynamic"
 // Cron quotidien : nettoyer les comptes non validés après 7 jours
 // Supprime les membres "nouveau" sans connexion confirmée
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization")
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAutorise(request)) { // secret absent = refus (lib/cron-auth.ts)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

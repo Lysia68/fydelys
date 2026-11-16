@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
+import { checkAuth } from "@/lib/auth-check"
+import { exigerRole, ADMIN, EQUIPE } from "@/lib/roles"
 
 export const dynamic = "force-dynamic"
 
@@ -7,6 +9,13 @@ export const dynamic = "force-dynamic"
 export async function GET(request: NextRequest) {
   const studioId = request.nextUrl.searchParams.get("studioId")
   if (!studioId) return NextResponse.json({ error: "studioId requis" }, { status: 400 })
+
+  // EQUIPE du studio (garde du 15/11/2026 ; appelants : planning, reglages).
+  // Avant : sans compte, liste nominative de l'equipe, e-mails et invitations.
+  const auth = await checkAuth(request, studioId)
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const refus = exigerRole(auth, EQUIPE)
+  if (refus) return refus
 
   const db = createServiceSupabase()
 
@@ -75,7 +84,19 @@ export async function POST(request: NextRequest) {
   const { coachId, discIds, studioId } = await request.json()
   if (!coachId || !studioId) return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 })
 
+  // ADMIN du studio, et le coach doit etre de ce studio (garde du 15/11/2026).
+  // Avant : sans compte, n'importe qui reecrivait les disciplines d'un coach
+  // et le drapeau `is_coach` de n'importe quel profil.
+  const auth = await checkAuth(request, studioId)
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const refus = exigerRole(auth, ADMIN)
+  if (refus) return refus
+
   const db = createServiceSupabase()
+
+  const { data: coach } = await db.from("profiles").select("studio_id").eq("id", coachId).maybeSingle()
+  if (!coach || coach.studio_id !== studioId)
+    return NextResponse.json({ error: "Accès refusé" }, { status: 403 })
 
   await db.from("coach_disciplines").delete().eq("profile_id", coachId).eq("studio_id", studioId)
 

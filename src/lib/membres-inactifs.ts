@@ -1,33 +1,33 @@
-// ── Membres sans réservation depuis plus de 30 jours ─────────────────────
+// ── Membres AVEC DU CREDIT qui ne sont pas venus depuis plus d'un an ───────
 //
-// « Réservation » = reservation CONFIRMEE (`bookings.status = 'confirmed'`),
-// quelle que soit la date de la seance : une reservation a venir rend le
-// membre actif. C'est la definition qu'utilisait deja la carte du tableau de
-// bord ; seul le calcul a change de place (serveur, pagine).
+// Definition (arbitree le 15/11/2026) :
+//   - « venir » = une PRESENCE POINTEE (`bookings.attended = true`, sur une
+//     reservation confirmee). Une reservation jamais pointee ne compte pas ;
+//   - seuls les membres ACTIFS qui ont du credit (`credits > 0`) ;
+//   - derniere presence il y a PLUS D'UN AN (plus de 365 jours) ;
+//   - jamais venu : inclus seulement s'il est inscrit depuis plus d'un an
+//     (`joined_at`) ; date d'inscription inconnue : exclu (rien ne prouve
+//     l'anciennete).
+// Jours = date du jour (Paris) − date de la seance de la derniere presence.
 //
-// Jours = date du jour (Paris) − date de la seance de la DERNIERE reservation.
-// Membre qui n'a jamais reserve : `jours = null`, et c'est son anciennete
-// (`joined_at`) qui donne la couleur ; un membre inscrit depuis 30 jours ou
-// moins n'est pas « inactif », il est nouveau.
-//
-// Couleur : orange jusqu'a un an (365 jours), rouge au-dela.
+// Avant le 15/11/2026, la liste prenait la derniere RESERVATION, a partir de
+// 30 jours, sans condition de credit.
 
-export const SEUIL_JOURS = 30
-export const UN_AN = 365
+export const SEUIL_JOURS = 365
 export const STATUTS_ACTIFS = ["actif", "Actif", "active"]
 
 export type MembreLu = {
   id: string; first_name: string | null; last_name: string | null
-  email: string | null; joined_at: string | null
+  email: string | null; joined_at: string | null; credits: number | null
 }
-export type ReservationLue = { member_id: string; session_date: string }
+/** Une presence POINTEE (attended = true). */
+export type PresenceLue = { member_id: string; session_date: string }
 
 export type MembreInactif = {
-  id: string; prenom: string; nom: string; email: string
-  derniereReservation: string | null // AAAA-MM-JJ, null = jamais reserve
-  jours: number | null               // jours depuis la derniere reservation
-  inscritDepuis: number | null       // jours depuis joined_at
-  niveau: "orange" | "rouge"
+  id: string; prenom: string; nom: string; email: string; credits: number
+  dernierePresence: string | null // AAAA-MM-JJ, null = jamais venu
+  jours: number | null            // jours depuis la derniere presence
+  inscritDepuis: number | null    // jours depuis joined_at
 }
 
 const JOUR = 86_400_000
@@ -36,28 +36,26 @@ function ecartJours(du: string, au: string): number {
   return Math.round((d(au) - d(du)) / JOUR)
 }
 
-export function membresInactifs(membres: MembreLu[], reservations: ReservationLue[], aujourdhui: string): MembreInactif[] {
+export function membresInactifs(membres: MembreLu[], presences: PresenceLue[], aujourdhui: string): MembreInactif[] {
   const derniere = new Map<string, string>()
-  for (const r of reservations) {
-    const d = derniere.get(r.member_id)
-    if (!d || r.session_date > d) derniere.set(r.member_id, r.session_date)
+  for (const p of presences) {
+    const d = derniere.get(p.member_id)
+    if (!d || p.session_date > d) derniere.set(p.member_id, p.session_date)
   }
 
   const inactifs: MembreInactif[] = []
   for (const m of membres) {
+    if (!((m.credits ?? 0) > 0)) continue                       // sans credit : hors liste
     const der = derniere.get(m.id) ?? null
     const jours = der ? ecartJours(der, aujourdhui) : null
     const inscritDepuis = m.joined_at ? ecartJours(m.joined_at, aujourdhui) : null
-    if (jours !== null && jours <= SEUIL_JOURS) continue                    // actif
-    if (jours === null && inscritDepuis !== null && inscritDepuis <= SEUIL_JOURS) continue // nouveau
-    const reference = jours ?? inscritDepuis
+    if (jours !== null && jours <= SEUIL_JOURS) continue          // venu dans l'annee
+    if (jours === null && !(inscritDepuis !== null && inscritDepuis > SEUIL_JOURS)) continue // jamais venu, pas (prouve) inscrit depuis plus d'un an
     inactifs.push({
-      id: m.id,
-      prenom: m.first_name || "", nom: m.last_name || "", email: m.email || "",
-      derniereReservation: der, jours, inscritDepuis,
-      niveau: reference !== null && reference > UN_AN ? "rouge" : "orange",
+      id: m.id, prenom: m.first_name || "", nom: m.last_name || "", email: m.email || "",
+      credits: m.credits ?? 0, dernierePresence: der, jours, inscritDepuis,
     })
   }
-  // Les plus anciens d'abord ; « jamais reserve » classe par anciennete.
+  // Les plus anciens d'abord ; « jamais venu » classe par anciennete.
   return inactifs.sort((a, b) => ((b.jours ?? b.inscritDepuis ?? 0) - (a.jours ?? a.inscritDepuis ?? 0)))
 }

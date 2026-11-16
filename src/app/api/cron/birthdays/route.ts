@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { cronAutorise } from "@/lib/cron-auth"
 import { createServiceSupabase } from "@/lib/supabase-server"
 import { sendEmail } from "@/lib/email"
 
@@ -6,8 +7,7 @@ export const dynamic = "force-dynamic"
 
 // Appelé par Vercel Cron chaque matin : 0 7 * * *  (7h UTC = 8h Paris hiver, 9h été)
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization")
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronAutorise(request)) { // secret absent = refus (lib/cron-auth.ts)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

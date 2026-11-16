@@ -1,23 +1,57 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createServiceSupabase } from "@/lib/supabase-server"
-import { sendEmail } from "@/lib/email"
+import { sendEmail, emailProviderConfigured } from "@/lib/email"
+import { checkAuth } from "@/lib/auth-check"
+import { exigerRole, EQUIPE } from "@/lib/roles"
 
 export const dynamic = "force-dynamic"
 
+// ── Rappel manuel d'une seance, depuis le planning (garde du 15/11/2026) ────
+// Avant : aucune authentification, et destinataires + contenu LUS DANS LA
+// REQUETE — un inconnu envoyait des mails a n'importe quelle adresse, au nom
+// d'un studio, par notre fournisseur (relais de phishing).
+// Appelant legitime : le PLANNING (equipe du studio) — et lui seul. Les rappels
+// automatiques passent par /api/cron/reminders (CRON_SECRET), pas par ici.
+// Destinataires : les inscrits CONFIRMES de la seance, relus en base. Les
+// champs `members` et `sess` encore envoyes par le planning sont IGNORES.
 export async function POST(request: NextRequest) {
-  const { sessId, studioId, members, sess } = await request.json()
+  const { sessId, studioId } = await request.json()
 
-  if (!sessId || !studioId || !members?.length) {
+  if (!sessId || !studioId) {
     return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 })
   }
 
-  const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY
-  if (!SENDGRID_API_KEY) {
-    console.warn("SENDGRID_API_KEY non configuré — rappel simulé")
-    return NextResponse.json({ ok: true, simulated: true, count: members.length })
-  }
+  const auth = await checkAuth(request, studioId)
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const refus = exigerRole(auth, EQUIPE)
+  if (refus) return refus
 
   const db = createServiceSupabase()
+
+  const { data: seance } = await db.from("sessions")
+    .select("studio_id, session_date, session_time, duration_min, teacher, room")
+    .eq("id", sessId).maybeSingle()
+  if (!seance || seance.studio_id !== studioId)
+    return NextResponse.json({ error: "Accès refusé" }, { status: 403 })
+
+  const { data: inscrits } = await db.from("bookings")
+    .select("members!bookings_member_id_fkey(first_name, last_name, email, studio_id)")
+    .eq("session_id", sessId).eq("status", "confirmed").not("member_id", "is", null)
+  const members: { email: string; name: string }[] = (inscrits || [])
+    .map((b: any) => Array.isArray(b.members) ? b.members[0] : b.members)
+    .filter((m: any) => m?.email && m.studio_id === studioId)
+    .map((m: any) => ({ email: m.email, name: `${m.first_name || ""} ${m.last_name || ""}`.trim() }))
+  if (!members.length) return NextResponse.json({ ok: true, sent: 0, failed: 0 })
+
+  const sess = {
+    date: seance.session_date, time: seance.session_time,
+    duration: seance.duration_min, teacher: seance.teacher, room: seance.room,
+  }
+
+  if (!emailProviderConfigured()) {
+    console.error("[send-reminder] Aucun fournisseur d'e-mail configuré (BREVO_API_KEY et SENDGRID_API_KEY absentes) — rappel non envoyé")
+    return NextResponse.json({ ok: true, simulated: true, count: members.length })
+  }
 
   // Récupérer le nom du studio
   const { data: studio } = await db

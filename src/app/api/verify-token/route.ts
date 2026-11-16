@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createServerClient } from "@supabase/ssr"
 import { createServiceSupabase } from "@/lib/supabase-server"
+import { MESSAGES_CONNEXION } from "@/lib/erreurs-connexion"
 
 export const dynamic = "force-dynamic"
 
@@ -138,6 +139,23 @@ export async function POST(request: NextRequest) {
       const intendedRole = invite?.role || user.user_metadata?.role || "adherent"
       const safeRole = (intendedRole === "admin" || intendedRole === "superadmin") ? "adherent" : intendedRole
 
+      // ── Compte d'ÉQUIPE d'un AUTRE studio : refus, profil intact ──────────
+      // Jusqu'au 15/11/2026, un admin du studio A qui ouvrait un lien du
+      // studio B etait REECRIT en adherent de B : il perdait l'acces a son
+      // propre studio. Un compte = un profil = un studio : on refuse, sans
+      // toucher au profil ni creer de fiche, et sans poser de session.
+      // (Couvert par tests/api/verify-token-retrogradation.test.ts.)
+      if (existing && ["admin", "coach", "staff"].includes(existing.role)
+          && existing.studio_id && existing.studio_id !== studio.id) {
+        console.warn("[verify-token] Compte d'équipe d'un autre studio — connexion refusée, profil inchangé :", user.id, existing.role)
+        // `code` : /auth/confirm le transmet a /login (?error=autre_studio),
+        // qui affiche ce message au lieu de « lien expiré ».
+        return NextResponse.json({
+          error: MESSAGES_CONNEXION.autre_studio,
+          code: "autre_studio",
+        }, { status: 403 })
+      }
+
       if (!existing) {
         // Nouveau profil
         console.log("[verify-token] Creating profile role:", safeRole, "for", user.email)
@@ -151,14 +169,17 @@ export async function POST(request: NextRequest) {
           await db.from("invitations").update({ used: true })
             .eq("email", user.email!).eq("studio_id", studio.id)
         }
-      } else if (existing.role === "admin" && existing.studio_id !== studio.id) {
-        // Profil admin créé par erreur pour un studio différent — corriger en adherent
-        console.warn("[verify-token] Correcting wrong admin profile for", user.email, "→ adherent")
+      } else if (existing.role === "admin" && !existing.studio_id) {
+        // Profil admin SANS studio : artefact de l'ancien declencheur
+        // `handle_new_user` (role admin par defaut a la creation du compte) —
+        // ce compte n'a jamais administre de studio : il devient adherent.
+        // Un admin RATTACHE a un autre studio est refuse plus haut.
+        console.warn("[verify-token] Profil admin sans studio → adherent :", user.id)
         await db.from("profiles").update({ role: "adherent", studio_id: studio.id }).eq("id", user.id)
       }
 
       // Créer/lier le membre si adherent ou coach
-      const finalRole = !existing ? safeRole : (existing.role === "admin" && existing.studio_id !== studio.id ? "adherent" : existing.role)
+      const finalRole = !existing ? safeRole : (existing.role === "admin" && !existing.studio_id ? "adherent" : existing.role)
       if (finalRole === "adherent") {
         const { data: existingMember } = await db.from("members")
           .select("id,profile_complete").eq("studio_id", studio.id).eq("email", user.email!).maybeSingle()
