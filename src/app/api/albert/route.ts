@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { rateLimit, getIP } from "@/lib/rate-limit"
+import { rateLimit } from "@/lib/rate-limit"
+import { checkAuth } from "@/lib/auth-check"
+import { exigerRole, EQUIPE } from "@/lib/roles"
+import { createServiceSupabase } from "@/lib/supabase-server"
+import { consommerQuota } from "@/lib/quota"
 
 export const dynamic = "force-dynamic"
 
@@ -21,27 +25,69 @@ Règles :
 - Si la question n'est pas liée à Fydelys, dis gentiment que tu ne peux aider que sur Fydelys
 - Termine par une phrase encourageante quand c'est pertinent`
 
+// ── Acces et limites (16/11/2026) ─────────────────────────────────────────
+// Albert n'est affiche que dans l'Aide de la console EQUIPE. Avant : ouvert
+// sans compte, avec une limite en memoire (par instance serverless) — n'importe
+// qui pouvait consommer la cle Anthropic.
+//   - equipe du studio uniquement (checkAuth + exigerRole EQUIPE) ;
+//   - quota PAR STUDIO, partage entre instances (fonction SQL consommer_quota) :
+//     QUOTA_COURT questions par 10 min, QUOTA_JOUR par jour ; si le compteur
+//     est indisponible (migration non appliquee), repli sur la limite en
+//     memoire par compte ;
+//   - question et historique plafonnes ; nom du studio lu en BASE (il etait
+//     lu dans la requete et injecte dans le prompt systeme).
+const QUOTA_COURT = { fenetreSec: 600, max: 20 }
+const QUOTA_JOUR = { fenetreSec: 86_400, max: 100 }
+const MAX_QUESTION = 2000      // caracteres
+const MAX_HISTORIQUE = 10      // messages
+const MAX_MESSAGE = 2000       // caracteres par message d'historique
+const LIMITE_ATTEINTE = "Doucement, je suis un vieux monsieur ! Votre studio m'a posé beaucoup de questions : reposez-moi la vôtre un peu plus tard, ou consultez les sections d'aide ci-dessous."
+
 export async function POST(req: NextRequest) {
-  // Rate limit : max 10 questions/min par IP (protège le coût API Claude)
-  const rl = rateLimit(getIP(req), { max: 10, windowSec: 60 })
-  if (!rl.ok) return NextResponse.json({ answer: "Doucement, je suis un vieux monsieur ! Attendez quelques instants avant de me reposer une question." })
+  const auth = await checkAuth(req)
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const refus = exigerRole(auth, EQUIPE)
+  if (refus) return refus
+  const studioId: string | null = (auth as any).studioId || null
+  if (!studioId) return NextResponse.json({ error: "Studio introuvable" }, { status: 403 })
 
   try {
-    const { question, studioName, history } = await req.json()
-    if (!question) return NextResponse.json({ error: "Question requise" }, { status: 400 })
+    const { question, history } = await req.json()
+    if (!question || typeof question !== "string") return NextResponse.json({ error: "Question requise" }, { status: 400 })
+    if (question.length > MAX_QUESTION)
+      return NextResponse.json({ answer: `Votre question est un peu longue pour moi : pouvez-vous la résumer en moins de ${MAX_QUESTION} caractères ?` }, { status: 400 })
+
+    const db = createServiceSupabase()
+
+    // Quota par studio, partage entre instances ; repli en memoire si le compteur manque.
+    for (const [nom, q] of [["10min", QUOTA_COURT], ["jour", QUOTA_JOUR]] as const) {
+      const r = await consommerQuota(db, `albert:${studioId}:${nom}`, q.fenetreSec, q.max)
+      if (r === "depasse") return NextResponse.json({ answer: LIMITE_ATTEINTE }, { status: 429 })
+      if (r === "indisponible") {
+        const rl = rateLimit(`albert:${(auth as any).user?.id}`, { max: 10, windowSec: 60 })
+        if (!rl.ok) return NextResponse.json({ answer: LIMITE_ATTEINTE }, { status: 429 })
+        break
+      }
+    }
 
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey) {
       return NextResponse.json({ answer: "Je suis en cours de configuration. En attendant, consultez les sections ci-dessous ou contactez le support via le formulaire." })
     }
 
-    // Construire les messages avec l'historique
+    const { data: studio } = await db.from("studios").select("name").eq("id", studioId).maybeSingle()
+    const studioName: string = (studio as any)?.name || ""
+
+    // Construire les messages avec l'historique (plafonne : nombre et longueur)
     const messages: any[] = []
-    if (history?.length) {
-      history.forEach((m: any) => {
-        messages.push({ role: m.role === "user" ? "user" : "assistant", content: m.text })
+    if (Array.isArray(history)) {
+      history.slice(-MAX_HISTORIQUE).forEach((m: any) => {
+        if (typeof m?.text !== "string" || !m.text) return
+        messages.push({ role: m.role === "user" ? "user" : "assistant", content: m.text.slice(0, MAX_MESSAGE) })
       })
     }
+    // L'API exige un premier message « user » : on retire les reponses d'Albert en tete.
+    while (messages.length && messages[0].role !== "user") messages.shift()
     messages.push({ role: "user", content: question })
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {

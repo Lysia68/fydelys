@@ -11,6 +11,9 @@ name: Backup Fydelys → Cloudflare R2
 #   - R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_ENDPOINT / R2_BUCKET
 #       (à recopier depuis le repo synq9-crm, ou nouvelle clé R2 dédiée).
 #   - SENDGRID_API_KEY : pour l'email de notification (optionnel).
+#   - HEALTHCHECK_PING_URL : URL de ping d'un service de surveillance (type
+#       Healthchecks.io), appelee apres chaque upload reussi ; le service
+#       alerte si aucun ping n'arrive dans le delai prevu (optionnel).
 #
 # Upload sous le préfixe `db/` : sans collision même si le bucket R2 est
 # partagé avec Synq9. Lancement manuel possible via workflow_dispatch.
@@ -117,6 +120,26 @@ jobs:
             --endpoint-url "$R2_ENDPOINT" \
             --no-progress
           echo "✓ DB Fydelys uploaded to s3://$R2_BUCKET/db/$DUMP_FILE"
+
+      # Signal de vie pour une surveillance externe (type Healthchecks.io) :
+      # le service alerte si AUCUN ping n'arrive dans le delai configure — le
+      # cas que le mail « Backup OK » ne couvre pas (un mail qui n'arrive pas
+      # ne se voit pas). Ping UNIQUEMENT apres un upload reussi : une etape en
+      # echec plus haut arrete le job avant celle-ci. La rotation (plus bas)
+      # n'est pas critique et ne doit pas pouvoir bloquer le signal.
+      # Secret HEALTHCHECK_PING_URL absent : etape sans effet (avertissement).
+      # Un ping rate n'echoue pas le job : son absence declenchera l'alerte.
+      - name: Ping de surveillance (sauvegarde reussie)
+        env:
+          HEALTHCHECK_PING_URL: ${{ secrets.HEALTHCHECK_PING_URL }}
+        run: |
+          if [ -z "$HEALTHCHECK_PING_URL" ]; then
+            echo "::warning::HEALTHCHECK_PING_URL absent — pas de ping de surveillance"
+            exit 0
+          fi
+          curl -fsS -m 10 --retry 3 -o /dev/null "$HEALTHCHECK_PING_URL" \
+            && echo "✓ ping de surveillance envoyé" \
+            || echo "::warning::ping de surveillance en échec (l'alerte externe se déclenchera si aucun ping n'arrive)"
 
       - name: Rotation — ne garder que les 30 derniers dumps
         env:
