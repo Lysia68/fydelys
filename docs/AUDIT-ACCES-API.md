@@ -45,13 +45,9 @@ double.
 | `/connect/webhook`, `/stripe/webhook` | idempotence sur `event.id` (table `stripe_webhook_events`, migration à appliquer ; repli : paiement déjà enregistré) ; membre crédité = membre du studio du paiement | `3d50f2a` |
 | `/calendar` | **supprimée** (aucun appelant, pas de flux d'agenda) | `a08e8db` |
 | `/team/suspend` DELETE | coach sans aucune séance seulement, sinon 409 « suspendez-le plutôt » ; la suspension annonce les séances futures à réassigner | `72d49fc` |
+| `/albert` | équipe du studio uniquement ; quota **par studio** partagé entre instances (20 / 10 min, 100 / jour — fonction SQL `consommer_quota`, migration `20261116_api_quota.sql` à appliquer ; repli en mémoire sans elle) ; question ≤ 2 000 caractères, historique ≤ 10 messages ; nom du studio lu en base | (ce commit) |
 
 **Reste ouvert** :
-- 🟡 `/albert` — seul appelant : l'Aide de l'espace équipe. Ouverte sans
-  compte ; envoie à l'API Anthropic (claude-haiku-4-5, 500 jetons max) la
-  question, un historique **de longueur libre** et un `studioName` injecté
-  dans le prompt système, tous lus dans la requête. Limite de débit en
-  mémoire, par instance serverless.
 - 🟡 `/check-availability` : révèle si un e-mail a un compte (faible).
 
 ## Légende
