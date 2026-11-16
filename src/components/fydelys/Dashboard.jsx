@@ -11,6 +11,7 @@ import { PlanningAccordion } from "./accordion";
 import { StatsPresences, useStatsPresences } from "./StatsPresences";
 import { libelleSemaine } from "@/lib/stats-presences";
 import { MembresInactifs, useMembresInactifs } from "./MembresInactifs";
+import { chargerDonneesDashboard } from "@/lib/chargement-dashboard";
 
 // ── PLANNING ACCORDION ────────────────────────────────────────────────────────
 
@@ -104,15 +105,19 @@ function Dashboard({ isMobile }) {
       });
 
 
+    // Séances, réservations, membres, paiements : PAGINÉS par 1 000 (au-delà,
+    // PostgREST tronquait sans erreur et les chiffres étaient faux) —
+    // src/lib/chargement-dashboard.ts.
     Promise.all([
-      sb.from("sessions").select("id,discipline_id,teacher,room,duration_min,spots,session_date,session_time,status").eq("studio_id", studioId),
-      sb.from("members").select("id,first_name,last_name,email,phone,status,joined_at,credits,credits_total,subscription_id,subscriptions(name)").eq("studio_id", studioId).is("deleted_at", null),
-      sb.from("member_payments").select("id,amount,status,payment_date,payment_type,notes,members(first_name,last_name)").eq("studio_id", studioId),
+      chargerDonneesDashboard(sb, studioId).catch(e => {
+        console.error("[dashboard] chargement :", e?.message);
+        return { sessions: [], bookings: [], members: [], payments: [] };
+      }),
       fetch(`/api/disciplines?studioId=${studioId}`).then(r=>r.json()).then(j=>({data:j.disciplines||[]})).catch(()=>sb.from("disciplines").select("id,name,color,icon").eq("studio_id", studioId)),
-    ]).then(async ([sessRes, membRes, payRes, discRes]) => {
-      const sessData = sessRes.data || [];
-      const membData = membRes.data || [];
-      const payData  = payRes.data  || [];
+    ]).then(async ([donnees, discRes]) => {
+      const sessData = donnees.sessions;
+      const membData = donnees.members;
+      const payData  = donnees.payments;
       const discData = discRes.data || [];
 
       if (sessData.length === 0 && membData.length === 0) {
@@ -131,14 +136,10 @@ function Dashboard({ isMobile }) {
           status: s.status||"scheduled", booked:0, waitlist:0,
         }));
 
-        // Charger les bookings pour calculer le taux de remplissage
-        const sessionIds = mappedSessions.map(s => s.id);
+        // Réservations (déjà chargées, paginées) pour le taux de remplissage
         let bkMap = {};
-        if (sessionIds.length > 0) {
-          const { data: bkData } = await sb.from("bookings")
-            .select("session_id, status, attended, member_id, guest_name, host_member_id, members!bookings_member_id_fkey(first_name, last_name, email, phone)")
-            .in("session_id", sessionIds);
-          (bkData || []).forEach(b => {
+        {
+          donnees.bookings.forEach(b => {
             if (!bkMap[b.session_id]) bkMap[b.session_id] = [];
             const isGuest = !!b.guest_name;
             bkMap[b.session_id].push({
