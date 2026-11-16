@@ -6,14 +6,66 @@ Ce fichier vit **dans le dépôt** et non dans une mémoire d'assistant : une
 mémoire locale ne suit pas les sessions cloud, et ces notes sont justement
 celles qui coûtent un aller-retour quand on ne les a pas.
 
-Tenu à jour au fil de l'eau. Dernière mise à jour : 15/11/2026.
+Tenu à jour au fil de l'eau. Dernière mise à jour : 16/11/2026.
 
-Le contrôle d'accès des routes `/api` a son propre relevé :
-[`AUDIT-ACCES-API.md`](AUDIT-ACCES-API.md) (15/11/2026, failles à prioriser).
+Le contrôle d'accès des routes `/api` a son propre relevé, avec le statut de
+chaque correction : [`AUDIT-ACCES-API.md`](AUDIT-ACCES-API.md).
 
 ---
 
-## 🟠 Sauvegarde de la base : aucune alerte si elle s'arrête
+## État au 16/11/2026
+
+### Fait (15-16/11/2026)
+
+En production (`main` = `e5d188c`) :
+- Next 15.5.28, types vérifiés au build ;
+- toutes les failles 🔴/🟠 de l'audit du contrôle d'accès (routes fermées ou
+  supprimées, adhérent refusé sur les routes de l'équipe, crons
+  `CRON_SECRET` absente = refus) ;
+- paiement : l'adhérent paie pour lui-même un produit de son studio ;
+  webhooks Stripe idempotents (`event.id`) ; séance achetée créée non pointée ;
+- équipe : suspension (`profiles.suspended_at`) et suppression d'un coach
+  (seulement sans aucune séance) ;
+- tableau de bord : « Présences validées », « Validés semaine précédente »,
+  « Sans venir depuis plus d'un an » ;
+- invitation de l'admin d'un nouveau studio envoyée ; aucun lien de
+  connexion dans les logs.
+
+Sur `dev`, **pas encore en production** :
+- `/api/albert` réservé à l'équipe, quota par studio partagé entre
+  instances (`ad7acb7`) ;
+- tableau de bord chargé par pages de 1 000 lignes (`33b9ace`) ;
+- `app/(app)/dashboard/page.tsx` réduit à son ancre de route (`fc92b5b`) ;
+- ping de surveillance de la sauvegarde (`143301f`).
+
+### Reste à faire
+
+**Avant la prochaine mise en production :**
+- appliquer `supabase/migrations/20261116_api_quota.sql` (sans elle, Albert
+  retombe sur la limite en mémoire) ;
+- supprimer la vue cassée `studio_kpis` — plus aucun lecteur :
+  `DROP VIEW IF EXISTS public.studio_kpis;` ;
+- vérifier que `CRON_SECRET` est posée dans Vercel (sans elle, les crons
+  répondent 401).
+
+**Ensuite :**
+- surveillance de la sauvegarde : créer le contrôle et poser le secret
+  `HEALTHCHECK_PING_URL` (section suivante) ;
+- `/api/check-availability` révèle si un e-mail a un compte (faible) ;
+- coach suspendu : aucun écran de réactivation (SQL :
+  `UPDATE profiles SET suspended_at = NULL WHERE id = …`) ;
+- séances ↔ coach rattachées par le **nom** (`sessions.teacher`), pas par un
+  id : une séance saisie avec un autre libellé échappe aux contrôles ;
+- autres pages mortes du même type que `dashboard/page.tsx` (le layout
+  `(app)` ignore `children`) : `historique`, `members`, `payments`,
+  `planning` — à réduire à leur ancre de route ;
+- limite de débit en mémoire encore utilisée par `send-magic-link`,
+  `bookings`, `register`, `contact` (ne tient pas d'une instance à l'autre) ;
+- montée en Next 16, pages adhérentes et logo du studio : sections plus bas.
+
+---
+
+## 🟠 Sauvegarde de la base : alerte si elle s'arrête — à configurer
 
 La base est sauvegardée chaque jour vers Cloudflare R2 (compartiment
 `fydelys-backups`) par `.github/workflows/backup-fydelys.yml`, qui envoie un
@@ -23,8 +75,19 @@ mail « ✅ Backup Fydelys OK » à chaque exécution réussie.
 tourner (désactivé, secret expiré, échec avant l'envoi), personne ne le
 remarque — un mail qui n'arrive pas ne se voit pas.
 
-Garde-fou proposé, non codé : un contrôle quotidien indépendant qui vérifie
-que le dernier objet de `fydelys-backups/db/` a moins de 48 h, et alerte sinon.
+**Codé le 16/11/2026 (`143301f`)** : après chaque upload réussi, le workflow
+appelle l'URL du secret `HEALTHCHECK_PING_URL`. Un service de surveillance
+externe (type Healthchecks.io) alerte si aucun ping n'arrive à temps.
+**Reste à configurer** (aucun compte créé) :
+1. créer un contrôle de type planning cron `30 3 * * *`, fuseau UTC, avec
+   une marge de grâce de 2 h (le job prend 1 à 2 min, mais GitHub peut
+   retarder un cron planifié) ;
+2. brancher ses alertes sur info@lysia.fr ;
+3. copier son URL de ping dans le dépôt GitHub `Lysia68/fydelys` :
+   Settings → Secrets and variables → Actions → New repository secret,
+   nom `HEALTHCHECK_PING_URL` ;
+4. lancer le workflow à la main (Actions → Run workflow) : le contrôle doit
+   passer au vert.
 
 > Le risque de **désactivation après 60 jours sans activité** ne s'applique
 > plus : GitHub ne l'applique qu'aux dépôts **publics**, et celui-ci est privé
