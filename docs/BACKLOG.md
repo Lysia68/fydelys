@@ -17,7 +17,7 @@ chaque correction : [`AUDIT-ACCES-API.md`](AUDIT-ACCES-API.md).
 
 ### Fait (15-16/11/2026)
 
-En production (`main` = `e5d188c`) :
+En production (`main` = `5939359`, 16/11/2026) :
 - Next 15.5.28, types vérifiés au build ;
 - toutes les failles 🔴/🟠 de l'audit du contrôle d'accès (routes fermées ou
   supprimées, adhérent refusé sur les routes de l'équipe, crons
@@ -29,28 +29,21 @@ En production (`main` = `e5d188c`) :
 - tableau de bord : « Présences validées », « Validés semaine précédente »,
   « Sans venir depuis plus d'un an » ;
 - invitation de l'admin d'un nouveau studio envoyée ; aucun lien de
-  connexion dans les logs.
-
-Sur `dev`, **pas encore en production** :
+  connexion dans les logs ;
 - `/api/albert` réservé à l'équipe, quota par studio partagé entre
-  instances (`ad7acb7`) ;
+  instances (`ad7acb7`, migration `20261116_api_quota.sql` appliquée) ;
 - tableau de bord chargé par pages de 1 000 lignes (`33b9ace`) ;
 - `app/(app)/dashboard/page.tsx` réduit à son ancre de route (`fc92b5b`) ;
-- ping de surveillance de la sauvegarde (`143301f`).
+  vue cassée `studio_kpis` supprimée (`DROP VIEW`, 16/11/2026) ;
+- ping de surveillance de la sauvegarde (`143301f`), secret
+  `HEALTHCHECK_PING_URL` posé.
 
 ### Reste à faire
 
-**Avant la prochaine mise en production :**
-- appliquer `supabase/migrations/20261116_api_quota.sql` (sans elle, Albert
-  retombe sur la limite en mémoire) ;
-- supprimer la vue cassée `studio_kpis` — plus aucun lecteur :
-  `DROP VIEW IF EXISTS public.studio_kpis;` ;
+- surveillance de la sauvegarde : vérifier que le contrôle passe au vert
+  au premier lancement depuis `main` (section suivante) ;
 - vérifier que `CRON_SECRET` est posée dans Vercel (sans elle, les crons
-  répondent 401).
-
-**Ensuite :**
-- surveillance de la sauvegarde : créer le contrôle et poser le secret
-  `HEALTHCHECK_PING_URL` (section suivante) ;
+  répondent 401) ;
 - `/api/check-availability` révèle si un e-mail a un compte (faible) ;
 - coach suspendu : aucun écran de réactivation (SQL :
   `UPDATE profiles SET suspended_at = NULL WHERE id = …`) ;
@@ -65,7 +58,7 @@ Sur `dev`, **pas encore en production** :
 
 ---
 
-## 🟠 Sauvegarde de la base : alerte si elle s'arrête — à configurer
+## 🟢 Sauvegarde de la base : alerte si elle s'arrête — configurée, premier ping à confirmer
 
 La base est sauvegardée chaque jour vers Cloudflare R2 (compartiment
 `fydelys-backups`) par `.github/workflows/backup-fydelys.yml`, qui envoie un
@@ -78,7 +71,8 @@ remarque — un mail qui n'arrive pas ne se voit pas.
 **Codé le 16/11/2026 (`143301f`)** : après chaque upload réussi, le workflow
 appelle l'URL du secret `HEALTHCHECK_PING_URL`. Un service de surveillance
 externe (type Healthchecks.io) alerte si aucun ping n'arrive à temps.
-**Reste à configurer** (aucun compte créé) :
+Configuration (secret `HEALTHCHECK_PING_URL` posé le 16/11/2026 ; reste
+l'étape 4 à confirmer — la nuit, c'est la version de `main` qui tourne) :
 1. créer un contrôle de type planning cron `30 3 * * *`, fuseau UTC, avec
    une marge de grâce de 2 h (le job prend 1 à 2 min, mais GitHub peut
    retarder un cron planifié) ;
