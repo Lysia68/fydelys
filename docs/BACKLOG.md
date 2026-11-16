@@ -35,13 +35,15 @@ En production (`main` = `5939359`, 16/11/2026) :
 - tableau de bord chargé par pages de 1 000 lignes (`33b9ace`) ;
 - `app/(app)/dashboard/page.tsx` réduit à son ancre de route (`fc92b5b`) ;
   vue cassée `studio_kpis` supprimée (`DROP VIEW`, 16/11/2026) ;
-- ping de surveillance de la sauvegarde (`143301f`), secret
-  `HEALTHCHECK_PING_URL` posé.
+- étape de ping de surveillance dans le workflow de sauvegarde (`143301f`)
+  — **code seulement** : sans le secret, l'étape ne fait rien.
 
 ### Reste à faire
 
-- surveillance de la sauvegarde : vérifier que le contrôle passe au vert
-  au premier lancement depuis `main` (section suivante) ;
+- **surveillance de la sauvegarde — action de l'utilisateur** (section
+  suivante) : créer le contrôle Healthchecks, poser le secret GitHub
+  `HEALTHCHECK_PING_URL`, puis lancer la sauvegarde à la main depuis `main`
+  et vérifier que le contrôle passe au vert ;
 - vérifier que `CRON_SECRET` est posée dans Vercel (sans elle, les crons
   répondent 401) ;
 - `/api/check-availability` révèle si un e-mail a un compte (faible) ;
@@ -58,7 +60,7 @@ En production (`main` = `5939359`, 16/11/2026) :
 
 ---
 
-## 🟢 Sauvegarde de la base : alerte si elle s'arrête — configurée, premier ping à confirmer
+## 🟠 Sauvegarde de la base : alerte si elle s'arrête — à configurer
 
 La base est sauvegardée chaque jour vers Cloudflare R2 (compartiment
 `fydelys-backups`) par `.github/workflows/backup-fydelys.yml`, qui envoie un
@@ -71,8 +73,8 @@ remarque — un mail qui n'arrive pas ne se voit pas.
 **Codé le 16/11/2026 (`143301f`)** : après chaque upload réussi, le workflow
 appelle l'URL du secret `HEALTHCHECK_PING_URL`. Un service de surveillance
 externe (type Healthchecks.io) alerte si aucun ping n'arrive à temps.
-Configuration (secret `HEALTHCHECK_PING_URL` posé le 16/11/2026 ; reste
-l'étape 4 à confirmer — la nuit, c'est la version de `main` qui tourne) :
+**Reste à configurer — action de l'utilisateur** (aucun compte créé, secret
+non posé ; tant qu'il manque, l'étape de ping ne fait rien) :
 1. créer un contrôle de type planning cron `30 3 * * *`, fuseau UTC, avec
    une marge de grâce de 2 h (le job prend 1 à 2 min, mais GitHub peut
    retarder un cron planifié) ;
@@ -80,8 +82,8 @@ l'étape 4 à confirmer — la nuit, c'est la version de `main` qui tourne) :
 3. copier son URL de ping dans le dépôt GitHub `Lysia68/fydelys` :
    Settings → Secrets and variables → Actions → New repository secret,
    nom `HEALTHCHECK_PING_URL` ;
-4. lancer le workflow à la main (Actions → Run workflow) : le contrôle doit
-   passer au vert.
+4. lancer le workflow à la main (Actions → Run workflow, branche `main`) :
+   le contrôle doit passer au vert.
 
 > Le risque de **désactivation après 60 jours sans activité** ne s'applique
 > plus : GitHub ne l'applique qu'aux dépôts **publics**, et celui-ci est privé
